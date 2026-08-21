@@ -1,0 +1,7 @@
+# 仅为结构模板。真实文件位于 ECS 的 /etc/metis-ai-cloud/redis.conf。
+bind 0.0.0.0
+protected-mode yes
+port 6379
+appendonly yes
+appendfsync everysec
+requirepass <server-generated-redis-password>
