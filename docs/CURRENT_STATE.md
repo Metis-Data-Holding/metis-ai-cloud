@@ -95,6 +95,7 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 - Runtime：app、PostgreSQL、Redis 均通过健康检查；PostgreSQL / Redis 未发布宿主端口
 - Persistence：容器重启与 app、PostgreSQL、Redis 分别重建后，管理员数据及非敏感 Redis 探针均通过恢复验证；探针已删除
 - 初始化：管理员初始化完成，运行模式为对外营业模式
+- Authentication：用户已通过公网 HTTPS 完成管理员登录、刷新保持会话与退出验证
 - 共存回归：`xy-stock` systemd 服务、loopback HTTP 与既有公网入口保持可用；Cloudflare Tunnel 进程 active，验收时重启计数为 0
 - 回滚边界：本次由用户明确接受不创建 BytePlus 系统盘或数据盘快照；应用可通过历史完整 release 回滚，但 shared 数据无云盘级部署前快照保护
 
