@@ -59,17 +59,14 @@ services:
     image: redis:7-alpine
     pull_policy: missing
     restart: unless-stopped
-    command: [redis-server, /run/secrets/redis.conf]
-    secrets:
-      - source: redis_config
-        target: redis.conf
-        mode: 0444
+    command: [redis-server, /usr/local/etc/redis/redis.conf]
     volumes:
       - /data/metis-ai-cloud/shared/redis:/data
+      - /etc/metis-ai-cloud/redis.conf:/usr/local/etc/redis/redis.conf:ro
     healthcheck:
       test:
         - CMD-SHELL
-        - REDISCLI_AUTH=$$(sed -n 's/^requirepass[[:space:]]\+//p' /run/secrets/redis.conf) redis-cli --no-auth-warning ping | grep -q '^PONG$$'
+        - REDISCLI_AUTH=$$(sed -n 's/^requirepass[[:space:]]\+//p' /usr/local/etc/redis/redis.conf) redis-cli --no-auth-warning ping | grep -q '^PONG$$'
       interval: 10s
       timeout: 5s
       retries: 12
@@ -81,7 +78,3 @@ services:
 networks:
   internal:
     driver: bridge
-
-secrets:
-  redis_config:
-    file: /etc/metis-ai-cloud/redis.conf

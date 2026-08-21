@@ -41,8 +41,10 @@
 /etc/metis-ai-cloud              root:root 0700
 /etc/metis-ai-cloud/app.env      root:root 0600
 /etc/metis-ai-cloud/postgres.env root:root 0600
-/etc/metis-ai-cloud/redis.conf   root:root 0600
+/etc/metis-ai-cloud/redis.conf   999:1000   0400
 ```
+
+`redis.conf` 的数值 owner 对应官方 `redis:7-alpine` 镜像内的 `redis` 用户；宿主的 root-only 父目录仍阻止普通宿主用户遍历，容器内 Redis 则可只读挂载该文件。更新 Redis 镜像前必须重新核对 UID/GID。
 
 `app.env` 中的 PostgreSQL 和 Redis 密码必须分别与 `postgres.env`、`redis.conf` 保持一致。`TRUSTED_PROXIES` 应填写该 Compose project 实际创建的 bridge network CIDR，不能照抄示例。
 
