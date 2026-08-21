@@ -1,0 +1,9 @@
+[agents]
+enabled = true
+
+# Avoid spawning too many agents at once.
+max_concurrent_threads_per_session = 4
+
+# Fallback configuration for subagents that don't specify their own model.
+default_subagent_model = "gpt-5.6-luna"
+default_subagent_reasoning_effort = "high"

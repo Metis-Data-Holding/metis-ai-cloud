@@ -5,12 +5,24 @@
 upload
 *.exe
 *.db
-build
 *.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.dump
+*.sql.gz
+build
 logs
+*.log
 web/dist
 web/node_modules
 .env
+.env.*
+!.env.example
 one-api
 new-api
 /__debug_bin*
@@ -34,6 +46,16 @@ electron/dist
 token_estimator_test.go
 skills-lock.json
 .playwright-mcp
+
+# Local private keys and certificates.
+*.pem
+*.key
+*.p12
+*.pfx
+*.ppk
+id_rsa
+id_ed25519
+id_ecdsa
 
 # Local-only live probes and scratch test workspaces.
 .local-tests/
