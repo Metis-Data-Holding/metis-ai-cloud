@@ -1,0 +1,379 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+if [[ "${EUID}" -eq 0 ]]; then
+  ROOT=/data/metis-ai-cloud
+  COMPOSE_TEMPLATE=/usr/local/lib/metis-ai-cloud/compose.yml
+  DOCKER=/usr/bin/docker
+  CURL=/usr/bin/curl
+  PYTHON=/usr/bin/python3
+  HEALTH_ATTEMPTS=60
+  HEALTH_INTERVAL=3
+else
+  # Test-only overrides are deliberately unavailable to sudo/root execution.
+  ROOT="${METIS_ROOT:-/data/metis-ai-cloud}"
+  COMPOSE_TEMPLATE="${METIS_COMPOSE_TEMPLATE:-/usr/local/lib/metis-ai-cloud/compose.yml}"
+  DOCKER="${METIS_DOCKER:-/usr/bin/docker}"
+  CURL="${METIS_CURL:-/usr/bin/curl}"
+  PYTHON="${METIS_PYTHON:-/usr/bin/python3}"
+  HEALTH_ATTEMPTS="${METIS_HEALTH_ATTEMPTS:-60}"
+  HEALTH_INTERVAL="${METIS_HEALTH_INTERVAL:-3}"
+fi
+
+HEALTH_URL=http://127.0.0.1:3000/api/status
+GHCR_PREFIX=ghcr.io/metis-data-holding/metis-ai-cloud@sha256:
+SERVICES=(postgres redis app)
+DOCKER_CONFIG_DIR=""
+REGISTRY_LOGGED_IN=false
+
+log() {
+  printf '[metis-ai-cloud-release] %s\n' "$*"
+}
+
+warn() {
+  printf '[metis-ai-cloud-release] WARNING: %s\n' "$*" >&2
+}
+
+die() {
+  printf '[metis-ai-cloud-release] ERROR: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat >&2 <<'EOF'
+Usage:
+  metis-ai-cloud-release deploy <40-character-commit> <ghcr-image-digest> <github-actor>
+  metis-ai-cloud-release rollback <40-character-commit> <github-actor>
+  metis-ai-cloud-release status
+
+Deploy and GHCR-backed rollback read the short-lived GitHub token from stdin.
+EOF
+}
+
+validate_commit() {
+  [[ "$1" =~ ^[0-9a-f]{40}$ ]] \
+    || die "commit must be a full 40-character lowercase hexadecimal SHA"
+}
+
+validate_actor() {
+  [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$ ]] \
+    || die "github actor contains unsupported characters"
+}
+
+validate_ghcr_image() {
+  local digest
+  [[ "$1" == "$GHCR_PREFIX"* ]] \
+    || die "image must be the project GHCR repository pinned by sha256 digest"
+  digest="${1#"$GHCR_PREFIX"}"
+  [[ "$digest" =~ ^[0-9a-f]{64}$ ]] \
+    || die "image must be the project GHCR repository pinned by sha256 digest"
+}
+
+validate_release_image() {
+  local image="$1"
+  local digest
+  if [[ "$image" == "$GHCR_PREFIX"* ]]; then
+    digest="${image#"$GHCR_PREFIX"}"
+    [[ "$digest" =~ ^[0-9a-f]{64}$ ]] \
+      || die "release contains an invalid GHCR image digest"
+    return 0
+  fi
+  [[ "$image" =~ ^metis-ai-cloud:[0-9a-f]{40}$ ]] \
+    || die "release contains an unsupported image reference"
+}
+
+cleanup_registry() {
+  if [[ "$REGISTRY_LOGGED_IN" == true ]]; then
+    "$DOCKER" logout ghcr.io >/dev/null 2>&1 || true
+  fi
+  if [[ -n "$DOCKER_CONFIG_DIR" && "$DOCKER_CONFIG_DIR" == "$ROOT"/.docker-auth.* ]]; then
+    rm -rf -- "$DOCKER_CONFIG_DIR"
+  fi
+}
+trap cleanup_registry EXIT
+
+registry_login() {
+  local actor="$1"
+  local token=""
+
+  validate_actor "$actor"
+  IFS= read -r token || [[ -n "$token" ]]
+  [[ -n "$token" ]] || die "missing GHCR token on stdin"
+
+  mkdir -p "$ROOT"
+  DOCKER_CONFIG_DIR="$(mktemp -d "$ROOT/.docker-auth.XXXXXX")"
+  export DOCKER_CONFIG="$DOCKER_CONFIG_DIR"
+  if ! printf '%s\n' "$token" | "$DOCKER" login ghcr.io -u "$actor" --password-stdin >/dev/null; then
+    die "GHCR login failed"
+  fi
+  token=""
+  REGISTRY_LOGGED_IN=true
+}
+
+compose() {
+  local release="$1"
+  shift
+  "$DOCKER" compose \
+    --env-file "$release/.release.env" \
+    -f "$release/compose.yml" \
+    "$@"
+}
+
+release_image() {
+  local release="$1"
+  local line=""
+  local extra=""
+
+  IFS= read -r line <"$release/.release.env" \
+    || die "cannot read release environment"
+  IFS= read -r extra < <(sed -n '2p' "$release/.release.env") || true
+  [[ -z "$extra" && "$line" == METIS_IMAGE=* ]] \
+    || die "release environment must contain exactly one METIS_IMAGE entry"
+  printf '%s\n' "${line#METIS_IMAGE=}"
+}
+
+validate_release() {
+  local release="$1"
+  [[ "$release" =~ ^${ROOT}/releases/[0-9a-f]{40}$ ]] \
+    || die "release path is outside the immutable release root"
+  [[ -d "$release" ]] || die "release does not exist: $release"
+  [[ -f "$release/compose.yml" ]] || die "release is missing compose.yml"
+  [[ -f "$release/.release.env" ]] || die "release is missing .release.env"
+  [[ -f "$release/image.sha256" ]] || die "release is missing image.sha256"
+
+  local image
+  local manifest
+  image="$(release_image "$release")"
+  validate_release_image "$image"
+  manifest="$(cat "$release/image.sha256")"
+  [[ "$manifest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+    || die "release image manifest must be a sha256 digest"
+  if [[ "$image" == "$GHCR_PREFIX"* ]]; then
+    [[ "${image##*@}" == "$manifest" ]] \
+      || die "release image digest does not match .release.env"
+  fi
+}
+
+prepare_release() {
+  local commit="$1"
+  local image="$2"
+  local release="$ROOT/releases/$commit"
+
+  mkdir -p "$ROOT/releases"
+  [[ -f "$COMPOSE_TEMPLATE" ]] || die "missing root-owned Compose template"
+
+  if [[ -d "$release" ]]; then
+    validate_release "$release"
+    [[ "$(release_image "$release")" == "$image" ]] \
+      || die "existing immutable release points to a different image"
+    printf '%s\n' "$release"
+    return 0
+  fi
+
+  local staging
+  local digest
+  digest="${image##*@}"
+  staging="$(mktemp -d "$ROOT/releases/.incoming-${commit}.XXXXXX")"
+  install -m 0644 "$COMPOSE_TEMPLATE" "$staging/compose.yml"
+  printf 'METIS_IMAGE=%s\n' "$image" >"$staging/.release.env"
+  printf '%s\n' "$digest" >"$staging/image.sha256"
+  chmod 0644 "$staging/.release.env" "$staging/image.sha256"
+  mv "$staging" "$release"
+  validate_release "$release"
+  printf '%s\n' "$release"
+}
+
+wait_healthy() {
+  local release="$1"
+  local attempt=1
+  local service
+  local container
+  local health
+  local all_healthy
+
+  while ((attempt <= HEALTH_ATTEMPTS)); do
+    all_healthy=true
+    for service in "${SERVICES[@]}"; do
+      container="$(compose "$release" ps -q "$service")"
+      if [[ -z "$container" ]]; then
+        all_healthy=false
+        break
+      fi
+      health="$("$DOCKER" inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container")"
+      if [[ "$health" != healthy ]]; then
+        all_healthy=false
+        break
+      fi
+    done
+
+    if [[ "$all_healthy" == true ]] \
+      && "$CURL" -fsS --max-time 5 "$HEALTH_URL" >/dev/null; then
+      return 0
+    fi
+    if ((attempt < HEALTH_ATTEMPTS)); then
+      sleep "$HEALTH_INTERVAL"
+    fi
+    attempt=$((attempt + 1))
+  done
+  return 1
+}
+
+current_release() {
+  local target
+  [[ -L "$ROOT/current" ]] || return 0
+  target="$(readlink "$ROOT/current")"
+  if [[ "$target" != /* ]]; then
+    target="$ROOT/$target"
+  fi
+  printf '%s\n' "$target"
+}
+
+switch_current() {
+  local release="$1"
+  local commit
+  local temporary="$ROOT/.current.$$"
+
+  commit="$(basename "$release")"
+  validate_commit "$commit"
+  if [[ -e "$ROOT/current" && ! -L "$ROOT/current" ]]; then
+    die "refusing to replace non-symlink current path"
+  fi
+  rm -f -- "$temporary"
+  ln -s "releases/$commit" "$temporary"
+  "$PYTHON" - "$temporary" "$ROOT/current" <<'PY'
+import os
+import sys
+
+os.replace(sys.argv[1], sys.argv[2])
+PY
+}
+
+restore_previous() {
+  local previous="$1"
+  if [[ -z "$previous" ]]; then
+    warn "activation failed and no previous release exists"
+    return 0
+  fi
+  validate_release "$previous"
+  if compose "$previous" up -d && wait_healthy "$previous"; then
+    warn "activation failed; restored previous release $(basename "$previous")"
+  else
+    warn "activation failed and previous release restoration also failed"
+  fi
+}
+
+activate_release() {
+  local release="$1"
+  local previous
+  previous="$(current_release)"
+
+  validate_release "$release"
+  if ! compose "$release" config --quiet; then
+    die "Compose validation failed"
+  fi
+  if ! compose "$release" up -d; then
+    restore_previous "$previous"
+    die "Compose activation failed"
+  fi
+  if ! wait_healthy "$release"; then
+    restore_previous "$previous"
+    die "health check failed"
+  fi
+  switch_current "$release"
+  log "active release: $(basename "$release")"
+}
+
+pull_ghcr_image() {
+  local image="$1"
+  local commit="$2"
+
+  validate_ghcr_image "$image"
+  "$DOCKER" pull "$image" >/dev/null || die "image pull failed"
+  [[ "$("$DOCKER" image inspect --format '{{.Os}}/{{.Architecture}}' "$image")" == linux/amd64 ]] \
+    || die "image platform must be linux/amd64"
+  [[ "$("$DOCKER" image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")" == "$commit" ]] \
+    || die "image OCI revision does not match requested commit"
+}
+
+deploy() {
+  local commit="$1"
+  local image="$2"
+  local actor="$3"
+  local release
+
+  validate_commit "$commit"
+  validate_ghcr_image "$image"
+  registry_login "$actor"
+  pull_ghcr_image "$image" "$commit"
+  release="$(prepare_release "$commit" "$image")"
+  activate_release "$release"
+}
+
+rollback() {
+  local commit="$1"
+  local actor="$2"
+  local release="$ROOT/releases/$commit"
+  local image
+
+  validate_commit "$commit"
+  validate_actor "$actor"
+  validate_release "$release"
+  image="$(release_image "$release")"
+  if [[ "$image" == "$GHCR_PREFIX"* ]]; then
+    registry_login "$actor"
+    pull_ghcr_image "$image" "$commit"
+  else
+    if ! "$DOCKER" image inspect "$image" >/dev/null; then
+      die "legacy local image is no longer present"
+    fi
+    [[ "$("$DOCKER" image inspect --format '{{.Id}}' "$image")" == "$(cat "$release/image.sha256")" ]] \
+      || die "legacy local image ID does not match release manifest"
+  fi
+  activate_release "$release"
+}
+
+show_status() {
+  local current
+  current="$(current_release)"
+  if [[ -n "$current" ]]; then
+    log "current: $(basename "$current")"
+    validate_release "$current"
+    compose "$current" ps
+  else
+    log "current: none"
+  fi
+}
+
+main() {
+  local action="${1:-}"
+  case "$action" in
+    deploy)
+      [[ "$#" -eq 4 ]] || {
+        usage
+        exit 2
+      }
+      deploy "$2" "$3" "$4"
+      ;;
+    rollback)
+      [[ "$#" -eq 3 ]] || {
+        usage
+        exit 2
+      }
+      rollback "$2" "$3"
+      ;;
+    status)
+      [[ "$#" -eq 1 ]] || {
+        usage
+        exit 2
+      }
+      show_status
+      ;;
+    *)
+      usage
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"

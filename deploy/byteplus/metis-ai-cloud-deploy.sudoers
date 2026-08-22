@@ -1,0 +1,2 @@
+# The root-owned entrypoint validates every action, commit and image digest.
+github-runner ALL=(root) NOPASSWD: /usr/local/sbin/metis-ai-cloud-release *

@@ -1,0 +1,5 @@
+self-hosted-runner:
+  labels:
+    - byteplus-hk
+    - metis-ai-cloud
+    - deploy

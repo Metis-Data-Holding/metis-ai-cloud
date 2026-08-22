@@ -1,0 +1,58 @@
+name: Roll back BytePlus ECS
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_commit:
+        description: Existing full 40-character release commit
+        type: string
+        required: true
+      confirmation:
+        description: Type ROLLBACK to activate the existing release
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: deploy-byteplus-metis-ai-cloud
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: Activate existing release
+    runs-on: [self-hosted, Linux, X64, byteplus-hk, metis-ai-cloud, deploy]
+    timeout-minutes: 10
+    environment:
+      name: byteplus-demo
+      url: https://many-models.metisdata.ai
+    steps:
+      - name: Roll back through restricted release command
+        shell: bash
+        env:
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$CONFIRMATION" == ROLLBACK ]] || {
+            echo 'confirmation must be exactly ROLLBACK' >&2
+            exit 1
+          }
+          [[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || {
+            echo 'release_commit must be a full lowercase commit' >&2
+            exit 1
+          }
+          printf '%s\n' "$GHCR_TOKEN" \
+            | sudo /usr/local/sbin/metis-ai-cloud-release \
+                rollback "$RELEASE_COMMIT" "$GITHUB_ACTOR"
+
+      - name: Verify public HTTPS
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -fsS --max-time 15 https://many-models.metisdata.ai/api/status \
+            | grep -q '"success"[[:space:]]*:[[:space:]]*true'
+          sudo /usr/local/sbin/metis-ai-cloud-release status
