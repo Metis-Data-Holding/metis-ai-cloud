@@ -2,7 +2,7 @@
 
 本文档回答 `metis-ai-cloud` 是什么、为什么存在、要解决什么问题，以及当前产品方向和总体技术路线。它记录长期背景与阶段边界，不承载当前任务、Sprint 日程、临时状态或具体测试结果。
 
-> 最后审阅：2026-08-21
+> 最后审阅：2026-08-22
 > 更新原则：仅在项目定位、长期架构、产品边界或长期事实变化时更新
 
 ## 1. 项目简介
@@ -118,12 +118,13 @@ Admin 查看调用信息
 
 ### 基础设施关系
 
-- 公网节点：当前计划使用 BytePlus ECS 承载 Demo 部署。
-- DNS：公司一级域名为 `metisdata.ai`，由 Cloudflare 管理；Demo 子域名待确认。
-- 模型服务：新加坡公司本地已有一台运行小型模型的机器，当前计划由 `metis-ai-cloud` 通过网络调用其 API。
-- 数据与依赖：当前 New API 基础支持 SQLite、MySQL、PostgreSQL，以及 Redis / 内存缓存；Demo 的最终部署组合以实际环境配置为准。
+- 公网节点：BytePlus ECS 承载当前 Demo，应用仅绑定宿主回环地址。
+- DNS / HTTPS：`many-models.metisdata.ai` 由 Cloudflare Tunnel 发布并由 Universal SSL 提供 HTTPS；不直接开放应用端口到公网。
+- 数据与缓存：Demo 使用独立 PostgreSQL 与 Redis，持久数据保存在 ECS 的 `/data/metis-ai-cloud/shared/`。
+- 模型网络：ECS 通过 Tailscale 固定私网地址访问新加坡 LM Studio；Tailscale 只承担模型私网传输，不作为 ECS 系统 DNS。
+- 发布：GitHub-hosted Runner 完成验证与镜像构建，ECS Self-hosted Runner 通过受限 root 入口执行发布和回滚。
 
-以下信息尚未确认，因此本文不写死：Singapore 模型名称与参数量、推理框架、GPU 型号、最终子域名、ECS IP、服务端口、实际性能和成本数据。
+当前基础设施的可执行细节、目录、Secret 边界和验证方式见 [`../deploy/byteplus/README.md`](../deploy/byteplus/README.md)。GPU 型号、实际性能、容量和成本数据仍需后续 Benchmark 确认。
 
 ## 6. 总体系统关系
 
@@ -148,7 +149,7 @@ Auth      Routing     Usage/Billing
             GPU
 ```
 
-Cloudflare 与 BytePlus ECS 是当前 Demo 公网链路的计划组成部分；Singapore Local Model API 是当前自有推理服务验证目标。该关系描述总体路线，不表示所有节点已经部署或通过运行态验收。
+Cloudflare、BytePlus ECS 与 Tailscale 私网模型链路已经形成当前 Demo 的基础设施 baseline。Provider 产品配置、Usage / Billing、Benchmark 与自动路由仍需分别完成运行态验收，不能由基础设施可达性替代。
 
 ## 7. Provider / Model 理念
 
@@ -244,8 +245,9 @@ Demo first
 ## 12. 项目知识导航
 
 - Agent 长期工作规则：[`../AGENTS.md`](../AGENTS.md)
-- 当前项目状态：`CURRENT_STATE.md`（后续 Step 0 创建）
-- 重要决策：`DECISIONS.md`（后续 Step 0 创建）
-- 历史工作：`../WORKLOG.md`（后续 Step 0 创建）
+- 当前项目状态：[`CURRENT_STATE.md`](CURRENT_STATE.md)
+- 基础设施与部署运行手册：[`../deploy/byteplus/README.md`](../deploy/byteplus/README.md)
+- 重要决策：[`DECISIONS.md`](DECISIONS.md)
+- 历史工作：[`../WORKLOG.md`](../WORKLOG.md)
 
 本文件只维护长期项目背景。阶段目标、当前进展和阻塞进入 `CURRENT_STATE.md`；执行记录进入 `WORKLOG.md`；重要架构、产品或技术取舍进入 `DECISIONS.md`。

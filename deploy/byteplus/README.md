@@ -2,6 +2,31 @@
 
 本目录用于把当前 fork 的固定 Commit 镜像部署到 BytePlus ECS。目标是 Demo / PoC 运行基线，不替代 Production 高可用设计。
 
+> 运行态最后验收：2026-08-22
+>
+> 当前公网入口：`https://many-models.metisdata.ai`
+>
+> 当前 release：`b740f5f52f8c14290b62d5b4351cf64ce0ab97db`
+
+## 当前拓扑
+
+```text
+Internet / API Client
+        ↓ HTTPS
+Cloudflare Universal SSL + Tunnel byteplus-hk-RI4m
+        ↓ http://127.0.0.1:3000
+BytePlus ECS
+  ├─ metis-ai-cloud app
+  ├─ PostgreSQL 15
+  ├─ Redis 7
+  ├─ GitHub Actions Self-hosted Runner（仅发布 / 回滚）
+  └─ Tailscale ──→ Singapore LM Studio
+```
+
+- ECS 安全组不需要开放 `3000`、`5432` 或 `6379`；Cloudflare Tunnel 从 ECS 内部访问回环端口。
+- `xy-stock.metisdata.ai` 共用同一个 Tunnel，但使用独立 route、端口、服务和数据目录。
+- Tailscale 只承载 ECS 到新加坡模型的私网通信，不接管 ECS 系统 DNS，不启用 exit node 或 subnet route。
+
 ## 边界
 
 - Compose project 固定为 `metis-ai-cloud`，不复用现有项目的容器、网络或目录。
@@ -31,6 +56,18 @@
 ├── app.env
 ├── postgres.env
 └── redis.conf
+
+/data/github-runner/
+└── metis-ai-cloud-actions-runner/
+
+/usr/local/lib/metis-ai-cloud/
+└── compose.yml
+
+/usr/local/sbin/
+└── metis-ai-cloud-release
+
+/etc/sudoers.d/
+└── metis-ai-cloud-deploy
 ```
 
 ## Secret 文件要求
@@ -48,7 +85,7 @@
 
 `app.env` 中的 PostgreSQL 和 Redis 密码必须分别与 `postgres.env`、`redis.conf` 保持一致。`TRUSTED_PROXIES` 应填写该 Compose project 实际创建的 bridge network CIDR，不能照抄示例。
 
-## 启动与验证顺序
+## 首次手工建立顺序
 
 1. 构建固定 Commit 的 `linux/amd64` 镜像，导出归档并计算 SHA-256。
 2. 在 ECS 创建隔离目录和 root-only Secret，再上传并校验 release。
@@ -58,6 +95,8 @@
 6. 验证容器重启和 PostgreSQL 持久化后，才在既有 Cloudflare Tunnel 新增 `many-models.metisdata.ai -> http://127.0.0.1:3000`。
 
 不得把命令已执行等同于部署成功；运行态以健康接口、容器状态、持久化探针和公网 HTTPS 的实际结果为准。
+
+该流程用于首次建立基线或灾难恢复，不是日常发布方式。日常上线应从 GitHub Actions 人工触发 Deploy Workflow。
 
 ## GitHub Actions 部署与回滚
 
@@ -109,8 +148,73 @@ ECS Self-hosted Runner
 
 ### 使用
 
-部署：打开 **Actions → Deploy BytePlus ECS → Run workflow**，输入要部署的 branch、tag 或完整 Commit。Workflow 只有在 GitHub-hosted 验证、镜像构建、ECS 本机健康检查和公网 HTTPS 检查全部完成后才标记成功。
+部署：打开 **Actions → Deploy BytePlus ECS → Run workflow**，输入要部署的 branch、tag 或完整 Commit。`main` 是 Demo 稳定分支，`develop` 是日常集成分支；正式 Demo 发布默认选择 `main`，只有明确需要验收集成状态时才直接部署 `develop`。Workflow 只有在 GitHub-hosted 验证、镜像构建、ECS 本机健康检查和公网 HTTPS 检查全部完成后才标记成功。
 
 回滚：打开 **Actions → Roll back BytePlus ECS → Run workflow**，输入 `/data/metis-ai-cloud/releases/` 中已有的完整 Commit，并在 confirmation 输入 `ROLLBACK`。
 
 回滚只切换应用 release，保留 shared PostgreSQL、Redis 和 app-data。涉及数据库 migration 的版本仍必须先备份数据库并单独评估降级兼容；当前没有 BytePlus 云盘快照。
+
+已完成的真实闭环：
+
+- 首次发布：Deploy Run `32558545994`；
+- 历史 release 回滚：Rollback Run `32559285305`；
+- 再次部署恢复：Deploy Run `32559331290`。
+
+三次运行均已成功；再次部署后 PostgreSQL 与 Redis 容器未重建，持久化挂载保持不变。
+
+## 日常只读检查
+
+以下命令不读取 Secret 内容：
+
+```bash
+ssh ECS-RI4m
+sudo -u github-runner sudo -n /usr/local/sbin/metis-ai-cloud-release status
+readlink -f /data/metis-ai-cloud/current
+docker ps --filter name=metis-ai-cloud \
+  --format '{{.Names}} | {{.Status}}'
+curl -fsS --max-time 10 http://127.0.0.1:3000/api/status
+curl -fsS --max-time 15 https://many-models.metisdata.ai/api/status
+```
+
+GitHub 侧检查：
+
+```bash
+gh run list --workflow deploy-byteplus.yml --limit 5
+gh run list --workflow rollback-byteplus.yml --limit 5
+```
+
+验收至少包括：目标 Commit、Workflow 终态、`current` 指针、三个容器健康、PostgreSQL / Redis 持久化未被替换，以及公网 HTTPS。Push 成功、镜像构建成功或容器 `Up` 均不能单独代表部署成功。
+
+## Tailscale 与 DNS 共存边界
+
+BytePlus DHCP 下发的 DNS 位于 `100.64.0.0/10`，与 Tailscale anti-spoof 规则发生地址段冲突。当前已验证的共存配置是：
+
+- `tailscaled` 保持 active；
+- `tailscale set --accept-dns=false`；
+- `/etc/netplan/90-metis-tailscale-dns.yaml` 禁用 eth0 DHCP DNS，并配置不位于 `100.64.0.0/10` 的递归 DNS；
+- `/etc/resolv.conf` 由 `systemd-resolved` 管理；
+- 默认路由仍通过 eth0，不启用 Tailscale exit node 或 subnet route。
+
+该配置由 Singapore Local Model 网络任务负责维护。部署任务不得为了恢复 Runner 而停用 Tailscale、修改默认路由或直接套用旧的 `/etc/resolv.conf` 备份。Runner 离线时先只读检查：
+
+```bash
+getent ahostsv4 github.com
+getent ahostsv4 tokenghub.actions.githubusercontent.com
+getent ahostsv4 ghcr.io
+systemctl is-active tailscaled
+systemctl --type=service --state=running | grep actions.runner
+```
+
+当前 DNS 使用公共递归解析器。若后续有企业 DNS 或合规要求，应替换为 ECS 可达且不位于 `100.64.0.0/10` 的公司递归 DNS，并同时回归 GitHub Runner 与新加坡模型链路。
+
+## Secret、备份与回滚边界
+
+- PostgreSQL、Redis、Session、Provider / Model 凭据只存在于 ECS root-only Secret 文件或应用数据库中；不得通过 GitHub Environment、Workflow 参数、文档、日志或聊天传递。
+- GitHub `GITHUB_TOKEN` 仅用于当次 GHCR 登录，经 stdin 进入受限发布入口，并使用临时 Docker config。
+- 当前没有 BytePlus 系统盘或数据盘快照，这是 Demo 阶段明确接受的成本取舍。
+- release 回滚只覆盖应用镜像和 Compose release，不回滚 `/data/metis-ai-cloud/shared/` 数据。
+- 涉及数据库 migration、数据破坏或跨版本不兼容时，历史 release 不能替代数据库备份；必须先制定单独的数据恢复方案。
+
+## 线路完成标准
+
+截至 2026-08-22，本部署线路已完成：固定 Commit 镜像、隔离运行目录、root-only Secret、PostgreSQL / Redis 持久化、Cloudflare HTTPS、登录会话、容器重建恢复、受限 Self-hosted Runner、自动发布、真实回滚和再次部署恢复。后续 Branding、Provider 产品配置、Usage / Billing、Benchmark 与 Routing 不属于本基础设施线路的未完成项。

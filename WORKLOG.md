@@ -57,6 +57,14 @@
 - 首次 Deploy Workflow Run `32558545994` 使用 `main`，完成后端与前端验证、GHCR 固定 digest `linux/amd64` 镜像构建和推送、ECS 受限激活及公网 HTTPS 检查。
 - 独立验收确认 `current` 指向 commit `9cc0479894985681e4c11b3476df02ce4f8e5cd8`，镜像架构与 OCI revision 匹配，app、PostgreSQL、Redis healthy；PostgreSQL 与 Redis 沿用部署前容器且重启计数为 0。
 
-**未验证**
+### GitHub Actions 真实回滚与恢复
 
-- Rollback Workflow 尚未真实执行；现有 `b3ef3d4fe815b984160faa865c22df21fe272c62` release 仍保留为回滚候选。
+- Rollback Workflow Run `32559285305` 成功将 `current` 切换至历史 release `b3ef3d4fe815b984160faa865c22df21fe272c62`；应用健康，PostgreSQL 与 Redis 容器未重建。
+- 随后的 Deploy Workflow Run `32559331290` 在 ECS Runner 网络恢复后自动继续并成功完成，将 `current` 恢复至 `b740f5f52f8c14290b62d5b4351cf64ce0ab97db`。
+- 独立验收确认 ECS Runner Online，GitHub、Actions Token 与 GHCR 域名解析正常；app、PostgreSQL、Redis healthy，PostgreSQL 与 Redis 容器 ID 与回滚前一致，持久化挂载未变。
+- `many-models.metisdata.ai` 与 `xy-stock.metisdata.ai` 公网访问均通过；此次网络故障与恢复由 Tailscale 接入任务负责处理，本部署任务未继续修改 ECS 网络。
+
+### BytePlus 基础设施线路收尾
+
+- 将已验证的当前拓扑、ECS 目录、Cloudflare Tunnel、GitHub Actions 日常发布 / 回滚、只读巡检、Tailscale 与 DNS 共存边界、Secret 与无云盘快照风险统一整理到基础设施文档。
+- BytePlus 部署线路完成固定 Commit 发布、持久化、HTTPS、登录会话、容器重建恢复、真实回滚与再次部署恢复闭环；后续工作转入 Local Model Provider、Usage / Billing、Branding 与 Benchmark。

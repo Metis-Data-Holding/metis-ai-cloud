@@ -138,3 +138,43 @@ GitHub Actions 使用 GitHub-hosted Runner 执行 CI 和 `linux/amd64` 镜像构
 - Self-hosted job 不 checkout 被部署代码，只接收完整 Commit 和固定 GHCR digest。
 - 数据库、Redis、Session 和 Provider Secret 继续只存在于 ECS；Cloudflare route 和安全组不参与日常发布。
 - Workflow 本地实现、Runner 注册、默认分支启用与真实部署验证必须分别报告，不能相互替代。
+
+## DEC-008 — Tailscale 只承载模型私网，不接管 ECS DNS
+
+- 日期：2026-08-22
+- 状态：Accepted
+
+**决定**
+
+BytePlus ECS 保持 Tailscale active，通过固定私网地址访问 Singapore Local Model；ECS 不接受 Tailscale DNS，不启用 exit node 或 subnet route，系统 DNS 继续由 eth0 与 `systemd-resolved` 管理。
+
+**原因**
+
+- BytePlus DHCP DNS 位于 `100.64.0.0/10`，其响应会与 Tailscale anti-spoof 规则发生地址段冲突，导致 GitHub、Actions Token 与 GHCR 域名解析超时。
+- 模型 Channel 使用固定 Tailscale IP，不依赖 MagicDNS；关闭 Tailscale DNS 接管不影响模型私网链路。
+
+**影响**
+
+- 当前 eth0 使用不位于 `100.64.0.0/10` 的公共递归 DNS，并通过 netplan 持久化；未来如采用企业 DNS，必须满足 ECS 可达且不与 Tailscale 地址段冲突。
+- 网络变更后必须同时验证 GitHub Runner、Cloudflare 公网服务、xy-stock 和 Singapore 模型链路。
+- 部署任务不得通过停用 Tailscale 或修改默认路由解决 Runner DNS 问题。
+
+## DEC-009 — Demo 阶段不购买 BytePlus 云盘快照
+
+- 日期：2026-08-22
+- 状态：Accepted
+
+**决定**
+
+当前 Demo / PoC 阶段不创建 BytePlus 系统盘或数据盘快照，接受相应恢复边界。
+
+**原因**
+
+- 用户评估当前 Demo 阶段无需承担快照费用。
+- 应用采用 immutable release，已能覆盖镜像与 Compose 层面的发布回滚需求。
+
+**影响**
+
+- `/data/metis-ai-cloud/shared/` 不受云盘级部署前快照保护。
+- release 回滚不会回滚 PostgreSQL、Redis 或 app-data；涉及 migration 或数据破坏时必须另行备份和评估降级兼容。
+- 不得把历史 release 可用描述为数据灾难恢复已经具备。
