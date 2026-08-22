@@ -68,3 +68,12 @@
 
 - 将已验证的当前拓扑、ECS 目录、Cloudflare Tunnel、GitHub Actions 日常发布 / 回滚、只读巡检、Tailscale 与 DNS 共存边界、Secret 与无云盘快照风险统一整理到基础设施文档。
 - BytePlus 部署线路完成固定 Commit 发布、持久化、HTTPS、登录会话、容器重建恢复、真实回滚与再次部署恢复闭环；后续工作转入 Local Model Provider、Usage / Billing、Branding 与 Benchmark。
+
+### Singapore Local Model Provider 与 Billing 闭环
+
+- 通过 Tailscale 将 ECS 与 Windows LM Studio `0.4.21` 连接，完成 `google/gemma-4-31b` OpenAI-compatible Channel 配置；Provider Credential 仅保存在平台中。
+- 保持 `tailscaled` active，关闭 Tailscale DNS 接管，并以 netplan 配置可达递归 DNS，恢复 GitHub、Actions Token、GHCR 与 Self-hosted Runner，同时保留模型私网链路和 eth0 默认路由。
+- 用户通过 Playground 完成真实对话；公网标准 API 的非流式、Streaming、`[DONE]`、Usage 与 reasoning token 均验证通过。
+- 使用限模型测试 Token 验证权限边界、Token / 用户余额 / 日志 Billing 一致性；未授权模型被拒绝且不计费。
+- 完成 LM Studio 停服与恢复回归：停服返回上游错误并记录零 quota 失败日志，恢复后原 Channel 无需修改即可继续调用。
+- 运行态复核确认 app、PostgreSQL、Redis、Tailscale、Self-hosted Runner、GitHub/GHCR DNS 和公网状态正常；GPU/显存、管理员日志页面、Serving Benchmark、Qwen 与 Routing 仍待独立验收。

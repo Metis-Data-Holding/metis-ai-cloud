@@ -1,7 +1,7 @@
 # Metis AI Cloud 当前状态
 
-> 最后更新：2026-08-22
-> 当前 Milestone：Local Model Provider、Usage / Billing 闭环
+> 最后更新：2026-08-23
+> 当前 Milestone：Demo 收尾、Serving Benchmark 与 Routing 实验
 > 当前目标：2026-08-24 周一上午前完成可向老板演示的 Demo / PoC
 
 本文档是项目当前状态的单一快照，采用覆盖式维护。长期背景见 [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)，执行历史与重要决策分别见 [`../WORKLOG.md`](../WORKLOG.md) 和 [`DECISIONS.md`](DECISIONS.md)。
@@ -10,9 +10,9 @@
 
 - 项目：`metis-ai-cloud`，来源于 New API fork。
 - Step 0：已完成 AI 开发协作与上下文基础设施。
-- 当前阶段：BytePlus ECS 公网部署、Cloudflare HTTPS、持久化、自动发布 / 回滚和 ECS → Singapore 私网链路 baseline 均已建立。
+- 当前阶段：BytePlus ECS 公网部署、Cloudflare HTTPS、持久化、自动发布 / 回滚、Singapore Local Model Provider 和 Usage / Billing 闭环均已完成真实验收。
 - Git 基线：部署资产已合入并推送 `main` 与 `develop`；当前 ECS release 为 `b740f5f52f8c14290b62d5b4351cf64ce0ab97db`。
-- 下一主 Milestone：完成 Local Model Provider 的产品配置与真实 Usage / Billing 闭环。
+- 下一主 Milestone：完成管理员日志页面验收、轻量 Branding、Serving Benchmark 与 Cost-aware Routing 实验。
 - 可运行 Deployment Baseline：应用通过 `https://many-models.metisdata.ai` 对外提供 HTTPS 访问，app、PostgreSQL 与 Redis 均通过健康和持久化验证。
 
 目标闭环：
@@ -31,7 +31,7 @@ Singapore Local Model
 GPU / Model
 ```
 
-目标产物包括公网 Demo、真实 API / 模型调用、Streaming、Usage / Billing、Serving Benchmark 数据和 Cost-aware Routing / Model Cascading 实验结果。公网与网络 baseline 已完成；Provider 产品闭环、平台侧 Usage / Billing、Benchmark 和 Routing 实验仍未完成。
+目标产物包括公网 Demo、真实 API / 模型调用、Streaming、Usage / Billing、Serving Benchmark 数据和 Cost-aware Routing / Model Cascading 实验结果。公网、网络、Provider、标准 API 和 Usage / Billing 闭环已完成；Benchmark、Routing 实验和最终 Demo 回归仍未完成。
 
 ## 2. Step 0 状态
 
@@ -70,20 +70,23 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 | Cloudflare DNS | ✅ | `many-models.metisdata.ai` 已通过 Tunnel Published application route 生效 |
 | HTTPS | ✅ | Universal SSL Active；公网首页与 `/api/status` 均返回 HTTP 200，TLS 校验通过 |
 | GitHub Actions 发布 | ✅ | Deploy Run `32558545994`、真实 Rollback Run `32559285305` 与再次部署恢复 Run `32559331290` 均成功 |
-| Singapore Local Model | ✅ 基础接口已验证 | LM Studio 提供 OpenAI-compatible API；模型产品定价与平台 Billing 仍待闭环 |
+| Singapore Local Model | ✅ Gemma 闭环已验证 | LM Studio 提供 OpenAI-compatible API；平台非流式、Streaming、Usage、Billing、权限边界和停服恢复均已验证 |
 | ECS → Singapore 网络 | ✅ | Tailscale 固定私网链路已验证；不使用 exit node 或 subnet route，Tailscale 不接管 ECS DNS |
-| 公网 Demo | 原版 baseline 已建立 | 管理员已初始化为对外营业模式；基础设施已就绪，Provider 产品闭环仍在下一阶段 |
+| 公网 Demo | ✅ 核心闭环已建立 | 管理员已初始化为对外营业模式；Playground 与限模型 API Token 均已完成真实模型调用 |
 
 ## 5. Singapore Local Model
 
-- 当前验证模型：`google/gemma-4-31b`
-- 推理框架：LM Studio
-- API Base URL：保存在 ECS 的 Provider / Channel 配置中；本文不记录凭据
-- OpenAI-compatible：已验证
-- Streaming：原始模型 API 已验证分块、`[DONE]` 与 Usage
-- Usage 返回：原始模型 API 已验证；平台计费闭环仍待完成
+- 当前完整验收模型：`google/gemma-4-31b`，GGUF `Q4_K_M`，模型文件约 19.89 GB
+- 推理框架：LM Studio `0.4.21`
+- Provider / Channel：OpenAI 类型，`default` 分组；API Base URL 和 Credential 保存在 ECS 平台配置中，本文不记录凭据
+- OpenAI-compatible：`/v1/models` 与 Chat Completions 已验证
+- Streaming：平台公网 SSE 已验证 `text/event-stream`、分块事件、`[DONE]` 和最终 Usage
+- Usage / Billing：prompt、completion、total、reasoning token 已返回；Token、用户余额与调用日志扣费一致
+- 权限边界：限模型 Token 访问未授权模型返回 HTTP 403，且不产生计费
+- 故障恢复：LM Studio 停服时平台返回上游错误并记录零 quota 失败日志；服务恢复后 Channel 无需修改即可继续调用
 - GPU：待确认
-- ECS 网络可达性：已通过 Tailscale 固定私网地址验证
+- ECS 网络可达性：已通过 Tailscale 固定私网地址验证，单次 peer 延迟约 40–52 ms；该数据不等同于 Serving Benchmark
+- 验证边界：Channel 当前还列出 `qwen/qwen3.6-35b-a3b`，但本轮只对 Gemma 完成闭环验收；Qwen 不得描述为已验证
 
 ## 6. Demo Deployment
 
@@ -102,23 +105,24 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 
 ## 7. 当前风险与 Blockers
 
-1. Local Model 已配置基础 Channel，但模型定价、平台 API、Usage / Billing 仍需完成真实闭环验收。
-2. ECS 当前使用公共递归 DNS 规避 BytePlus DHCP DNS 与 Tailscale 地址段冲突；后续如有企业 DNS 或合规要求，应更换为 ECS 可达且不位于 `100.64.0.0/10` 的递归 DNS。
-3. New API Branding / License / Attribution 边界需要在品牌二开前进一步确认。
-4. 尚无真实 Serving Benchmark 数据，容量、延迟、吞吐和瓶颈均未知。
-5. Cost-aware Routing 仍是实验方向，尚无质量、成本或性能结论。
-6. 本次部署未创建 BytePlus 云盘快照，shared 数据发生破坏时无法依赖部署前云盘快照恢复。
-7. Self-hosted Runner 依赖 ECS 出站网络与 DNS；该依赖需要持续监控，但不应扩大 Runner 的系统权限。
+1. GPU 型号、显存、驱动和长时间稳定性尚未形成正式记录；现有单次延迟与功能回归不能替代 Serving Benchmark。
+2. Channel 当前还列出未完成闭环验收的 Qwen 模型，使用前必须单独核对定价、权限、Usage / Billing 和质量。
+3. 管理员调用日志已确认落库，但管理员后台页面的展示与筛选仍待人工验收。
+4. ECS 当前使用公共递归 DNS 规避 BytePlus DHCP DNS 与 Tailscale 地址段冲突；后续如有企业 DNS 或合规要求，应更换为 ECS 可达且不位于 `100.64.0.0/10` 的递归 DNS。
+5. New API Branding / License / Attribution 边界需要在品牌二开前进一步确认。
+6. 尚无真实 Serving Benchmark 数据，容量、延迟、吞吐和瓶颈均未知。
+7. Cost-aware Routing 仍是实验方向，尚无质量、成本或性能结论。
+8. 本次部署未创建 BytePlus 云盘快照，shared 数据发生破坏时无法依赖部署前云盘快照恢复。
+9. Self-hosted Runner 依赖 ECS 出站网络与 DNS；该依赖需要持续监控，但不应扩大 Runner 的系统权限。
 
 ## 8. 当前 Scope
 
 ### 当前必须完成
 
-- Singapore Local Model Provider 接入
-- API / Streaming 与 Usage / Billing 闭环
+- 管理员日志页面与最终 Demo 回归
+- 轻量 Branding
 - Serving Benchmark
 - Cost-aware Routing / Model Cascading 实验
-- Demo 回归与演示
 
 ### 基础设施线路已完成
 
@@ -127,6 +131,7 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 - PostgreSQL / Redis 持久化与容器重建恢复
 - GitHub Actions 固定镜像发布、真实回滚与再次部署恢复
 - ECS → Singapore Local Model Tailscale 网络连通性验证
+- Gemma Local Model Provider、非流式 / Streaming、Usage / Billing、权限边界与停服恢复
 
 ### 当前明确不做
 
@@ -138,10 +143,11 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 
 ## 9. 下一步行动
 
-1. 完成当前 Local Model 的 PoC 定价与平台模型配置。
-2. 通过平台 API 验证非流式、Streaming、Token Usage、Quota 与 Billing 记录。
-3. 验证管理员侧调用日志、费用和错误可追溯性。
-4. 在上述闭环稳定后再开展轻量 Branding、Serving Benchmark 与 Cost-aware Routing 实验。
+1. 在管理员后台日志页面确认成功、Streaming 与失败调用的展示和筛选。
+2. 记录 Windows GPU、显存、驱动信息，并设计长时间稳定性与 Serving Benchmark。
+3. 开展轻量 Branding；修改前先确认 License / Attribution 边界。
+4. 在 Gemma 基线之上设计 Cost-aware Routing 实验；Qwen 如需启用，先完成独立闭环验收。
+5. 完成最终 Demo 回归与演示准备。
 
 完成上述事项后，覆盖更新本节与对应状态，不在文件末尾追加旧任务。
 
