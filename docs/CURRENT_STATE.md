@@ -69,6 +69,7 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 | BytePlus ECS | ✅ | app、PostgreSQL、Redis 均为 healthy；应用仅监听 `127.0.0.1:3000` |
 | Cloudflare DNS | ✅ | `many-models.metisdata.ai` 已通过 Tunnel Published application route 生效 |
 | HTTPS | ✅ | Universal SSL Active；公网首页与 `/api/status` 均返回 HTTP 200，TLS 校验通过 |
+| GitHub Actions 发布 | 本地实现已完成 / 待启用 | GHCR 构建、ECS deploy 与 rollback Workflow 已在任务分支实现；尚未 Push、合入默认分支、注册本仓库 Runner 或执行远程 Workflow |
 | Singapore Local Model | 已存在 / 接口待确认 | 公司本地已有小模型服务 |
 | ECS → Singapore 网络 | 未验证 | 当前最高风险项之一 |
 | 公网 Demo | 原版 baseline 已建立 | 管理员已初始化为对外营业模式；尚未接入 Provider 或 Singapore 模型 |
@@ -96,6 +97,7 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 - Persistence：容器重启与 app、PostgreSQL、Redis 分别重建后，管理员数据及非敏感 Redis 探针均通过恢复验证；探针已删除
 - 初始化：管理员初始化完成，运行模式为对外营业模式
 - Authentication：用户已通过公网 HTTPS 完成管理员登录、刷新保持会话与退出验证
+- Release Automation：GitHub-hosted Runner 构建 GHCR 镜像、ECS Self-hosted Runner 通过受限 root wrapper 部署和回滚的本地实现已建立；外部 Runner、Environment 与默认分支 Workflow 尚未启用
 - 共存回归：`xy-stock` systemd 服务、loopback HTTP 与既有公网入口保持可用；Cloudflare Tunnel 进程 active，验收时重启计数为 0
 - 回滚边界：本次由用户明确接受不创建 BytePlus 系统盘或数据盘快照；应用可通过历史完整 release 回滚，但 shared 数据无云盘级部署前快照保护
 
@@ -107,6 +109,7 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 4. 尚无真实 Serving Benchmark 数据，容量、延迟、吞吐和瓶颈均未知。
 5. Cost-aware Routing 仍是实验方向，尚无质量、成本或性能结论。
 6. 本次部署未创建 BytePlus 云盘快照，shared 数据发生破坏时无法依赖部署前云盘快照恢复。
+7. GitHub Actions 发布流程尚未远程启用；本地 Workflow 通过静态和隔离测试不等于 GitHub run 或 ECS 自动部署已成功。
 
 ## 8. 当前 Scope
 

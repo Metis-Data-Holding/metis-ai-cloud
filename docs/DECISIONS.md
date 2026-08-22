@@ -116,3 +116,25 @@
 **影响**
 
 - 模型名称、GPU、推理框架和网络方案等未确认信息不属于本决策。
+
+## DEC-007 — GitHub-hosted 构建，ECS Self-hosted 受限发布
+
+- 日期：2026-08-22
+- 状态：Accepted
+
+**决定**
+
+GitHub Actions 使用 GitHub-hosted Runner 执行 CI 和 `linux/amd64` 镜像构建，使用 BytePlus ECS 上独立的 Self-hosted Runner 实例完成部署与回滚。ECS Runner 复用 Linux 账户 `github-runner`，但使用独立目录、service、labels 和 root-owned 受限发布入口。
+
+**原因**
+
+- 避免把 ECS SSH Private Key 保存到 GitHub，也不需要为 GitHub-hosted Runner 扩大 SSH 入站范围。
+- 避免 ECS 承担 Go、Bun 和 Docker build 压力。
+- 沿用 xy-stock 已验证的受限 sudo 模式，同时隔离两个仓库的 Runner 与发布权限。
+
+**影响**
+
+- `github-runner` 不加入 `docker` 组，只能调用 `/usr/local/sbin/metis-ai-cloud-release`。
+- Self-hosted job 不 checkout 被部署代码，只接收完整 Commit 和固定 GHCR digest。
+- 数据库、Redis、Session 和 Provider Secret 继续只存在于 ECS；Cloudflare route 和安全组不参与日常发布。
+- Workflow 本地实现、Runner 注册、默认分支启用与真实部署验证必须分别报告，不能相互替代。
