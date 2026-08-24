@@ -46,6 +46,7 @@ electron/dist
 token_estimator_test.go
 skills-lock.json
 .playwright-mcp
+.worktrees/
 
 # Local private keys and certificates.
 *.pem
