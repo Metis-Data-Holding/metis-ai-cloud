@@ -102,13 +102,13 @@ go run ./cmd/serving-benchmark run \
       "base_url": "https://many-models.metisdata.ai/v1",
       "model": "google/gemma-4-31b",
       "api_key_env": "BENCHMARK_API_KEY",
-      "extra_body": {}
+      "request_overrides": {}
     },
     "public-deepseek": {
       "base_url": "https://many-models.metisdata.ai/v1",
       "model": "deepseek-v4-flash",
       "api_key_env": "BENCHMARK_API_KEY",
-      "extra_body": {
+      "request_overrides": {
         "thinking": {"type": "disabled"}
       }
     }
@@ -163,7 +163,8 @@ git commit -m "test(benchmark): 定义模型容量测试契约"
 - `api_key`、`authorization`、`credential` 等敏感配置字段出现时拒绝启动；
 - 环境变量不存在时返回只包含变量名、不包含值的错误；
 - Base URL 仅允许 `http` / `https`；
-- 请求数、并发、超时和输出上限必须为正数且有合理上限。
+- 请求数、并发、超时和输出上限必须为正数且有合理上限；
+- 配置必须包含不可绕过的最大并发、请求总数、运行总时长、单请求输出 Token、上下文和可选官方 API 预算上限；超过上限时拒绝启动。
 
 关键接口：
 
@@ -172,7 +173,7 @@ type PathConfig struct {
     BaseURL   string         `json:"base_url"`
     Model     string         `json:"model"`
     APIKeyEnv string         `json:"api_key_env"`
-    ExtraBody map[string]any `json:"extra_body"`
+    RequestOverrides map[string]any `json:"request_overrides"`
 }
 
 func LoadConfig(path string) (Config, error)
@@ -191,7 +192,7 @@ Expected: FAIL，提示实现缺失。
 
 **Step 3: 最小实现**
 
-使用 `common/json.go` wrapper 解析 JSON；显式检查未知敏感字段。错误信息只引用字段名或环境变量名。
+使用 `common/json.go` wrapper 解析 JSON；显式检查未知敏感字段。错误信息只引用字段名或环境变量名。所有新写 Go 测试按仓库规则使用 `testify/require` 做前置 / 致命断言，使用 `testify/assert` 做非致命断言。
 
 **Step 4: 运行通过测试**
 
@@ -227,6 +228,8 @@ git commit -m "test(benchmark): 增加配置与凭据安全门禁"
 - TTFT 从请求发出到第一个非空内容 / reasoning delta；
 - 正确识别 `[DONE]`；
 - 解析最终 Usage；
+- `stream_options.include_usage` 可配置，Provider 未返回 Usage 时结果明确标为 unavailable，不补零；
+- `request_overrides` 合并到请求 JSON 顶层，DeepSeek 请求实际包含顶层 `"thinking":{"type":"disabled"}` 且不包含 `"request_overrides"`；
 - HTTP 非 2xx、SSE error、超时和中断分别分类；
 - 错误正文中的疑似 Key 被替换为 `[REDACTED]`。
 
@@ -241,6 +244,7 @@ type RequestResult struct {
     PromptTokens     int            `json:"prompt_tokens"`
     CompletionTokens int            `json:"completion_tokens"`
     ReasoningTokens  int            `json:"reasoning_tokens"`
+    UsageAvailable   bool           `json:"usage_available"`
     OutputTokensPS   float64        `json:"output_tokens_per_second"`
     HTTPStatus       int            `json:"http_status"`
     ErrorClass       string         `json:"error_class,omitempty"`
@@ -259,7 +263,7 @@ Expected: FAIL。
 
 **Step 3: 最小实现**
 
-使用 `net/http`、`bufio.Scanner` 和 `common/json.go`；增加 Scanner buffer 上限。生成速度从首个有效 Token 到完成时间计算，不能用总请求时间代替。
+使用 `net/http`、`bufio.Scanner` 和 `common/json.go`；增加 Scanner buffer 上限。生成速度从首个有效 Token 到完成时间计算，不能用总请求时间代替。合并 `request_overrides` 时保留工具控制的 `model`、`messages`、`stream` 和安全上限，禁止覆盖 Authorization 或目标 URL。
 
 **Step 4: 运行通过测试**
 
@@ -303,7 +307,7 @@ Expected: FAIL。
 
 **Step 3: 最小实现**
 
-实现固定请求数和固定时长两种终止条件。默认停止条件：连续 5 次失败或最近 20 次错误率超过 10%；实际测试配置可更严格。
+实现固定请求数和固定时长两种终止条件。默认停止条件：连续 5 次失败或最近 20 次错误率超过 10%；实际测试配置可更严格。增加费用 / Token 累计门禁，达到配置预算后不再启动新请求。
 
 **Step 4: 运行通过测试**
 
@@ -330,7 +334,7 @@ git commit -m "test(benchmark): 增加并发执行与自动停止"
 
 用确定输入验证：
 
-- P50 / P95 计算；
+- P50 / P95 计算；有效样本少于 100 时 P95 必须标记为 exploratory；
 - 成功率、错误率和超时率；
 - 单请求 Output Tokens/s 中位数；
 - Aggregate Output Tokens/s；
@@ -408,7 +412,7 @@ benchmark-build:
 ```bash
 make benchmark-test
 make benchmark-build
-gofmt -l cmd/serving-benchmark internal/servingbenchmark
+gofmt -l cmd/serving-benchmark/*.go internal/servingbenchmark/*.go
 ```
 
 Expected: tests / build PASS，`gofmt -l` 无输出。
@@ -528,11 +532,11 @@ Expected: 配置、Prompt 和输出路径检查 PASS，不发模型请求。
 
 **Step 5: A / B / C / D 基线**
 
-每条路径使用短问答，预热后采集至少 20 个成功样本。若某路径因现场权限不能由 Codex直接执行，由用户运行同一跨平台工具并只回传脱敏结果目录。
+每条路径使用短问答，预热后采集至少 20 个成功样本作为探索性基线。若某路径因现场权限不能由 Codex直接执行，由用户运行同一跨平台工具并只回传脱敏结果目录。
 
 **Step 6: 检查点**
 
-比较四条路径的 P50 / P95 TTFT 和 latency；若结果无法解释，停止进入高并发，先修正测试路径或时间同步。
+结果表必须同时记录“压测机 × 被测路径”，四条路径只作为包含式对照，不直接相减为网络、Cloudflare或Gateway耗时。优先比较同一ECS压测机发起的B / C嵌套路径；其他差异只用于发现异常路径。20个样本的P95标为探索性；若结果无法解释，停止进入高并发，先修正测试路径、连接复用或时间同步。
 
 ### Task 10: 运行公网并发阶梯与稳定性测试
 
@@ -541,11 +545,11 @@ Expected: 配置、Prompt 和输出路径检查 PASS，不发模型请求。
 
 **Step 1: 短问答阶梯**
 
-依次运行并发 1、2、4、8、16。每档预热后运行至少 3 分钟或完成 30 个请求，以先满足者为下限；关键拐点重复两轮。
+依次运行并发 1、2、4、8、16。每档预热后运行至少3分钟且完成至少30个请求，作为快速探测；关键拐点重复两轮。快速探测只能报告本轮观测值，不能据此声称成功率达到99%。
 
 **Step 2: 内容生成阶梯**
 
-使用固定输出上限重复并发阶梯。若低并发已触发停止条件，不继续上探。
+使用固定输出上限重复并发阶梯。若低并发已触发停止条件，不继续上探。在并发1基线完成后、首次高并发前，双方先把本次Demo的TTFT、单请求Output Tokens/s和超时门槛写入run metadata。
 
 **Step 3: 每档检查**
 
@@ -553,15 +557,19 @@ Expected: 配置、Prompt 和输出路径检查 PASS，不发模型请求。
 
 **Step 4: 确定候选稳定并发**
 
-使用设计文档中的稳定容量定义，不简单选择“没有报错的最大数字”。
+使用设计文档中的稳定容量定义，不简单选择“没有报错的最大数字”。候选档位至少收集100个有效样本后才正式报告P95；若要声称“成功率不低于99%”，应完成约300个零失败样本，否则只报告实际观测的N/N。
 
 **Step 5: 30分钟稳定性测试**
 
-以候选稳定并发的约70%～80%运行。测试结束后重新执行健康检查，并观察指标是否恢复。
+在准备声称的“已验证稳定并发”上运行约30分钟。测试结束后重新执行健康检查，并观察指标是否恢复。验证通过后，再将其70%～80%单独列为保守运行建议值，不能把较低并发的soak当作较高并发已稳定的证据。
 
 **Step 6: 瓶颈复核**
 
-在拐点并发下选择性重复 A / B / C，区分 GPU / Serving、网络和 Gateway 开销。未经证据支持不归因。
+在拐点并发下选择性重复 A / B / C，结合固定压测机的配对路径、GPU、网络和Gateway资源证据缩小瓶颈范围。未经独立证据支持不做组件级因果归因。
+
+**Step 7: 可选 arrival-rate ramp**
+
+在closed-loop结果稳定后，使用硬性请求数、时长、并发和Token上限运行短时固定到达率ramp，观察突发到达、排队和超时。若不执行，报告明确说明容量只代表持续在途请求数，不能外推峰值RPS或注册用户数。
 
 ### Task 11: 接入 DeepSeek 并完成参考测试
 
@@ -575,7 +583,7 @@ Expected: 配置、Prompt 和输出路径检查 PASS，不发模型请求。
 
 **Step 2: 功能 Smoke**
 
-通过 metis-ai-cloud 公网入口测试非流式、Streaming、Usage 和 Billing；显式设置 `thinking.type=disabled`。
+通过 metis-ai-cloud 公网入口测试非流式、Streaming、`[DONE]`、Usage 和 Billing；检查实际HTTP body中的`thinking`是顶层disabled字段，并从API Usage与平台日志确认未产生reasoning tokens。若官方响应仍显示thinking行为，停止性能对比并先修正请求。
 
 **Step 3: 小样本性能参考**
 
@@ -587,7 +595,7 @@ Gemma与DeepSeek使用相同10～20题；保存模型输出的脱敏副本或摘
 
 **Step 5: 成本核对**
 
-以测试当天DeepSeek官方价格、API返回Usage和平台日志计算单次成本；记录价格来源日期。平台测试价格与官方实际成本分栏展示。
+以测试当天DeepSeek官方价格、API返回Usage和平台日志计算单次成本；记录测试UTC时间、价格快照、缓存命中 / 未命中、输出Token和Usage可得性。无法取得缓存或Usage字段时明确标为估算值。平台测试价格与官方实际成本分栏展示。
 
 ### Task 12: 汇总数据并编写测试报告
 
@@ -630,10 +638,10 @@ Gemma与DeepSeek使用相同10～20题；保存模型输出的脱敏副本或摘
 
 ```bash
 git diff --check -- reports/demo
-rg -n "Bearer |api[_-]?key|Authorization|sk-" reports/demo
+rg -n "Bearer [A-Za-z0-9._-]{16,}|sk-[A-Za-z0-9_-]{12,}|api[_-]?key[=:][[:space:]]*[A-Za-z0-9_-]{12,}" reports/demo
 ```
 
-Expected: diff check PASS；Secret扫描无真实值。确认后显式暂存报告文件并提交。
+Expected: diff check PASS。人工审阅Secret扫描的每一条命中；无命中不代替人工检查，出现字段名等预期文本也不能直接判定为泄露。确认后显式暂存报告文件并提交。
 
 ### Task 13: 制作架构图、PPT、PDF 与 HTML 附录
 
