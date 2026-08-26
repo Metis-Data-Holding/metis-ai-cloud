@@ -32,6 +32,17 @@ export const loadThresholds = {
   gateway_protocol_valid: [{ threshold: 'rate>0.99', abortOnFail: true, delayAbortEval: '10s' }],
 };
 
+export const nonStreamLoadThresholds = {
+  ...loadThresholds,
+  gateway_overhead_duration_ms: [{ threshold: 'p(95)<1000', abortOnFail: true, delayAbortEval: '10s' }],
+};
+
+// 这是 HTTP 响应头首字节的停止线，不是模型 Token TTFT。
+export const streamingLoadThresholds = {
+  ...loadThresholds,
+  gateway_http_ttfb: [{ threshold: 'p(95)<1000', abortOnFail: true, delayAbortEval: '10s' }],
+};
+
 const target = __ENV.GATEWAY_CAPACITY_TARGET || 'https://invalid.local';
 const model = __ENV.GATEWAY_CAPACITY_MODEL || 'mock-sleep-1s';
 const apiKey = __ENV.GATEWAY_CAPACITY_API_KEY || '';
@@ -67,12 +78,12 @@ export function requestBody(stream) {
   });
 }
 
-export function requestParams(mode) {
+export function requestParams(stream, mode) {
   return {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
-      Accept: mode === 'streaming' ? 'text/event-stream' : 'application/json',
+      Accept: stream ? 'text/event-stream' : 'application/json',
     },
     timeout: __ENV.TIMEOUT || '30s',
     tags: { gateway_test_mode: mode, load_model: loadModel },
@@ -126,7 +137,7 @@ export function observeResponse(response, { stream = false, mode = stream ? 'str
 }
 
 export function postCompletion(stream, mode) {
-  const response = http.post(completionEndpoint(), requestBody(stream), requestParams(mode));
+  const response = http.post(completionEndpoint(), requestBody(stream), requestParams(stream, mode));
   observeResponse(response, { stream, mode });
   return response;
 }

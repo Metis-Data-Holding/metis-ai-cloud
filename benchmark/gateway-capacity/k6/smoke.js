@@ -8,4 +8,5 @@ export const options = {
 
 export default function () {
   postCompletion(false, 'smoke');
+  postCompletion(true, 'smoke');
 }
