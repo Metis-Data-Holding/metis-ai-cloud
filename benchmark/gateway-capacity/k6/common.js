@@ -20,6 +20,8 @@ export const gatewayE2ELatency = new Trend('gateway_e2e_latency');
 export const gatewayHttpTtfb = new Trend('gateway_http_ttfb');
 export const gatewayOverheadDuration = new Trend('gateway_overhead_duration_ms');
 
+export const formalSummaryTrendStats = ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'];
+
 export const smokeThresholds = {
   http_req_failed: ['rate<0.01'],
   gateway_error_rate: ['rate<0.01'],
@@ -34,13 +36,13 @@ export const loadThresholds = {
 
 export const nonStreamLoadThresholds = {
   ...loadThresholds,
-  gateway_overhead_duration_ms: [{ threshold: 'p(95)<1000', abortOnFail: true, delayAbortEval: '10s' }],
+  gateway_overhead_duration_ms: [{ threshold: 'p(95)<1000', abortOnFail: true, delayAbortEval: '30s' }],
 };
 
 // 这是 HTTP 响应头首字节的停止线，不是模型 Token TTFT。
 export const streamingLoadThresholds = {
   ...loadThresholds,
-  gateway_http_ttfb: [{ threshold: 'p(95)<1000', abortOnFail: true, delayAbortEval: '10s' }],
+  gateway_http_ttfb: [{ threshold: 'p(95)<1000', abortOnFail: true, delayAbortEval: '30s' }],
 };
 
 const target = __ENV.GATEWAY_CAPACITY_TARGET || 'https://invalid.local';

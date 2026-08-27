@@ -48,6 +48,9 @@ skills-lock.json
 .playwright-mcp
 .worktrees/
 
+# Local Serving Benchmark outputs. Raw GuideLLM reports include the target URL.
+artifacts/benchmarks/
+
 # Local private keys and certificates.
 *.pem
 *.key

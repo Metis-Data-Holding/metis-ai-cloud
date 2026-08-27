@@ -40,18 +40,24 @@ describe('gateway capacity k6 configuration', () => {
     assert.match(smoke, /postCompletion\(true,\s*'smoke'\)/);
   });
 
-  it('keeps formal latency stop lines on the mode that produces each sample', () => {
+  it('keeps formal latency stop lines with a 30-second sample window', () => {
     assert.match(common, /export const nonStreamLoadThresholds\s*=\s*\{/);
     assert.match(common, /export const streamingLoadThresholds\s*=\s*\{/);
     const nonStreamThresholds = common.slice(common.indexOf('export const nonStreamLoadThresholds'));
     const streamingThresholds = common.slice(common.indexOf('export const streamingLoadThresholds'));
-    assert.match(nonStreamThresholds, /gateway_overhead_duration_ms[\s\S]{0,240}p\(95\)<1000[\s\S]{0,120}abortOnFail:\s*true[\s\S]{0,120}delayAbortEval:\s*['"]10s['"]/);
-    assert.match(streamingThresholds, /gateway_http_ttfb[\s\S]{0,240}p\(95\)<1000[\s\S]{0,120}abortOnFail:\s*true[\s\S]{0,120}delayAbortEval:\s*['"]10s['"]/);
+    assert.match(nonStreamThresholds, /gateway_overhead_duration_ms[\s\S]{0,240}p\(95\)<1000[\s\S]{0,120}abortOnFail:\s*true[\s\S]{0,120}delayAbortEval:\s*['"]30s['"]/);
+    assert.match(streamingThresholds, /gateway_http_ttfb[\s\S]{0,240}p\(95\)<1000[\s\S]{0,120}abortOnFail:\s*true[\s\S]{0,120}delayAbortEval:\s*['"]30s['"]/);
     assert.match(nonStream, /nonStreamLoadThresholds/);
     assert.match(streaming, /streamingLoadThresholds/);
     assert.doesNotMatch(nonStream, /streamingLoadThresholds/);
     assert.doesNotMatch(streaming, /nonStreamLoadThresholds/);
     assert.match(common, /HTTP 响应头首字节.*不是严格的模型 TTFT/);
+  });
+
+  it('includes P99 in formal trend summaries', () => {
+    assert.match(common, /export const formalSummaryTrendStats\s*=\s*\[[^\]]*['"]p\(99\)['"]/s);
+    assert.match(nonStream, /summaryTrendStats:\s*formalSummaryTrendStats/);
+    assert.match(streaming, /summaryTrendStats:\s*formalSummaryTrendStats/);
   });
 
   it('selects the streaming Accept header from the stream boolean', () => {

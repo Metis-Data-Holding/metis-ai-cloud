@@ -224,7 +224,7 @@ ssh ECS-RI4m 'bash -s -- --output-dir /tmp/gateway-capacity-snapshots --containe
 立即停止当前档位或整场测试的条件：
 
 - 错误率超过 1%，或 429/502/503/504 持续出现；
-- 非流式 `gateway_overhead_duration_ms` 的 p95 超过 1 秒，或流式 `gateway_http_ttfb` 的 p95 超过 1 秒；k6 会在连续评估 10 秒后自动中止对应负载。流式指标是 HTTP 首字节近似值，不是模型 Token TTFT；
+- 非流式 `gateway_overhead_duration_ms` 的 p95 超过 1 秒，或流式 `gateway_http_ttfb` 的 p95 超过 1 秒；延迟类停止线会先积累 30 秒样本再自动中止，避免低档位小样本被少量公网冷连接长尾误判。错误率与协议停止线仍在 10 秒后开始评估。流式指标是 HTTP 首字节近似值，不是模型 Token TTFT；
 - ECS CPU 持续超过 85% 两分钟，内存超过 80% 或持续增长；
 - 文件描述符、连接池、网络连接耗尽，容器 OOM/restart/health 失败；
 - many-models、Mock 或公网入口无法恢复健康。
