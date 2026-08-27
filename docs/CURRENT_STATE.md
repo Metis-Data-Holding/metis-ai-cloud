@@ -1,7 +1,7 @@
 # Metis AI Cloud 当前状态
 
-> 最后更新：2026-08-22
-> 当前 Milestone：Local Model Provider、Usage / Billing 闭环
+> 最后更新：2026-08-26
+> 当前 Milestone：Demo 汇报与 Serving Benchmark 收尾
 > 当前目标：2026-08-24 周一上午前完成可向老板演示的 Demo / PoC
 
 本文档是项目当前状态的单一快照，采用覆盖式维护。长期背景见 [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)，执行历史与重要决策分别见 [`../WORKLOG.md`](../WORKLOG.md) 和 [`DECISIONS.md`](DECISIONS.md)。
@@ -12,7 +12,12 @@
 - Step 0：已完成 AI 开发协作与上下文基础设施。
 - 当前阶段：BytePlus ECS 公网部署、Cloudflare HTTPS、持久化、自动发布 / 回滚和 ECS → Singapore 私网链路 baseline 均已建立。
 - Git 基线：部署资产已合入并推送 `main` 与 `develop`；当前 ECS release 为 `b740f5f52f8c14290b62d5b4351cf64ce0ab97db`。
-- 下一主 Milestone：完成 Local Model Provider 的产品配置与真实 Usage / Billing 闭环。
+- Local Model Provider、普通用户 API、Streaming、Usage / Billing 与 Serving Benchmark 均已形成真实验证证据。
+- 当前容量结论：老板现场建议并发 1～2；并发 4 已通过 30 分钟稳定性验证。将 LM Studio 预测槽位放宽至 6 只获得约 9.9% 吞吐增益，同时 TTFT P50 增加约 72.9%。
+- 加权路由 baseline：同一 `google/gemma-4-31b` 入口已验证按权重选择本地 Gemma 或映射到 DeepSeek；20 个短请求实际分布 13 / 7，30 个混合 Streaming 请求零错误。
+- 网关容量 baseline：固定延迟 Mock 短时闭环中，非流式 100 VU、Streaming 25 VU 通过，下一档分别在 200 / 50 VU 触发延迟停止线。
+- 网关稳定性：Streaming 20 VU 运行 30 分钟，完成 42779 请求，其中 6 次 HTTP 503，错误率 0.014%；容器无重启、OOM 或内存持续增长。
+- 下一主 Milestone：完善老板 Demo 交付，归因网关稳定性轮次中的 6 次 HTTP 503，并设计开放到达率与真实服务器复测。
 - 可运行 Deployment Baseline：应用通过 `https://many-models.metisdata.ai` 对外提供 HTTPS 访问，app、PostgreSQL 与 Redis 均通过健康和持久化验证。
 
 目标闭环：
@@ -31,7 +36,7 @@ Singapore Local Model
 GPU / Model
 ```
 
-目标产物包括公网 Demo、真实 API / 模型调用、Streaming、Usage / Billing、Serving Benchmark 数据和 Cost-aware Routing / Model Cascading 实验结果。公网与网络 baseline 已完成；Provider 产品闭环、平台侧 Usage / Billing、Benchmark 和 Routing 实验仍未完成。
+公网 Demo、真实 API / 模型调用、Streaming、Usage / Billing 与 Serving Benchmark 数据已经具备；Cost-aware Routing / Model Cascading 仍为后续实验方向。
 
 ## 2. Step 0 状态
 
@@ -70,7 +75,7 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 | Cloudflare DNS | ✅ | `many-models.metisdata.ai` 已通过 Tunnel Published application route 生效 |
 | HTTPS | ✅ | Universal SSL Active；公网首页与 `/api/status` 均返回 HTTP 200，TLS 校验通过 |
 | GitHub Actions 发布 | ✅ | Deploy Run `32558545994`、真实 Rollback Run `32559285305` 与再次部署恢复 Run `32559331290` 均成功 |
-| Singapore Local Model | ✅ 基础接口已验证 | LM Studio 提供 OpenAI-compatible API；模型产品定价与平台 Billing 仍待闭环 |
+| Singapore Local Model | ✅ 业务闭环已验证 | LM Studio 提供 OpenAI-compatible API；Gemma Streaming、Usage、平台 Billing 与模型权限已验证 |
 | ECS → Singapore 网络 | ✅ | Tailscale 固定私网链路已验证；不使用 exit node 或 subnet route，Tailscale 不接管 ECS DNS |
 | 公网 Demo | 原版 baseline 已建立 | 管理员已初始化为对外营业模式；基础设施已就绪，Provider 产品闭环仍在下一阶段 |
 
@@ -81,8 +86,9 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 - API Base URL：保存在 ECS 的 Provider / Channel 配置中；本文不记录凭据
 - OpenAI-compatible：已验证
 - Streaming：原始模型 API 已验证分块、`[DONE]` 与 Usage
-- Usage 返回：原始模型 API 已验证；平台计费闭环仍待完成
-- GPU：待确认
+- Usage 返回：原始模型 API 与平台计费闭环均已验证
+- GPU：NVIDIA GeForce RTX 4090，24564 MiB；Gemma 4 31B 加载后显存约 23.9 GB
+- Serving Benchmark：并发 4 已完成 30 分钟稳定性验证；预测槽位 6 的并发 4/5/6 短时实验已完成
 - ECS 网络可达性：已通过 Tailscale 固定私网地址验证
 
 ## 6. Demo Deployment
@@ -102,21 +108,22 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 
 ## 7. 当前风险与 Blockers
 
-1. Local Model 已配置基础 Channel，但模型定价、平台 API、Usage / Billing 仍需完成真实闭环验收。
+1. `Max Concurrent Predictions = 6` 仅通过短时参数实验，不能替代并发 4 的 30 分钟稳定性证据。
 2. ECS 当前使用公共递归 DNS 规避 BytePlus DHCP DNS 与 Tailscale 地址段冲突；后续如有企业 DNS 或合规要求，应更换为 ECS 可达且不位于 `100.64.0.0/10` 的递归 DNS。
 3. New API Branding / License / Attribution 边界需要在品牌二开前进一步确认。
-4. 尚无真实 Serving Benchmark 数据，容量、延迟、吞吐和瓶颈均未知。
-5. Cost-aware Routing 仍是实验方向，尚无质量、成本或性能结论。
+4. Serving Benchmark 已找到当前交互容量边界，但尚未验证长上下文、多轮、多模型并载、故障恢复或 Production SLA。
+5. 加权路由核心功能已验证，但尚未形成质量评估、统一成本模型、用户知情机制或 Production 路由策略。
 6. 本次部署未创建 BytePlus 云盘快照，shared 数据发生破坏时无法依赖部署前云盘快照恢复。
 7. Self-hosted Runner 依赖 ECS 出站网络与 DNS；该依赖需要持续监控，但不应扩大 Runner 的系统权限。
+8. 网关 Mock 测试只是固定 VU 闭环容量，不代表实际用户数、开放到达率、Production SLA 或真实模型容量；30 分钟轮次的 6 次 HTTP 503 尚待日志级归因。
 
 ## 8. 当前 Scope
 
 ### 当前必须完成
 
-- Singapore Local Model Provider 接入
-- API / Streaming 与 Usage / Billing 闭环
-- Serving Benchmark
+- Singapore Local Model Provider 接入（已完成）
+- API / Streaming 与 Usage / Billing 闭环（已完成）
+- Serving Benchmark（已完成基础容量、稳定性与参数实验）
 - Cost-aware Routing / Model Cascading 实验
 - Demo 回归与演示
 
@@ -138,10 +145,11 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 
 ## 9. 下一步行动
 
-1. 完成当前 Local Model 的 PoC 定价与平台模型配置。
-2. 通过平台 API 验证非流式、Streaming、Token Usage、Quota 与 Billing 记录。
-3. 验证管理员侧调用日志、费用和错误可追溯性。
-4. 在上述闭环稳定后再开展轻量 Branding、Serving Benchmark 与 Cost-aware Routing 实验。
+1. 完善老板汇报稿、架构图、HTML/PDF/PPT 交付与现场 Demo 脚本。
+2. 对网关 Streaming 30 分钟轮次中的 6 次 HTTP 503 做 many-models、Cloudflare 和 Mock 日志交叉归因。
+3. 使用开放到达率模型和多轮重复运行，形成可用于容量规划的区间，不把固定 VU 换算为用户数。
+4. 在真实服务器与候选工业显卡上复测模型容量，并补充长上下文、多轮、多模型并载、质量/成本与故障恢复。
+5. 完成测试资源清理前先确认是否仍需保留 ECS 临时 Mock 容器与测试渠道。
 
 完成上述事项后，覆盖更新本节与对应状态，不在文件末尾追加旧任务。
 
