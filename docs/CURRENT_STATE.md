@@ -1,7 +1,7 @@
 # Metis AI Cloud 当前状态
 
-> 最后更新：2026-08-23
-> 当前 Milestone：Demo 收尾、Serving Benchmark 与 Routing 实验
+> 最后更新：2026-08-26
+> 当前 Milestone：Demo 汇报与 Serving Benchmark 收尾
 > 当前目标：2026-08-24 周一上午前完成可向老板演示的 Demo / PoC
 
 本文档是项目当前状态的单一快照，采用覆盖式维护。长期背景见 [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)，执行历史与重要决策分别见 [`../WORKLOG.md`](../WORKLOG.md) 和 [`DECISIONS.md`](DECISIONS.md)。
@@ -12,7 +12,12 @@
 - Step 0：已完成 AI 开发协作与上下文基础设施。
 - 当前阶段：BytePlus ECS 公网部署、Cloudflare HTTPS、持久化、自动发布 / 回滚、Singapore Local Model Provider 和 Usage / Billing 闭环均已完成真实验收。
 - Git 基线：部署资产已合入并推送 `main` 与 `develop`；当前 ECS release 为 `b740f5f52f8c14290b62d5b4351cf64ce0ab97db`。
-- 下一主 Milestone：完成管理员日志页面验收、轻量 Branding、Serving Benchmark 与 Cost-aware Routing 实验。
+- Local Model Provider、普通用户 API、Streaming、Usage / Billing 与 Serving Benchmark 均已形成真实验证证据。
+- 当前容量结论：老板现场建议并发 1～2；并发 4 已通过 30 分钟稳定性验证。将 LM Studio 预测槽位放宽至 6 只获得约 9.9% 吞吐增益，同时 TTFT P50 增加约 72.9%。
+- 加权路由 baseline：同一 `google/gemma-4-31b` 入口已验证按权重选择本地 Gemma 或映射到 DeepSeek；20 个短请求实际分布 13 / 7，30 个混合 Streaming 请求零错误。
+- 网关容量 baseline：固定延迟 Mock 短时闭环中，非流式 100 VU、Streaming 25 VU 通过，下一档分别在 200 / 50 VU 触发延迟停止线。
+- 网关稳定性：Streaming 20 VU 运行 30 分钟，完成 42779 请求，其中 6 次 HTTP 503，错误率 0.014%；容器无重启、OOM 或内存持续增长。
+- 下一主 Milestone：完善老板 Demo 交付，归因网关稳定性轮次中的 6 次 HTTP 503，并设计开放到达率与真实服务器复测。
 - 可运行 Deployment Baseline：应用通过 `https://many-models.metisdata.ai` 对外提供 HTTPS 访问，app、PostgreSQL 与 Redis 均通过健康和持久化验证。
 
 目标闭环：
@@ -31,7 +36,7 @@ Singapore Local Model
 GPU / Model
 ```
 
-目标产物包括公网 Demo、真实 API / 模型调用、Streaming、Usage / Billing、Serving Benchmark 数据和 Cost-aware Routing / Model Cascading 实验结果。公网、网络、Provider、标准 API 和 Usage / Billing 闭环已完成；Benchmark、Routing 实验和最终 Demo 回归仍未完成。
+公网 Demo、真实 API / 模型调用、Streaming、Usage / Billing 与 Serving Benchmark 数据已经具备；Cost-aware Routing / Model Cascading 仍为后续实验方向。
 
 ## 2. Step 0 状态
 
@@ -84,9 +89,10 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 - Usage / Billing：prompt、completion、total、reasoning token 已返回；Token、用户余额与调用日志扣费一致
 - 权限边界：限模型 Token 访问未授权模型返回 HTTP 403，且不产生计费
 - 故障恢复：LM Studio 停服时平台返回上游错误并记录零 quota 失败日志；服务恢复后 Channel 无需修改即可继续调用
-- GPU：待确认
+- GPU：NVIDIA GeForce RTX 4090，24564 MiB；Gemma 4 31B 加载后显存约 23.9 GB
+- Serving Benchmark：并发 4 已完成 30 分钟稳定性验证；预测槽位 6 的并发 4/5/6 短时实验已完成
 - ECS 网络可达性：已通过 Tailscale 固定私网地址验证，单次 peer 延迟约 40–52 ms；该数据不等同于 Serving Benchmark
-- 验证边界：Channel 当前还列出 `qwen/qwen3.6-35b-a3b`，但本轮只对 Gemma 完成闭环验收；Qwen 不得描述为已验证
+- 验证边界：本轮只对 Gemma 完成闭环与容量验收；其他模型不得据此描述为已验证
 
 ## 6. Demo Deployment
 
@@ -105,24 +111,25 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 
 ## 7. 当前风险与 Blockers
 
-1. GPU 型号、显存、驱动和长时间稳定性尚未形成正式记录；现有单次延迟与功能回归不能替代 Serving Benchmark。
-2. Channel 当前还列出未完成闭环验收的 Qwen 模型，使用前必须单独核对定价、权限、Usage / Billing 和质量。
-3. 管理员调用日志已确认落库，但管理员后台页面的展示与筛选仍待人工验收。
-4. ECS 当前使用公共递归 DNS 规避 BytePlus DHCP DNS 与 Tailscale 地址段冲突；后续如有企业 DNS 或合规要求，应更换为 ECS 可达且不位于 `100.64.0.0/10` 的递归 DNS。
-5. New API Branding / License / Attribution 边界需要在品牌二开前进一步确认。
-6. 尚无真实 Serving Benchmark 数据，容量、延迟、吞吐和瓶颈均未知。
-7. Cost-aware Routing 仍是实验方向，尚无质量、成本或性能结论。
-8. 本次部署未创建 BytePlus 云盘快照，shared 数据发生破坏时无法依赖部署前云盘快照恢复。
-9. Self-hosted Runner 依赖 ECS 出站网络与 DNS；该依赖需要持续监控，但不应扩大 Runner 的系统权限。
+1. `Max Concurrent Predictions = 6` 仅通过短时参数实验，不能替代并发 4 的 30 分钟稳定性证据。
+2. ECS 当前使用公共递归 DNS 规避 BytePlus DHCP DNS 与 Tailscale 地址段冲突；后续如有企业 DNS 或合规要求，应更换为 ECS 可达且不位于 `100.64.0.0/10` 的递归 DNS。
+3. New API Branding / License / Attribution 边界需要在品牌二开前进一步确认。
+4. Serving Benchmark 已找到当前交互容量边界，但尚未验证长上下文、多轮、多模型并载、故障恢复或 Production SLA。
+5. 加权路由核心功能已验证，但尚未形成质量评估、统一成本模型、用户知情机制或 Production 路由策略。
+6. 本次部署未创建 BytePlus 云盘快照，shared 数据发生破坏时无法依赖部署前云盘快照恢复。
+7. Self-hosted Runner 依赖 ECS 出站网络与 DNS；该依赖需要持续监控，但不应扩大 Runner 的系统权限。
+8. 网关 Mock 测试只是固定 VU 闭环容量，不代表实际用户数、开放到达率、Production SLA 或真实模型容量；30 分钟轮次的 6 次 HTTP 503 尚待日志级归因。
 
 ## 8. 当前 Scope
 
 ### 当前必须完成
 
-- 管理员日志页面与最终 Demo 回归
-- 轻量 Branding
-- Serving Benchmark
+- Singapore Local Model Provider 接入（已完成）
+- API / Streaming 与 Usage / Billing 闭环（已完成）
+- Serving Benchmark（已完成基础容量、稳定性与参数实验）
 - Cost-aware Routing / Model Cascading 实验
+- 轻量 Branding
+- 最终 Demo 回归与演示材料
 
 ### 基础设施线路已完成
 
@@ -131,7 +138,6 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 - PostgreSQL / Redis 持久化与容器重建恢复
 - GitHub Actions 固定镜像发布、真实回滚与再次部署恢复
 - ECS → Singapore Local Model Tailscale 网络连通性验证
-- Gemma Local Model Provider、非流式 / Streaming、Usage / Billing、权限边界与停服恢复
 
 ### 当前明确不做
 
@@ -143,11 +149,12 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 
 ## 9. 下一步行动
 
-1. 在管理员后台日志页面确认成功、Streaming 与失败调用的展示和筛选。
-2. 记录 Windows GPU、显存、驱动信息，并设计长时间稳定性与 Serving Benchmark。
-3. 开展轻量 Branding；修改前先确认 License / Attribution 边界。
-4. 在 Gemma 基线之上设计 Cost-aware Routing 实验；Qwen 如需启用，先完成独立闭环验收。
-5. 完成最终 Demo 回归与演示准备。
+1. 完善老板汇报稿、架构图、HTML/PDF/PPT 交付与现场 Demo 脚本。
+2. 对网关 Streaming 30 分钟轮次中的 6 次 HTTP 503 做 many-models、Cloudflare 和 Mock 日志交叉归因。
+3. 使用开放到达率模型和多轮重复运行，形成可用于容量规划的区间，不把固定 VU 换算为用户数。
+4. 在真实服务器与候选工业显卡上复测模型容量，并补充长上下文、多轮、多模型并载、质量/成本与故障恢复。
+5. 开展轻量 Branding；修改前先确认 License / Attribution 边界。
+6. 完成测试资源清理前先确认是否仍需保留 ECS 临时 Mock 容器与测试渠道。
 
 完成上述事项后，覆盖更新本节与对应状态，不在文件末尾追加旧任务。
 

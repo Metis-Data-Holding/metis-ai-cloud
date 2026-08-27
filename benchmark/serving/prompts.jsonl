@@ -1,0 +1,4 @@
+{"id":"short-answer-01","profile":"short-answer","prompt":"请用三句话说明企业通过统一 AI API 接入多个模型的主要价值。"}
+{"id":"short-answer-02","profile":"short-answer","prompt":"请列出模型 API 服务上线前最需要检查的三个指标，每项只写一句。"}
+{"id":"content-generation-01","profile":"content-generation","prompt":"请为一家面向亚太开发者的 AI 推理 API 平台撰写一段约 300 字的中文产品介绍，包含统一接口、流式响应、用量统计和多模型接入。"}
+{"id":"content-generation-02","profile":"content-generation","prompt":"请用通俗中文解释大模型服务中首 Token 延迟、单用户生成速度和系统总吞吐之间的区别，并给出一个生活化类比。"}

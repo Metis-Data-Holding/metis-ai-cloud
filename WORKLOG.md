@@ -69,6 +69,8 @@
 - 将已验证的当前拓扑、ECS 目录、Cloudflare Tunnel、GitHub Actions 日常发布 / 回滚、只读巡检、Tailscale 与 DNS 共存边界、Secret 与无云盘快照风险统一整理到基础设施文档。
 - BytePlus 部署线路完成固定 Commit 发布、持久化、HTTPS、登录会话、容器重建恢复、真实回滚与再次部署恢复闭环；后续工作转入 Local Model Provider、Usage / Billing、Branding 与 Benchmark。
 
+## 2026-08-23
+
 ### Singapore Local Model Provider 与 Billing 闭环
 
 - 通过 Tailscale 将 ECS 与 Windows LM Studio `0.4.21` 连接，完成 `google/gemma-4-31b` OpenAI-compatible Channel 配置；Provider Credential 仅保存在平台中。
@@ -76,4 +78,25 @@
 - 用户通过 Playground 完成真实对话；公网标准 API 的非流式、Streaming、`[DONE]`、Usage 与 reasoning token 均验证通过。
 - 使用限模型测试 Token 验证权限边界、Token / 用户余额 / 日志 Billing 一致性；未授权模型被拒绝且不计费。
 - 完成 LM Studio 停服与恢复回归：停服返回上游错误并记录零 quota 失败日志，恢复后原 Channel 无需修改即可继续调用。
-- 运行态复核确认 app、PostgreSQL、Redis、Tailscale、Self-hosted Runner、GitHub/GHCR DNS 和公网状态正常；GPU/显存、管理员日志页面、Serving Benchmark、Qwen 与 Routing 仍待独立验收。
+- 运行态复核确认 app、PostgreSQL、Redis、Tailscale、Self-hosted Runner、GitHub/GHCR DNS 和公网状态正常。
+
+## 2026-08-24
+
+### Demo 业务闭环与 Serving Benchmark
+
+- 完成普通用户注册登录、Playground、API Key、模型权限、Streaming、Usage 与计费的公网闭环验证。
+- 完成 Gemma 4 31B 的短时容量阶梯与并发 4、30 分钟稳定性测试；稳定性测试记录 1308 个成功请求、0 个请求错误。
+- 完成 Gemma 与 DeepSeek V4 Flash 的并发 1 体验参考，并核对 many-models 与 DeepSeek 官方 Token 聚合结果。
+- 将 LM Studio 并行预测槽位从 4 调至 6 后完成并发 4、5、6 参数实验；72 个请求全部成功。槽位放宽提高约 9.9% 总吞吐，但 TTFT P50 增加约 72.9%，不改变交互业务优先使用并发 4 的建议。
+- 使用 GuideLLM、Windows `nvidia-smi`、LM Studio 日志及平台调用记录形成 Markdown 与 Lieflat HTML 测试报告；原始结果和 GPU CSV 仅保存在未跟踪本地目录。
+- 完成 New API 同优先级加权路由与 Model Mapping 功能测试：20 个非流式请求中 Gemma / DeepSeek 实际观察为 13 / 7，30 个混合 Streaming 请求全部成功；后台逐渠道日志与流式输出上限口径仍待补证。
+
+## 2026-08-26
+
+### 固定延迟 Mock 网关容量测试
+
+- 在 ECS 应用内网部署无宿主端口的临时 Mock Provider，从 macOS 使用 k6 经 Cloudflare 和 many-models 发起真实公网请求，隔离排除真实模型与 GPU 影响。
+- 完成非流式与 Streaming 固定 VU 阶梯：非流式 100 VU、Streaming 25 VU 为短时最后通过档；200 / 50 VU 分别触发 P95 延迟停止线。
+- 完成 Streaming 20 VU、30 分钟稳定性测试：42779 个请求中 42773 个 2xx、6 个 HTTP 503，错误率 0.014%；核心容器全程 healthy、重启数为 0、无 OOM 或内存持续增长。
+- 修正 10 秒小样本延迟误触发：错误与协议停止线保持 10 秒，延迟停止线改为 30 秒观察窗口；正式汇总增加 P99 供后续运行采集。
+- 更新 Markdown 与 Lieflat HTML 报告，明确区分真实模型并发、网关 VU、用户数与 Production SLA。

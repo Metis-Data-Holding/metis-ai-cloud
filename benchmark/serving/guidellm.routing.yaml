@@ -1,0 +1,45 @@
+metadata:
+  labels:
+    project: metis-ai-cloud
+    purpose: weighted-routing-functional-test
+
+spec:
+  backend:
+    kind: openai_http
+    request_format: /v1/chat/completions
+    stream: true
+    timeout: 120
+    timeout_connect: 10
+    verify: true
+    max_tokens: 32
+
+  profile:
+    kind: synchronous
+
+  constraints:
+    - kind: max_requests
+      stopping_scope: current
+      count: 30
+    - kind: max_errors
+      stopping_scope: all
+      count: 1
+
+  tokenizer:
+    kind: huggingface_auto
+    model: gpt2
+
+  data:
+    - kind: synthetic_text
+      prompt_tokens: 32
+      output_tokens: 32
+
+  outputs:
+    - kind: json
+      path: artifacts/benchmarks/weighted-routing/guidellm.json
+    - kind: csv
+      path: artifacts/benchmarks/weighted-routing/guidellm.csv
+
+  metrics:
+    kind: generative
+    sample_size: 0
+    prefer_response_metrics: true
