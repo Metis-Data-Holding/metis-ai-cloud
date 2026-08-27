@@ -204,14 +204,16 @@ P95 至少需要 100 个有效样本才作为正式分位数，小于该样本�
 - DeepSeek 使用专用 Key、小额余额，并在测试后禁用或删除；
 - 不读取或输出 ECS root-only Secret 文件内容。
 
-## 9. 分工
+## 9. 工具与分工
+
+性能测试优先使用 GuideLLM 的 OpenAI-compatible HTTP backend，复用其 Streaming、并发 / 速率控制、TTFT / ITL / 吞吐统计以及 JSON / CSV / HTML 输出。仓库不开发自有 Go 压测框架；只保留无 Secret 配置、固定 Prompt、安全环境变量启动脚本、Windows GPU 监控和必要的短结果处理脚本。macOS 使用 `spawn` 多进程上下文，避免 GuideLLM 0.7.2 默认 `fork` 在当前环境触发 worker `signal 11`。若单请求冒烟发现关键协议缺口，才针对该缺口增加最小适配层。
 
 ### Codex 负责
 
-- 设计和实现跨平台测试工具；
+- 准备 GuideLLM 配置并执行可达路径的命令；
 - 提供 macOS、Linux、Windows 的执行命令；
 - 执行可自动化的公网 / ECS 测试；
-- 解析 SSE、Usage、延迟与吞吐；
+- 复核 GuideLLM 采集的 SSE、Usage、延迟与吞吐；
 - 清洗和汇总脱敏数据；
 - 绘制架构图、容量曲线和瓶颈证据图；
 - 编写测试报告、老板汇报稿及 PPT / PDF / HTML；
@@ -238,7 +240,7 @@ P95 至少需要 100 个有效样本才作为正式分位数，小于该样本�
 
 ## 10. 交付物
 
-- 可复现的测试工具与无 Secret 配置模板；
+- 固定版本的 GuideLLM 执行说明与无 Secret 配置模板；
 - 业务闭环验收清单和脱敏证据；
 - 原始结果及聚合指标；
 - `并发 → TTFT / Latency` 曲线；
