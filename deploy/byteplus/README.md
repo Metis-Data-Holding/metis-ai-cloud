@@ -2,7 +2,7 @@
 
 本目录用于把当前 fork 的固定 Commit 镜像部署到 BytePlus ECS。目标是 Demo / PoC 运行基线，不替代 Production 高可用设计。
 
-> 运行态最后验收：2026-08-22
+> 运行态最后验收：2026-08-23
 >
 > 当前公网入口：`https://many-models.metisdata.ai`
 >
@@ -185,6 +185,33 @@ gh run list --workflow rollback-byteplus.yml --limit 5
 
 验收至少包括：目标 Commit、Workflow 终态、`current` 指针、三个容器健康、PostgreSQL / Redis 持久化未被替换，以及公网 HTTPS。Push 成功、镜像构建成功或容器 `Up` 均不能单独代表部署成功。
 
+## Singapore Local Model 运行边界
+
+当前已完成闭环验收的自有模型是 LM Studio `0.4.21` 提供的 `google/gemma-4-31b`。平台使用 OpenAI 类型 Channel，经 Tailscale 固定私网地址访问 LM Studio；Channel Credential 只保存在平台数据库中，不进入本文、Git 或运维输出。
+
+已验证的最小业务闭环包括：
+
+- Playground 实际对话；
+- 公网 `/v1/chat/completions` 非流式与 Streaming；
+- prompt、completion、total 与 reasoning token Usage；
+- Token、用户余额与日志三方 Billing 一致；
+- 限模型 Token 拒绝未授权模型且不计费；
+- LM Studio 停服时返回上游错误、记录零 quota 失败日志，恢复后无需修改 Channel。
+
+日常只读网络检查不需要读取 Provider Secret：
+
+```bash
+systemctl is-active tailscaled
+tailscale ping --timeout=5s -c 1 100.85.112.45
+timeout 5 bash -c '</dev/tcp/100.85.112.45/1234'
+ip route show default
+tailscale debug prefs
+```
+
+预期 `tailscaled` 为 active、peer 可达、1234 端口开放、默认路由仍为 eth0，且 `CorpDNS=false`、`RouteAll=false`、无 exit node。端口或模型调用失败时，先区分 Windows LM Studio、Tailscale peer、平台 Channel 和公网入口；不得通过停用 Tailscale、修改默认路由或输出 Credential 进行诊断。
+
+当前 Channel 还列出 `qwen/qwen3.6-35b-a3b`，但该模型未在本轮完成标准 API、Streaming、Usage / Billing 与故障恢复验收。文档和演示不得把“Channel 中已配置”描述为“模型已验证”。40–52 ms 的 peer 延迟仅是连通性快照，不是 Serving Benchmark 结论。
+
 ## Tailscale 与 DNS 共存边界
 
 BytePlus DHCP 下发的 DNS 位于 `100.64.0.0/10`，与 Tailscale anti-spoof 规则发生地址段冲突。当前已验证的共存配置是：
@@ -217,4 +244,4 @@ systemctl --type=service --state=running | grep actions.runner
 
 ## 线路完成标准
 
-截至 2026-08-22，本部署线路已完成：固定 Commit 镜像、隔离运行目录、root-only Secret、PostgreSQL / Redis 持久化、Cloudflare HTTPS、登录会话、容器重建恢复、受限 Self-hosted Runner、自动发布、真实回滚和再次部署恢复。后续 Branding、Provider 产品配置、Usage / Billing、Benchmark 与 Routing 不属于本基础设施线路的未完成项。
+截至 2026-08-23，本部署线路已完成：固定 Commit 镜像、隔离运行目录、root-only Secret、PostgreSQL / Redis 持久化、Cloudflare HTTPS、登录会话、容器重建恢复、受限 Self-hosted Runner、自动发布、真实回滚和再次部署恢复。Singapore Gemma Provider、标准 API、Usage / Billing 与停服恢复也已完成跨线路验收；后续 Branding、Benchmark、Routing 和其他模型验收不属于本基础设施线路的未完成项。

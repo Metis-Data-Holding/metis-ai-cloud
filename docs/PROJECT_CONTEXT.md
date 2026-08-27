@@ -2,7 +2,7 @@
 
 本文档回答 `metis-ai-cloud` 是什么、为什么存在、要解决什么问题，以及当前产品方向和总体技术路线。它记录长期背景与阶段边界，不承载当前任务、Sprint 日程、临时状态或具体测试结果。
 
-> 最后审阅：2026-08-22
+> 最后审阅：2026-08-23
 > 更新原则：仅在项目定位、长期架构、产品边界或长期事实变化时更新
 
 ## 1. 项目简介
@@ -149,7 +149,7 @@ Auth      Routing     Usage/Billing
             GPU
 ```
 
-Cloudflare、BytePlus ECS 与 Tailscale 私网模型链路已经形成当前 Demo 的基础设施 baseline。Provider 产品配置、Usage / Billing、Benchmark 与自动路由仍需分别完成运行态验收，不能由基础设施可达性替代。
+Cloudflare、BytePlus ECS 与 Tailscale 私网模型链路已经形成当前 Demo 的基础设施 baseline。首条 Singapore Gemma Provider 的产品配置、标准 API、Streaming、Usage 与 Billing 已完成运行态验收；Benchmark 与自动路由仍需独立验证，不能由单模型功能闭环替代。
 
 ## 7. Provider / Model 理念
 

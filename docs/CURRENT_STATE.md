@@ -10,7 +10,7 @@
 
 - 项目：`metis-ai-cloud`，来源于 New API fork。
 - Step 0：已完成 AI 开发协作与上下文基础设施。
-- 当前阶段：BytePlus ECS 公网部署、Cloudflare HTTPS、持久化、自动发布 / 回滚和 ECS → Singapore 私网链路 baseline 均已建立。
+- 当前阶段：BytePlus ECS 公网部署、Cloudflare HTTPS、持久化、自动发布 / 回滚、Singapore Local Model Provider 和 Usage / Billing 闭环均已完成真实验收。
 - Git 基线：部署资产已合入并推送 `main` 与 `develop`；当前 ECS release 为 `b740f5f52f8c14290b62d5b4351cf64ce0ab97db`。
 - Local Model Provider、普通用户 API、Streaming、Usage / Billing 与 Serving Benchmark 均已形成真实验证证据。
 - 当前容量结论：老板现场建议并发 1～2；并发 4 已通过 30 分钟稳定性验证。将 LM Studio 预测槽位放宽至 6 只获得约 9.9% 吞吐增益，同时 TTFT P50 增加约 72.9%。
@@ -75,21 +75,24 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 | Cloudflare DNS | ✅ | `many-models.metisdata.ai` 已通过 Tunnel Published application route 生效 |
 | HTTPS | ✅ | Universal SSL Active；公网首页与 `/api/status` 均返回 HTTP 200，TLS 校验通过 |
 | GitHub Actions 发布 | ✅ | Deploy Run `32558545994`、真实 Rollback Run `32559285305` 与再次部署恢复 Run `32559331290` 均成功 |
-| Singapore Local Model | ✅ 业务闭环已验证 | LM Studio 提供 OpenAI-compatible API；Gemma Streaming、Usage、平台 Billing 与模型权限已验证 |
+| Singapore Local Model | ✅ Gemma 闭环已验证 | LM Studio 提供 OpenAI-compatible API；平台非流式、Streaming、Usage、Billing、权限边界和停服恢复均已验证 |
 | ECS → Singapore 网络 | ✅ | Tailscale 固定私网链路已验证；不使用 exit node 或 subnet route，Tailscale 不接管 ECS DNS |
-| 公网 Demo | 原版 baseline 已建立 | 管理员已初始化为对外营业模式；基础设施已就绪，Provider 产品闭环仍在下一阶段 |
+| 公网 Demo | ✅ 核心闭环已建立 | 管理员已初始化为对外营业模式；Playground 与限模型 API Token 均已完成真实模型调用 |
 
 ## 5. Singapore Local Model
 
-- 当前验证模型：`google/gemma-4-31b`
-- 推理框架：LM Studio
-- API Base URL：保存在 ECS 的 Provider / Channel 配置中；本文不记录凭据
-- OpenAI-compatible：已验证
-- Streaming：原始模型 API 已验证分块、`[DONE]` 与 Usage
-- Usage 返回：原始模型 API 与平台计费闭环均已验证
+- 当前完整验收模型：`google/gemma-4-31b`，GGUF `Q4_K_M`，模型文件约 19.89 GB
+- 推理框架：LM Studio `0.4.21`
+- Provider / Channel：OpenAI 类型，`default` 分组；API Base URL 和 Credential 保存在 ECS 平台配置中，本文不记录凭据
+- OpenAI-compatible：`/v1/models` 与 Chat Completions 已验证
+- Streaming：平台公网 SSE 已验证 `text/event-stream`、分块事件、`[DONE]` 和最终 Usage
+- Usage / Billing：prompt、completion、total、reasoning token 已返回；Token、用户余额与调用日志扣费一致
+- 权限边界：限模型 Token 访问未授权模型返回 HTTP 403，且不产生计费
+- 故障恢复：LM Studio 停服时平台返回上游错误并记录零 quota 失败日志；服务恢复后 Channel 无需修改即可继续调用
 - GPU：NVIDIA GeForce RTX 4090，24564 MiB；Gemma 4 31B 加载后显存约 23.9 GB
 - Serving Benchmark：并发 4 已完成 30 分钟稳定性验证；预测槽位 6 的并发 4/5/6 短时实验已完成
-- ECS 网络可达性：已通过 Tailscale 固定私网地址验证
+- ECS 网络可达性：已通过 Tailscale 固定私网地址验证，单次 peer 延迟约 40–52 ms；该数据不等同于 Serving Benchmark
+- 验证边界：本轮只对 Gemma 完成闭环与容量验收；其他模型不得据此描述为已验证
 
 ## 6. Demo Deployment
 
@@ -125,7 +128,8 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 - API / Streaming 与 Usage / Billing 闭环（已完成）
 - Serving Benchmark（已完成基础容量、稳定性与参数实验）
 - Cost-aware Routing / Model Cascading 实验
-- Demo 回归与演示
+- 轻量 Branding
+- 最终 Demo 回归与演示材料
 
 ### 基础设施线路已完成
 
@@ -149,7 +153,8 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 2. 对网关 Streaming 30 分钟轮次中的 6 次 HTTP 503 做 many-models、Cloudflare 和 Mock 日志交叉归因。
 3. 使用开放到达率模型和多轮重复运行，形成可用于容量规划的区间，不把固定 VU 换算为用户数。
 4. 在真实服务器与候选工业显卡上复测模型容量，并补充长上下文、多轮、多模型并载、质量/成本与故障恢复。
-5. 完成测试资源清理前先确认是否仍需保留 ECS 临时 Mock 容器与测试渠道。
+5. 开展轻量 Branding；修改前先确认 License / Attribution 边界。
+6. 完成测试资源清理前先确认是否仍需保留 ECS 临时 Mock 容器与测试渠道。
 
 完成上述事项后，覆盖更新本节与对应状态，不在文件末尾追加旧任务。
 
