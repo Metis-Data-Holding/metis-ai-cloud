@@ -1,6 +1,31 @@
 package plugins_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/QuantumNous/new-api/pkg/jsplugin"
+	builtinplugins "github.com/QuantumNous/new-api/plugins"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestDoubaoDeclaresBytePlusDreaminaModels(t *testing.T) {
+	source, err := builtinplugins.Source("doubao")
+	require.NoError(t, err)
+	registry := jsplugin.NewRegistry()
+	plugin, err := registry.RegisterFactory(source, jsplugin.Options{Key: "doubao"})
+	require.NoError(t, err)
+
+	for _, model := range []string{
+		"dreamina-seedance-2-0-260128",
+		"dreamina-seedance-2-0-fast-260128",
+	} {
+		binding, found := registry.Generation().LookupEndpoint("POST", "/v1/responses", model)
+		require.True(t, found, model)
+		assert.Same(t, plugin, binding.Plugin)
+		assert.Equal(t, "openai_responses", binding.Protocol)
+	}
+}
 
 func TestDoubaoResponsesProtocol(t *testing.T) {
 	testVideoResponsesProtocol(t, videoResponsesTestCase{

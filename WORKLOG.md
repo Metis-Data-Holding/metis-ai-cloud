@@ -100,3 +100,12 @@
 - 完成 Streaming 20 VU、30 分钟稳定性测试：42779 个请求中 42773 个 2xx、6 个 HTTP 503，错误率 0.014%；核心容器全程 healthy、重启数为 0、无 OOM 或内存持续增长。
 - 修正 10 秒小样本延迟误触发：错误与协议停止线保持 10 秒，延迟停止线改为 30 秒观察窗口；正式汇总增加 P99 供后续运行采集。
 - 更新 Markdown 与 Lieflat HTML 报告，明确区分真实模型并发、网关 VU、用户数与 Production SLA。
+
+## 2026-09-01
+
+### BytePlus Dreamina Seedance 任务计费适配
+
+- 基于同步后的 upstream 任务插件与用量表达式计费体系，为 Doubao Video 插件补充 Dreamina Seedance 2.0 与 2.0 Fast 模型声明。
+- BytePlus 请求包含参考视频时，提交阶段按官方输入视频总时长上限 15 秒保守预扣；完成阶段继续以 `usage.completion_tokens` 为实际用量进行差额结算。
+- 增加模型路由、预扣估算、完成 usage 和失败终态回归测试；相关定向测试与仓库 `make test` 通过。
+- 当前仅完成本地功能分支开发，尚未合并、部署或执行真实 BytePlus Provider 计费对账；模型价格矩阵仍需管理员在部署后配置。

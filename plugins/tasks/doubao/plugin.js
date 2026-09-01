@@ -1,13 +1,13 @@
 export const meta = {
   apiVersion: 1,
   key: "doubao",
-  name: "Doubao Video",
+  name: "Doubao / Dreamina Video",
   icon: "Doubao.Color",
   description: {
-    en: "Volcengine Doubao Seedance video generation (text-to-video, image-to-video, and video-to-video)",
-    zh: "火山引擎豆包 Seedance 视频生成（文生视频、图生视频、视频生视频）",
+    en: "Volcengine Doubao and BytePlus Dreamina Seedance video generation (text-to-video, image-to-video, and video-to-video)",
+    zh: "火山引擎豆包与 BytePlus Dreamina Seedance 视频生成（文生视频、图生视频、视频生视频）",
   },
-  version: "1.0.0",
+  version: "1.1.0",
   author: { name: "QuantumNous" },
   channelTypes: [54, 45], // VolcEngine-type channels serve Ark video models with the same wire format
   models: [
@@ -19,6 +19,8 @@ export const meta = {
     "doubao-seedance-2-0-fast-260128",
     "doubao-seedance-2-0-mini-260615",
     "doubao-seedance-2-5-260628",
+    "dreamina-seedance-2-0-260128",
+    "dreamina-seedance-2-0-fast-260128",
   ],
   fetchMode: "per_task",
   usageSchema: {
@@ -115,6 +117,15 @@ function normalizeResolution(value) {
 
 function hasVideo(content) {
   return Array.isArray(content) && content.some((item) => item && (item.type === "video_url" || Object.prototype.hasOwnProperty.call(item, "video_url")));
+}
+
+function isBytePlusSeedance2(model) {
+  return [
+    "dreamina-seedance-2-0-260128",
+    "dreamina-seedance-2-0-fast-260128",
+    "dreamina-seedance-2.0",
+    "dreamina-seedance-2.0-fast",
+  ].includes(trimmed(model).toLowerCase());
 }
 
 // Max-pixel 16:9 dimensions per resolution tier. Used when ratio is absent or
@@ -288,6 +299,11 @@ export function extractUsage(ctx) {
     seconds = Number.isFinite(frames) && frames > 0 ? Math.floor(frames / 24) : 15;
   }
   if (seconds <= 0) seconds = 5;
+  const video = hasVideo(metadata.content);
+  // BytePlus bills Seedance 2.0 against input + output video duration, while
+  // the request only carries remote video URLs. Reserve its documented
+  // maximum total input-video duration; completion usage settles the delta.
+  if (video && isBytePlusSeedance2(ctx.upstreamModel || ctx.model)) seconds += 15;
   seconds = Math.min(seconds, 3600);
   const rawResolution = metadata.resolution || req.size;
   const raw = trimmed(rawResolution).toLowerCase();
@@ -296,7 +312,7 @@ export function extractUsage(ctx) {
   return {
     tokens: estimateTokens(seconds, resolution),
     resolution: resolution,
-    video_input: hasVideo(metadata.content) ? "video" : "none",
+    video_input: video ? "video" : "none",
   };
 }
 
