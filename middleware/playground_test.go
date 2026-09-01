@@ -8,6 +8,8 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	appI18n "github.com/QuantumNous/new-api/i18n"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -32,6 +34,23 @@ func TestPlaygroundVideoAuthCreatesTemporaryTokenContext(t *testing.T) {
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/pg/videos?group=default", nil))
 
 	require.True(t, reached)
+}
+
+func TestPlaygroundVideoRelayInfoRemainsPlaygroundAfterPathRewrite(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	router := gin.New()
+	router.POST("/pg/videos", func(c *gin.Context) {
+		c.Set("id", 42)
+		c.Set("group", "default")
+	}, PlaygroundVideoAuth(), RewritePlaygroundVideoPath(), func(c *gin.Context) {
+		info, err := relaycommon.GenRelayInfo(c, types.RelayFormatTask, nil, nil)
+		require.NoError(t, err)
+		assert.True(t, info.IsPlayground)
+		assert.Equal(t, "/v1/videos?group=default", info.RequestURLPath)
+	})
+
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/pg/videos?group=default", nil))
 }
 
 func TestPlaygroundVideoAuthRejectsDashboardAccessToken(t *testing.T) {

@@ -33,6 +33,7 @@ func PlaygroundVideoAuth() gin.HandlerFunc {
 			return
 		}
 
+		common.SetContextKey(c, constant.ContextKeyIsPlayground, true)
 		common.SetContextKey(c, constant.ContextKeyUsingGroup, usingGroup)
 		tempToken := &model.Token{
 			UserId: userID,
