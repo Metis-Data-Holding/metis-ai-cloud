@@ -1,8 +1,8 @@
 # Metis AI Cloud 当前状态
 
-> 最后更新：2026-08-26
-> 当前 Milestone：Demo 汇报与 Serving Benchmark 收尾
-> 当前目标：2026-08-24 周一上午前完成可向老板演示的 Demo / PoC
+> 最后更新：2026-09-01
+> 当前 Milestone：Seedance 视频能力产品化
+> 当前目标：完成视频定价与 Playground 文生视频闭环，并在部署后做真实验收
 
 本文档是项目当前状态的单一快照，采用覆盖式维护。长期背景见 [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)，执行历史与重要决策分别见 [`../WORKLOG.md`](../WORKLOG.md) 和 [`DECISIONS.md`](DECISIONS.md)。
 
@@ -15,6 +15,7 @@
 - Local Model Provider、普通用户 API、Streaming、Usage / Billing 与 Serving Benchmark 均已形成真实验证证据。
 - 当前容量结论：老板现场建议并发 1～2；并发 4 已通过 30 分钟稳定性验证。将 LM Studio 预测槽位放宽至 6 只获得约 9.9% 吞吐增益，同时 TTFT P50 增加约 72.9%。
 - 加权路由 baseline：同一 `google/gemma-4-31b` 入口已验证按权重选择本地 Gemma 或映射到 DeepSeek；20 个短请求实际分布 13 / 7，30 个混合 Streaming 请求零错误。
+- Seedance 视频能力：Dreamina Seedance 2.0 / 2.0 Fast 的任务计费已进入 `main`；Playground 文生视频入口、异步轮询、预览与下载已在本地功能分支完成，尚未合并、部署或做公网真实验收。
 - 网关容量 baseline：固定延迟 Mock 短时闭环中，非流式 100 VU、Streaming 25 VU 通过，下一档分别在 200 / 50 VU 触发延迟停止线。
 - 网关稳定性：Streaming 20 VU 运行 30 分钟，完成 42779 请求，其中 6 次 HTTP 503，错误率 0.014%；容器无重启、OOM 或内存持续增长。
 - 下一主 Milestone：完善老板 Demo 交付，归因网关稳定性轮次中的 6 次 HTTP 503，并设计开放到达率与真实服务器复测。
@@ -149,12 +150,12 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 
 ## 9. 下一步行动
 
-1. 完善老板汇报稿、架构图、HTML/PDF/PPT 交付与现场 Demo 脚本。
-2. 对网关 Streaming 30 分钟轮次中的 6 次 HTTP 503 做 many-models、Cloudflare 和 Mock 日志交叉归因。
-3. 使用开放到达率模型和多轮重复运行，形成可用于容量规划的区间，不把固定 VU 换算为用户数。
-4. 在真实服务器与候选工业显卡上复测模型容量，并补充长上下文、多轮、多模型并载、质量/成本与故障恢复。
-5. 开展轻量 Branding；修改前先确认 License / Attribution 边界。
-6. 完成测试资源清理前先确认是否仍需保留 ECS 临时 Mock 容器与测试渠道。
+1. 合并并部署 Playground 视频功能后，使用 Dreamina Seedance 2.0 与 2.0 Fast 分别验收提交、轮询、预览、下载、任务日志与实际扣费。
+2. 完善老板汇报稿、架构图、HTML/PDF/PPT 交付与现场 Demo 脚本。
+3. 对网关 Streaming 30 分钟轮次中的 6 次 HTTP 503 做 many-models、Cloudflare 和 Mock 日志交叉归因。
+4. 使用开放到达率模型和多轮重复运行，形成可用于容量规划的区间，不把固定 VU 换算为用户数。
+5. 在真实服务器与候选工业显卡上复测模型容量，并补充长上下文、多轮、多模型并载、质量/成本与故障恢复。
+6. 开展轻量 Branding；修改前先确认 License / Attribution 边界。
 
 完成上述事项后，覆盖更新本节与对应状态，不在文件末尾追加旧任务。
 

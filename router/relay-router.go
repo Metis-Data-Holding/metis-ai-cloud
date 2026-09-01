@@ -62,9 +62,24 @@ func SetRelayRouter(router *gin.Engine) {
 	playgroundRouter := router.Group("/pg")
 	playgroundRouter.Use(middleware.RouteTag("relay"))
 	playgroundRouter.Use(middleware.SystemPerformanceCheck())
-	playgroundRouter.Use(middleware.UserAuth(), middleware.Distribute())
+	playgroundRouter.Use(middleware.UserAuth())
 	{
-		playgroundRouter.POST("/chat/completions", controller.Playground)
+		playgroundRouter.POST("/chat/completions", middleware.Distribute(), controller.Playground)
+
+		playgroundVideoRouter := playgroundRouter.Group("/videos")
+		playgroundVideoRouter.Use(middleware.PlaygroundVideoAuth(), middleware.RewritePlaygroundVideoPath())
+		playgroundVideoRouter.POST("",
+			middleware.PinTaskPluginEndpoint(),
+			middleware.TaskPluginEndpointOnly(middleware.ModelRequestRateLimit()),
+			middleware.PrepareTaskPluginEndpoint(),
+			middleware.Distribute(),
+			func(c *gin.Context) {
+				controller.RelayTaskPluginEndpoint(c, controller.RelayTask)
+			},
+		)
+		playgroundVideoRouter.GET("/:task_id", middleware.Distribute(), controller.RelayTaskFetch)
+		playgroundVideoRouter.GET("/:task_id/content", controller.VideoProxy)
+		playgroundVideoRouter.HEAD("/:task_id/content", controller.VideoProxy)
 	}
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.RouteTag("relay"))

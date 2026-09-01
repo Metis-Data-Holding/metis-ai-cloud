@@ -2,14 +2,58 @@ package model
 
 import (
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMergeTaskPluginEndpointTypesAddsDeclaredVideoProtocol(t *testing.T) {
+	registry := jsplugin.NewRegistry()
+	_, err := registry.Register(`
+export const meta = {
+  apiVersion: 1,
+  key: "video-capability",
+  name: "Video capability",
+  version: "1.0.0",
+  author: {name: "Test"},
+  channelTypes: [54],
+  models: ["video-model"],
+  fetchMode: "per_task",
+  protocols: ["openai_video"],
+};
+export const protocols = {openai_video: {
+  decodeRequest: function(ctx) { return {kind: "submit", model: ctx.model, requestBody: ctx.body.value}; },
+  render: function(ctx, task) { return task; },
+}};
+export function buildSubmitRequest() { return {}; }
+export function parseSubmitResponse() { return {taskId: "task"}; }
+export function buildQueryRequest() { return {}; }
+export function parseTaskResult() { return {status: "SUCCESS"}; }
+export function listArtifacts() { return []; }
+export function buildContentRequest() { return {}; }
+`, jsplugin.Options{})
+	require.NoError(t, err)
+
+	endpoints := map[string][]string{
+		"video-model": {string(constant.EndpointTypeOpenAI)},
+		"chat-model":  {string(constant.EndpointTypeOpenAI)},
+	}
+	mergeTaskPluginEndpointTypes(endpoints, registry.Generation())
+
+	assert.Equal(t, []string{
+		string(constant.EndpointTypeOpenAI),
+		string(constant.EndpointTypeOpenAIVideo),
+	}, endpoints["video-model"])
+	assert.Equal(t, []string{string(constant.EndpointTypeOpenAI)}, endpoints["chat-model"])
+	_, found := registry.Generation().LookupEndpoint(http.MethodPost, "/v1/videos", "video-model")
+	assert.True(t, found)
+}
 
 func resetPricingEndpointTestTables(t *testing.T) {
 	t.Helper()

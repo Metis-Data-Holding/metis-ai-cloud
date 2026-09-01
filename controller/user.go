@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/middleware"
@@ -20,8 +21,6 @@ import (
 	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
-
-	"github.com/QuantumNous/new-api/constant"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -685,11 +684,37 @@ func GetUserModels(c *gin.Context) {
 			groupsToQuery = []string{group}
 		}
 	}
+	models := service.GetGroupsEnabledModels(groupsToQuery)
+	endpointType := strings.TrimSpace(c.Query("endpoint_type"))
+	if endpointType != "" {
+		model.GetPricing()
+		supported := make(map[string][]constant.EndpointType, len(models))
+		for _, modelName := range models {
+			supported[modelName] = model.GetModelSupportEndpointTypes(modelName)
+		}
+		models = filterUserModelsByEndpointType(models, endpointType, supported)
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    service.GetGroupsEnabledModels(groupsToQuery),
+		"data":    models,
 	})
+}
+
+func filterUserModelsByEndpointType(models []string, endpointType string, supported map[string][]constant.EndpointType) []string {
+	if endpointType == "" {
+		return models
+	}
+	filtered := make([]string, 0, len(models))
+	for _, modelName := range models {
+		for _, candidate := range supported[modelName] {
+			if string(candidate) == endpointType {
+				filtered = append(filtered, modelName)
+				break
+			}
+		}
+	}
+	return filtered
 }
 
 func UpdateUser(c *gin.Context) {

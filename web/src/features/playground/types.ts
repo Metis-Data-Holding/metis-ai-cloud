@@ -149,3 +149,46 @@ export interface GroupOption {
   ratio: number
   desc?: string
 }
+
+export type VideoResolution = '480p' | '720p' | '1080p' | '4k'
+export type VideoAspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4'
+export type VideoTaskStatus =
+  | 'unknown'
+  | 'queued'
+  | 'in_progress'
+  | 'completed'
+  | 'failed'
+
+export interface VideoGenerationConfig {
+  model: string
+  prompt: string
+  seconds: number
+  resolution: VideoResolution
+  ratio: VideoAspectRatio
+}
+
+export interface VideoGenerationRequest {
+  model: string
+  prompt: string
+  seconds: number
+  metadata: {
+    resolution: VideoResolution
+    ratio: VideoAspectRatio
+  }
+}
+
+export interface VideoTask {
+  id: string
+  object: 'video'
+  model: string
+  status: VideoTaskStatus
+  progress: number
+  created_at: number
+  completed_at?: number
+  expires_at?: number
+  seconds?: string
+  error?: {
+    code: string
+    message: string
+  }
+}

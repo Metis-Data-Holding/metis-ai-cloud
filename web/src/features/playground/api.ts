@@ -24,6 +24,8 @@ import type {
   ChatCompletionResponse,
   ModelOption,
   GroupOption,
+  VideoGenerationRequest,
+  VideoTask,
 } from './types'
 
 /**
@@ -43,9 +45,12 @@ export async function sendChatCompletion(
 /**
  * Get user available models
  */
-export async function getUserModels(group: string): Promise<ModelOption[]> {
+export async function getUserModels(
+  group: string,
+  endpointType?: string
+): Promise<ModelOption[]> {
   const res = await api.get(API_ENDPOINTS.USER_MODELS, {
-    params: { group },
+    params: { group, endpoint_type: endpointType },
   })
   const { data } = res
 
@@ -57,6 +62,34 @@ export async function getUserModels(group: string): Promise<ModelOption[]> {
     label: model,
     value: model,
   }))
+}
+
+export async function submitVideoGeneration(
+  group: string,
+  payload: VideoGenerationRequest
+): Promise<VideoTask> {
+  const res = await api.post(API_ENDPOINTS.VIDEOS, payload, {
+    params: { group },
+    skipErrorHandler: true,
+  })
+  return res.data
+}
+
+export async function getVideoGeneration(taskId: string): Promise<VideoTask> {
+  const res = await api.get(`${API_ENDPOINTS.VIDEOS}/${taskId}`, {
+    disableDuplicate: true,
+    skipErrorHandler: true,
+  })
+  return res.data
+}
+
+export async function getVideoContent(taskId: string): Promise<Blob> {
+  const res = await api.get(`${API_ENDPOINTS.VIDEOS}/${taskId}/content`, {
+    disableDuplicate: true,
+    responseType: 'blob',
+    skipErrorHandler: true,
+  })
+  return res.data
 }
 
 /**

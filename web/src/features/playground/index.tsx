@@ -16,8 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { AiVideoIcon, BubbleChatIcon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+
 import { PlaygroundChat } from './components/chat/playground-chat'
 import { PlaygroundInput } from './components/input/playground-input'
+import { VideoPlayground } from './components/video/video-playground'
 import {
   useChatHandler,
   usePlaygroundConversation,
@@ -25,7 +33,9 @@ import {
   usePlaygroundState,
 } from './hooks'
 
-export function Playground() {
+type PlaygroundMode = 'chat' | 'video'
+
+function ChatPlayground() {
   const {
     config,
     parameterEnabled,
@@ -116,5 +126,41 @@ export function Playground() {
         />
       </div>
     </div>
+  )
+}
+
+export function Playground() {
+  const { t } = useTranslation()
+  const [mode, setMode] = useState<PlaygroundMode>('chat')
+
+  return (
+    <Tabs
+      value={mode}
+      onValueChange={(value) => {
+        if (value === 'chat' || value === 'video') {
+          setMode(value)
+        }
+      }}
+      className='size-full min-h-0 gap-0 overflow-hidden'
+    >
+      <div className='border-b px-4 py-2 sm:px-6'>
+        <TabsList aria-label={t('Playground mode')}>
+          <TabsTrigger value='chat'>
+            <HugeiconsIcon icon={BubbleChatIcon} strokeWidth={2} />
+            {t('Chat')}
+          </TabsTrigger>
+          <TabsTrigger value='video'>
+            <HugeiconsIcon icon={AiVideoIcon} strokeWidth={2} />
+            {t('Video generation')}
+          </TabsTrigger>
+        </TabsList>
+      </div>
+      <TabsContent value='chat' className='min-h-0 overflow-hidden'>
+        <ChatPlayground />
+      </TabsContent>
+      <TabsContent value='video' className='min-h-0 overflow-hidden'>
+        <VideoPlayground />
+      </TabsContent>
+    </Tabs>
   )
 }

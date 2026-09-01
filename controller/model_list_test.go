@@ -215,6 +215,18 @@ func TestGetUserModelsFiltersByRequestedGroup(t *testing.T) {
 	require.Empty(t, decodeUserModelsResponse(t, vipRecorder))
 }
 
+func TestFilterUserModelsByEndpointType(t *testing.T) {
+	models := []string{"video-model", "chat-model", "unknown-model"}
+	supported := map[string][]constant.EndpointType{
+		"video-model": {constant.EndpointTypeOpenAI, constant.EndpointTypeOpenAIVideo},
+		"chat-model":  {constant.EndpointTypeOpenAI},
+	}
+
+	assert.Equal(t, models, filterUserModelsByEndpointType(models, "", supported))
+	assert.Equal(t, []string{"video-model"}, filterUserModelsByEndpointType(models, string(constant.EndpointTypeOpenAIVideo), supported))
+	assert.Empty(t, filterUserModelsByEndpointType(models, "unknown-endpoint", supported))
+}
+
 func TestGetUserModelsExpandsAutoGroupsInConfiguredOrder(t *testing.T) {
 	originalAutoGroups := setting.AutoGroups2JsonString()
 	originalUsableGroups := setting.UserUsableGroups2JSONString()

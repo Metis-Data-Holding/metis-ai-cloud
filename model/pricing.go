@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"maps"
+	"net/http"
 	"strings"
 
 	"sync"
@@ -181,6 +182,25 @@ func appendPricingEndpoint(endpoints []string, endpoint string) []string {
 	return append(endpoints, endpoint)
 }
 
+func mergeTaskPluginEndpointTypes(modelEndpoints map[string][]string, generation *jsplugin.RoutingGeneration) {
+	if generation == nil {
+		return
+	}
+	for modelName, endpoints := range modelEndpoints {
+		lookupModel := modelName
+		if canonical, ok := generation.CanonicalModel(modelName); ok {
+			lookupModel = canonical
+		} else if target, ok := ResolveTaskModelAlias(generation, modelName); ok && target.Declared != "" {
+			lookupModel = target.Declared
+		}
+		binding, ok := generation.LookupEndpoint(http.MethodPost, "/v1/videos", lookupModel)
+		if !ok || binding.Protocol != "openai_video" {
+			continue
+		}
+		modelEndpoints[modelName] = appendPricingEndpoint(endpoints, string(constant.EndpointTypeOpenAIVideo))
+	}
+}
+
 func updatePricing() {
 	//modelRatios := common.GetModelRatios()
 	enableAbilities, err := GetAllEnableAbilityWithChannels()
@@ -276,6 +296,7 @@ func updatePricing() {
 	//这里使用切片而不是Set，因为一个模型可能支持多个端点类型，并且第一个端点是优先使用端点
 	modelSupportEndpointsStr := make(map[string][]string)
 	advancedCustomConfigs := loadPricingAdvancedCustomConfigs(enableAbilities)
+	pluginGeneration := jsplugin.DefaultRegistry.Generation()
 
 	// 先根据已有能力填充原生端点
 	for _, ability := range enableAbilities {
@@ -308,6 +329,7 @@ func updatePricing() {
 			}
 		}
 	}
+	mergeTaskPluginEndpointTypes(modelSupportEndpointsStr, pluginGeneration)
 
 	modelSupportEndpointTypes = make(map[string][]constant.EndpointType)
 	for model, endpoints := range modelSupportEndpointsStr {
@@ -359,7 +381,6 @@ func updatePricing() {
 	}
 
 	pricingMap = make([]Pricing, 0)
-	pluginGeneration := jsplugin.DefaultRegistry.Generation()
 	for model, groups := range modelGroupsMap {
 		pricing := Pricing{
 			ModelName:              model,

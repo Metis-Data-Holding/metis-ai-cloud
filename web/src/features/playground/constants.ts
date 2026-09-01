@@ -35,9 +35,21 @@ export const MESSAGE_STATUS = {
 // API endpoints
 export const API_ENDPOINTS = {
   CHAT_COMPLETIONS: '/pg/chat/completions',
+  VIDEOS: '/pg/videos',
   USER_MODELS: '/api/user/models',
   USER_GROUPS: '/api/user/self/groups',
 } as const
+
+export const VIDEO_ENDPOINT_TYPE = 'openai-video' as const
+
+export const VIDEO_DURATION_OPTIONS = [5, 10] as const
+export const VIDEO_ASPECT_RATIO_OPTIONS = [
+  '16:9',
+  '9:16',
+  '1:1',
+  '4:3',
+  '3:4',
+] as const
 
 // Default group — uses 'default' as the safe fallback; auto-group is
 // only selected when the backend confirms it is available for the user.
