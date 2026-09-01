@@ -62,7 +62,6 @@ import {
 } from '@/components/ui/empty'
 import {
   Field,
-  FieldContent,
   FieldDescription,
   FieldError,
   FieldGroup,
@@ -71,7 +70,6 @@ import {
   FieldSet,
 } from '@/components/ui/field'
 import { Spinner } from '@/components/ui/spinner'
-import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 
 import { getUserGroups, getUserModels } from '../../api'
@@ -273,7 +271,7 @@ export function VideoPlayground() {
                   ) : null}
                 </Field>
 
-                <FieldSet>
+                <FieldSet className='min-w-0'>
                   <FieldLegend id='video-duration-label' variant='label'>
                     {t('Video duration')}
                   </FieldLegend>
@@ -294,7 +292,7 @@ export function VideoPlayground() {
                   />
                 </FieldSet>
 
-                <FieldSet>
+                <FieldSet className='min-w-0'>
                   <FieldLegend id='video-resolution-label' variant='label'>
                     {t('Resolution')}
                   </FieldLegend>
@@ -312,7 +310,7 @@ export function VideoPlayground() {
                   />
                 </FieldSet>
 
-                <FieldSet>
+                <FieldSet className='min-w-0'>
                   <FieldLegend id='video-ratio-label' variant='label'>
                     {t('Aspect ratio')}
                   </FieldLegend>
@@ -330,29 +328,23 @@ export function VideoPlayground() {
                   />
                 </FieldSet>
 
-                <Field
-                  orientation='horizontal'
-                  className='bg-muted/40 rounded-xl border p-3'
-                >
-                  <FieldContent>
-                    <FieldLabel htmlFor='video-generate-audio'>
-                      {t('Generate audio')}
-                    </FieldLabel>
-                    <FieldDescription>
-                      {t(
-                        'Adds synchronized sound. Keep this off for a silent video and fewer audio copyright checks.'
-                      )}
-                    </FieldDescription>
-                  </FieldContent>
-                  <Switch
-                    id='video-generate-audio'
-                    checked={generateAudio}
-                    onCheckedChange={(checked) =>
-                      form.setValue('generateAudio', checked)
-                    }
+                <FieldSet className='min-w-0'>
+                  <FieldLegend id='video-audio-label' variant='label'>
+                    {t('Output audio')}
+                  </FieldLegend>
+                  <VideoSegmentedControl
+                    labelledBy='video-audio-label'
+                    value={generateAudio ? 'on' : 'off'}
+                    options={[
+                      { value: 'on', label: t('On') },
+                      { value: 'off', label: t('Off') },
+                    ]}
+                    onValueChange={(value) => {
+                      form.setValue('generateAudio', value === 'on')
+                    }}
                     disabled={generation.isSubmitting || noVideoModels}
                   />
-                </Field>
+                </FieldSet>
 
                 {optionLoadError || generation.submitError ? (
                   <Alert variant='destructive'>

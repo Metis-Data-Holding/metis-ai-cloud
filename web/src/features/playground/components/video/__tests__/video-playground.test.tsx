@@ -91,23 +91,41 @@ describe('VideoPlayground', () => {
   })
 
   test('offers every duration from 5 through 15 seconds in a scrollable segmented control', async () => {
+    const user = userEvent.setup()
+    const scrollBy = vi.fn()
+    const originalScrollBy = HTMLElement.prototype.scrollBy
+    Object.defineProperty(HTMLElement.prototype, 'scrollBy', {
+      configurable: true,
+      value: scrollBy,
+    })
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
-    await screen.findByRole('button', { name: '5s' })
+    const firstDuration = await screen.findByRole('button', { name: '5s' })
     for (let seconds = 5; seconds <= 15; seconds += 1) {
       expect(
         screen.getByRole('button', { name: `${seconds}s` })
       ).toBeInTheDocument()
     }
+    expect(firstDuration.closest('fieldset')).toHaveClass('min-w-0')
     expect(
       screen.getByRole('button', { name: 'Scroll duration backward' })
     ).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: 'Scroll duration forward' })
-    ).toBeInTheDocument()
+    const forwardButton = screen.getByRole('button', {
+      name: 'Scroll duration forward',
+    })
+    await user.click(forwardButton)
+    expect(scrollBy).toHaveBeenCalledWith({
+      left: 180,
+      behavior: 'smooth',
+    })
     expect(
       document.querySelectorAll('[data-slot="video-segmented-control"]')
-    ).toHaveLength(3)
+    ).toHaveLength(4)
+
+    Object.defineProperty(HTMLElement.prototype, 'scrollBy', {
+      configurable: true,
+      value: originalScrollBy,
+    })
   })
 
   test('submits the selected duration', async () => {
@@ -152,16 +170,19 @@ describe('VideoPlayground', () => {
     expect(await screen.findByText('Task submitted')).toBeVisible()
   })
 
-  test('submits generate_audio only after the audio switch is enabled', async () => {
+  test('submits generate_audio only after output audio is turned on', async () => {
     const user = userEvent.setup()
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
-    const audioSwitch = await screen.findByRole('switch', {
-      name: 'Generate audio',
-    })
-    expect(audioSwitch).not.toBeChecked()
+    const audioOff = await screen.findByRole('button', { name: 'Off' })
+    expect(audioOff).toHaveAttribute('aria-pressed', 'true')
+    expect(
+      screen.queryByText(
+        'Adds synchronized sound. Keep this off for a silent video and fewer audio copyright checks.'
+      )
+    ).not.toBeInTheDocument()
 
-    await user.click(audioSwitch)
+    await user.click(screen.getByRole('button', { name: 'On' }))
     await user.type(
       screen.getByLabelText('Prompt'),
       'A paper boat crossing a neon river'

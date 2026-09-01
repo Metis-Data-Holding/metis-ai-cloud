@@ -79,9 +79,10 @@ export function VideoSegmentedControl<T extends string>({
 
       <div
         ref={viewportRef}
+        data-scroll-viewport
         className={cn(
           'min-w-0 flex-1 overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
-          scrollable ? 'overflow-x-auto' : 'overflow-hidden'
+          scrollable ? 'touch-pan-x overflow-x-auto' : 'overflow-hidden'
         )}
       >
         <ToggleGroup
