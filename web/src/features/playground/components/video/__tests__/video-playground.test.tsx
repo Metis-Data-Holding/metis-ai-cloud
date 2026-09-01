@@ -2,9 +2,9 @@
 Copyright (C) 2023-2026 QuantumNous
 
 This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published by
-the Free Software Foundation, either version 3 of the License, or (at your option)
-any later version.
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -90,6 +90,45 @@ describe('VideoPlayground', () => {
     expect(screen.queryByRole('button', { name: '4k' })).not.toBeInTheDocument()
   })
 
+  test('offers every duration from 5 through 15 seconds in a scrollable segmented control', async () => {
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await screen.findByRole('button', { name: '5s' })
+    for (let seconds = 5; seconds <= 15; seconds += 1) {
+      expect(
+        screen.getByRole('button', { name: `${seconds}s` })
+      ).toBeInTheDocument()
+    }
+    expect(
+      screen.getByRole('button', { name: 'Scroll duration backward' })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Scroll duration forward' })
+    ).toBeInTheDocument()
+    expect(
+      document.querySelectorAll('[data-slot="video-segmented-control"]')
+    ).toHaveLength(3)
+  })
+
+  test('submits the selected duration', async () => {
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await user.type(
+      await screen.findByLabelText('Prompt'),
+      'A paper boat crossing a neon river'
+    )
+    await user.click(screen.getByRole('button', { name: '15s' }))
+    await user.click(screen.getByRole('button', { name: 'Generate video' }))
+
+    await waitFor(() =>
+      expect(submitVideoGeneration).toHaveBeenCalledWith(
+        'default',
+        expect.objectContaining({ seconds: 15 })
+      )
+    )
+  })
+
   test('submits a text-to-video task with the selected settings', async () => {
     const user = userEvent.setup()
     render(<VideoPlayground />, { wrapper: createWrapper() })
@@ -103,10 +142,40 @@ describe('VideoPlayground', () => {
         model: 'dreamina-seedance-2-0-fast-260128',
         prompt: 'A paper boat crossing a neon river',
         seconds: 5,
-        metadata: { resolution: '720p', ratio: '16:9' },
+        metadata: {
+          resolution: '720p',
+          ratio: '16:9',
+          generate_audio: false,
+        },
       })
     )
     expect(await screen.findByText('Task submitted')).toBeVisible()
+  })
+
+  test('submits generate_audio only after the audio switch is enabled', async () => {
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    const audioSwitch = await screen.findByRole('switch', {
+      name: 'Generate audio',
+    })
+    expect(audioSwitch).not.toBeChecked()
+
+    await user.click(audioSwitch)
+    await user.type(
+      screen.getByLabelText('Prompt'),
+      'A paper boat crossing a neon river'
+    )
+    await user.click(screen.getByRole('button', { name: 'Generate video' }))
+
+    await waitFor(() =>
+      expect(submitVideoGeneration).toHaveBeenCalledWith(
+        'default',
+        expect.objectContaining({
+          metadata: expect.objectContaining({ generate_audio: true }),
+        })
+      )
+    )
   })
 
   test('disables submission and explains when no video model is available', async () => {

@@ -165,6 +165,7 @@ export interface VideoGenerationConfig {
   seconds: number
   resolution: VideoResolution
   ratio: VideoAspectRatio
+  generateAudio: boolean
 }
 
 export interface VideoGenerationRequest {
@@ -174,6 +175,7 @@ export interface VideoGenerationRequest {
   metadata: {
     resolution: VideoResolution
     ratio: VideoAspectRatio
+    generate_audio: boolean
   }
 }
 

@@ -42,7 +42,9 @@ export const API_ENDPOINTS = {
 
 export const VIDEO_ENDPOINT_TYPE = 'openai-video' as const
 
-export const VIDEO_DURATION_OPTIONS = [5, 10] as const
+export const VIDEO_DURATION_OPTIONS = [
+  5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+] as const
 export const VIDEO_ASPECT_RATIO_OPTIONS = [
   '16:9',
   '9:16',

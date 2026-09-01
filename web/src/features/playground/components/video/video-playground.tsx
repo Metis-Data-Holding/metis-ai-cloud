@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
 import { zodResolver } from '@hookform/resolvers/zod'
 /*
 Copyright (C) 2023-2026 QuantumNous
@@ -44,6 +62,7 @@ import {
 } from '@/components/ui/empty'
 import {
   Field,
+  FieldContent,
   FieldDescription,
   FieldError,
   FieldGroup,
@@ -52,8 +71,8 @@ import {
   FieldSet,
 } from '@/components/ui/field'
 import { Spinner } from '@/components/ui/spinner'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 import { getUserGroups, getUserModels } from '../../api'
 import {
@@ -73,13 +92,9 @@ import {
   isSupportedVideoPlaygroundModel,
   normalizeVideoResolution,
 } from '../../lib/video/video-generation'
-import type {
-  GroupOption,
-  ModelOption,
-  VideoAspectRatio,
-  VideoResolution,
-} from '../../types'
+import type { GroupOption, ModelOption } from '../../types'
 import { VideoGenerationResult } from './video-generation-result'
+import { VideoSegmentedControl } from './video-segmented-control'
 
 const EMPTY_GROUPS: GroupOption[] = []
 const EMPTY_MODELS: ModelOption[] = []
@@ -91,6 +106,7 @@ const DEFAULT_VALUES: VideoFormValues = {
   seconds: 5,
   resolution: '720p',
   ratio: '16:9',
+  generateAudio: false,
 }
 
 export function VideoPlayground() {
@@ -105,6 +121,7 @@ export function VideoPlayground() {
   const selectedResolution = form.watch('resolution')
   const selectedSeconds = form.watch('seconds')
   const selectedRatio = form.watch('ratio')
+  const generateAudio = form.watch('generateAudio')
 
   const groupsQuery = useQuery({
     queryKey: ['playground', 'video-groups'],
@@ -258,79 +275,84 @@ export function VideoPlayground() {
 
                 <FieldSet>
                   <FieldLegend id='video-duration-label' variant='label'>
-                    {t('Duration')}
+                    {t('Video duration')}
                   </FieldLegend>
-                  <ToggleGroup
-                    aria-labelledby='video-duration-label'
-                    value={[String(selectedSeconds)]}
-                    onValueChange={(values) => {
-                      const seconds = Number(values[0])
-                      if (seconds === 5 || seconds === 10) {
-                        form.setValue('seconds', seconds)
-                      }
+                  <VideoSegmentedControl
+                    labelledBy='video-duration-label'
+                    value={String(selectedSeconds)}
+                    options={VIDEO_DURATION_OPTIONS.map((seconds) => ({
+                      value: String(seconds),
+                      label: t('{{value}}s', { value: seconds }),
+                    }))}
+                    onValueChange={(value) => {
+                      form.setValue('seconds', Number(value))
                     }}
-                    variant='outline'
-                    spacing={2}
-                  >
-                    {VIDEO_DURATION_OPTIONS.map((seconds) => (
-                      <ToggleGroupItem key={seconds} value={String(seconds)}>
-                        {t('{{value}}s', { value: seconds })}
-                      </ToggleGroupItem>
-                    ))}
-                  </ToggleGroup>
+                    disabled={generation.isSubmitting || noVideoModels}
+                    scrollable
+                    backwardLabel={t('Scroll duration backward')}
+                    forwardLabel={t('Scroll duration forward')}
+                  />
                 </FieldSet>
 
                 <FieldSet>
                   <FieldLegend id='video-resolution-label' variant='label'>
                     {t('Resolution')}
                   </FieldLegend>
-                  <ToggleGroup
-                    aria-labelledby='video-resolution-label'
-                    value={[selectedResolution]}
-                    onValueChange={(values) => {
-                      const resolution = values[0] as
-                        | VideoResolution
-                        | undefined
-                      if (resolution) {
-                        form.setValue('resolution', resolution)
-                      }
+                  <VideoSegmentedControl
+                    labelledBy='video-resolution-label'
+                    value={selectedResolution}
+                    options={resolutions.map((resolution) => ({
+                      value: resolution,
+                      label: resolution,
+                    }))}
+                    onValueChange={(resolution) => {
+                      form.setValue('resolution', resolution)
                     }}
-                    variant='outline'
-                    spacing={2}
-                    className='flex-wrap'
-                  >
-                    {resolutions.map((resolution) => (
-                      <ToggleGroupItem key={resolution} value={resolution}>
-                        {resolution}
-                      </ToggleGroupItem>
-                    ))}
-                  </ToggleGroup>
+                    disabled={generation.isSubmitting || noVideoModels}
+                  />
                 </FieldSet>
 
                 <FieldSet>
                   <FieldLegend id='video-ratio-label' variant='label'>
                     {t('Aspect ratio')}
                   </FieldLegend>
-                  <ToggleGroup
-                    aria-labelledby='video-ratio-label'
-                    value={[selectedRatio]}
-                    onValueChange={(values) => {
-                      const ratio = values[0] as VideoAspectRatio | undefined
-                      if (ratio) {
-                        form.setValue('ratio', ratio)
-                      }
+                  <VideoSegmentedControl
+                    labelledBy='video-ratio-label'
+                    value={selectedRatio}
+                    options={VIDEO_ASPECT_RATIO_OPTIONS.map((ratio) => ({
+                      value: ratio,
+                      label: ratio,
+                    }))}
+                    onValueChange={(ratio) => {
+                      form.setValue('ratio', ratio)
                     }}
-                    variant='outline'
-                    spacing={2}
-                    className='flex-wrap'
-                  >
-                    {VIDEO_ASPECT_RATIO_OPTIONS.map((ratio) => (
-                      <ToggleGroupItem key={ratio} value={ratio}>
-                        {ratio}
-                      </ToggleGroupItem>
-                    ))}
-                  </ToggleGroup>
+                    disabled={generation.isSubmitting || noVideoModels}
+                  />
                 </FieldSet>
+
+                <Field
+                  orientation='horizontal'
+                  className='bg-muted/40 rounded-xl border p-3'
+                >
+                  <FieldContent>
+                    <FieldLabel htmlFor='video-generate-audio'>
+                      {t('Generate audio')}
+                    </FieldLabel>
+                    <FieldDescription>
+                      {t(
+                        'Adds synchronized sound. Keep this off for a silent video and fewer audio copyright checks.'
+                      )}
+                    </FieldDescription>
+                  </FieldContent>
+                  <Switch
+                    id='video-generate-audio'
+                    checked={generateAudio}
+                    onCheckedChange={(checked) =>
+                      form.setValue('generateAudio', checked)
+                    }
+                    disabled={generation.isSubmitting || noVideoModels}
+                  />
+                </Field>
 
                 {optionLoadError || generation.submitError ? (
                   <Alert variant='destructive'>
