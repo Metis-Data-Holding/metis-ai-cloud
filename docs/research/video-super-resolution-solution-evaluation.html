@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>AI生成视频云端超分与增强方案调研</title>
+<style>
+  /* Lieflat Charts R01 · 调研一页纸 · Porcelain 色系，扩展为长篇研究报告。 */
+  :root{
+    --bg:#F7F2EB; --paper:#FFFDFC; --txt:#081F5C;
+    --mut:rgba(8,31,92,.64); --lab:rgba(8,31,92,.76);
+    --faint:rgba(8,31,92,.34); --quiet:rgba(8,31,92,.12);
+    --grid:rgba(8,31,92,.16); --data:#334EAC; --data2:#7096D1;
+    --hero:#081F5C; --faintdata:#BAD6EB; --good:#216869; --warn:#9A5B13;
+    --serif:"Source Serif 4","Noto Serif SC","Songti SC",serif;
+    --sans:Inter,"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums lining-nums}
+  a{color:var(--data);text-underline-offset:3px}
+  .page{width:min(1180px,calc(100% - 36px));margin:0 auto;padding:34px 0 80px}
+  .hero{display:grid;grid-template-columns:minmax(0,1fr) 320px;min-height:520px;
+    border-top:7px solid var(--hero);border-bottom:1px solid var(--txt)}
+  .hero-main{padding:62px 64px 56px 8px}
+  .eyebrow,.section-no,.source{font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+  .eyebrow{color:var(--data);margin-bottom:18px}
+  h1,h2,h3,p{margin-top:0}
+  h1{font-family:var(--serif);font-size:clamp(44px,6.3vw,78px);font-weight:400;
+    line-height:1.08;letter-spacing:.01em;max-width:760px;margin-bottom:28px}
+  h1 b{font-weight:700}
+  .dek{font-family:var(--serif);font-size:24px;line-height:1.55;max-width:720px;margin-bottom:36px}
+  .hero-meta{display:flex;gap:24px;flex-wrap:wrap;font-size:12px;font-weight:700;color:var(--mut)}
+  .hero-rail{background:var(--data);color:var(--bg);padding:56px 30px;display:flex;flex-direction:column}
+  .hero-rail h2{font-family:var(--serif);font-size:27px;line-height:1.3;margin:18px 0}
+  .hero-rail p{font-size:13px;line-height:1.85;color:rgba(247,242,235,.9)}
+  .hero-rail .status{display:inline-flex;align-self:flex-start;border:1px solid rgba(255,255,255,.5);
+    border-radius:99px;padding:7px 11px;font-size:10px;font-weight:800;letter-spacing:.1em}
+  .hero-rail .rail-bottom{margin-top:auto;padding-top:34px;border-top:1px solid rgba(255,255,255,.25)}
+  .nav{position:sticky;top:0;z-index:20;background:rgba(247,242,235,.96);backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--grid);display:flex;gap:20px;overflow:auto;padding:13px 2px}
+  .nav a{font-size:12px;font-weight:700;color:var(--txt);white-space:nowrap;text-decoration:none}
+  section{padding:72px 0;border-bottom:1px solid var(--grid)}
+  .section-head{display:grid;grid-template-columns:140px minmax(0,1fr);gap:24px;margin-bottom:34px}
+  .section-no{color:var(--data);padding-top:9px}
+  h2{font-family:var(--serif);font-size:42px;font-weight:500;line-height:1.22;margin-bottom:14px}
+  .section-intro{font-size:17px;line-height:1.75;color:var(--lab);max-width:780px}
+  h3{font-size:20px;line-height:1.45;margin:38px 0 16px}
+  .verdict{display:grid;grid-template-columns:1.2fr .8fr;gap:18px;margin-top:20px}
+  .callout{border-radius:22px;padding:28px;background:var(--hero);color:var(--bg)}
+  .callout.secondary{background:var(--faintdata);color:var(--txt)}
+  .callout h3{font-family:var(--serif);font-size:25px;margin:0 0 10px}
+  .callout p{font-size:13px;line-height:1.8;margin:0;opacity:.92}
+  .pipeline{display:grid;grid-template-columns:1fr 44px 1fr 44px 1fr;align-items:center;margin:28px 0}
+  .stage{background:var(--paper);border-radius:20px;padding:24px;text-align:center;min-height:136px}
+  .stage b{display:block;font-size:15px;margin-bottom:8px}.stage span{font-size:12px;line-height:1.6;color:var(--mut)}
+  .arrow{text-align:center;color:var(--data);font-size:26px}
+  .table-wrap{overflow:auto;border-radius:18px;border:1px solid var(--grid);background:var(--paper)}
+  table{border-collapse:collapse;width:100%;font-size:12px;line-height:1.55}
+  th,td{padding:13px 14px;text-align:left;border-bottom:1px solid var(--grid);vertical-align:top}
+  th{font-size:10px;letter-spacing:.07em;text-transform:uppercase;background:rgba(186,214,235,.28)}
+  tr:last-child td{border-bottom:0}
+  .gallery-block{margin-top:40px}
+  .gallery-head{margin-bottom:14px}
+  .gallery-head h3{margin:0}
+  .gallery{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+  figure{margin:0;background:var(--paper);border-radius:18px;overflow:hidden;border:1px solid var(--grid)}
+  figure button{display:block;border:0;padding:0;background:none;width:100%;cursor:zoom-in}
+  figure img{display:block;width:100%;height:auto;aspect-ratio:5/3;object-fit:cover;background:#e9e7e1}
+  .crop-gallery figure img{aspect-ratio:80/63}
+  .resolution-gallery figure img{aspect-ratio:80/33}
+  figcaption{padding:14px 15px 16px;font-size:11px;line-height:1.65;color:var(--mut)}
+  figcaption b{display:block;font-size:12px;color:var(--txt);margin-bottom:4px}
+  .observation{margin-top:22px;padding:23px 26px;border-left:5px solid var(--data);background:rgba(186,214,235,.25);
+    font-size:13px;line-height:1.85}
+  .cost-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:22px 0}
+  .cost{background:var(--paper);border-radius:20px;padding:24px}
+  .cost .name{font-size:12px;font-weight:800}.cost .price{font-family:var(--serif);font-size:36px;font-weight:700;margin:13px 0 5px}
+  .cost .unit{font-size:11px;color:var(--mut)}
+  .meter{height:8px;background:var(--quiet);border-radius:9px;margin-top:18px;overflow:hidden}.meter i{display:block;height:100%;background:var(--data)}
+  .note{font-size:12px;line-height:1.8;color:var(--mut)}
+  .command{overflow:auto;margin:16px 0 0;padding:18px 20px;border-radius:16px;background:var(--hero);color:#eef4ff;
+    font:11px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre}
+  .status-table td:first-child{font-weight:700}.done{color:var(--good);font-weight:800}.pending{color:var(--warn);font-weight:800}
+  .links{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.links a{display:block;padding:17px 18px;border:1px solid var(--grid);
+    border-radius:16px;background:var(--paper);font-size:12px;font-weight:700;text-decoration:none}
+  .footer{padding:38px 0 0;display:flex;justify-content:space-between;gap:20px;font-size:10px;line-height:1.6;color:var(--faint)}
+  dialog{width:min(96vw,1700px);max-height:96vh;border:0;border-radius:18px;padding:10px;background:#111827;
+    box-shadow:0 20px 80px rgba(0,0,0,.45)}
+  dialog::backdrop{background:rgba(4,10,28,.86)}dialog img{display:block;max-width:100%;max-height:90vh;margin:auto}
+  dialog button{position:fixed;right:24px;top:20px;border:1px solid rgba(255,255,255,.45);background:rgba(0,0,0,.55);
+    color:white;border-radius:99px;width:38px;height:38px;font-size:18px;cursor:pointer}
+  @media(max-width:850px){
+    .page{width:min(100% - 22px,1180px)}.hero{grid-template-columns:1fr}.hero-main{padding:42px 8px}.hero-rail{min-height:340px}
+    .section-head{grid-template-columns:1fr;gap:4px}.cost-grid{grid-template-columns:repeat(2,1fr)}
+    .verdict{grid-template-columns:1fr}.gallery{grid-template-columns:repeat(2,1fr)}
+  }
+  @media(max-width:560px){h1{font-size:43px}h2{font-size:34px}.cost-grid,.gallery,.links{grid-template-columns:1fr}
+    .pipeline{grid-template-columns:1fr}.arrow{transform:rotate(90deg);padding:5px}}
+  @media print{body{background:white}.page{width:100%;padding:0}.nav{display:none}section{break-inside:auto}.callout,figure,.cost{break-inside:avoid}}
+  @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="hero">
+    <div class="hero-main">
+      <div class="eyebrow">Video Super Resolution · Evaluation Report</div>
+      <h1>AI生成视频<br><b>云端超分与增强</b></h1>
+      <p class="dek">比较 Tencent Cloud International 327007、BytePlus Fast、BytePlus Standard/Natural 与普通 Lanczos 放大，回答画质、成本与生产可用性问题。</p>
+      <div class="hero-meta"><span>调研时间：2026-08-28 至 2026-08-31</span><span>报告版本：Draft 1.0</span><span>样本：2组内容 × 2档输入</span></div>
+    </div>
+    <aside class="hero-rail">
+      <span class="status">阶段报告 · 官方目录价口径</span>
+      <h2>常规观看差异不明显，Tencent局部最锐。</h2>
+      <p>Standard相对Fast的静帧提升较小，但官方处理单价为Fast的2倍。</p>
+      <div class="rail-bottom"><p>点击图片可查看原始PNG。</p></div>
+    </aside>
+  </header>
+
+  <nav class="nav" aria-label="报告目录">
+    <a href="#summary">结论</a><a href="#design">测试设计</a><a href="#full">全图对比</a>
+    <a href="#crop">Crop对比</a><a href="#resolution">输入分辨率</a><a href="#spec">参数</a><a href="#cost">成本</a><a href="#sources">资料</a>
+  </nav>
+
+  <section id="summary">
+    <div class="section-head"><div class="section-no">01 · 结论</div><div><h2>阶段结论</h2></div></div>
+    <div class="verdict">
+      <div class="callout"><h3>Tencent 327007</h3><p>猫毛、发丝、北极熊毛发、冰面和远景轮廓最清楚。处理也最激进，需要通过动态观看排查闪烁、纹理游走和假细节。</p></div>
+      <div class="callout secondary"><h3>BytePlus Fast与Standard</h3><p>两档处理更保守。Standard在部分人脸、睫毛和毛发上略强，但静帧差异较小。</p></div>
+    </div>
+    <div class="observation">多名同事在常规观看中认为几种增强结果没有明显差异。当前可辨差别主要出现在静帧放大和局部Crop中，因此不应把局部锐度差异写成普通用户一定能感知的整体提升。</div>
+  </section>
+
+  <section id="design">
+    <div class="section-head"><div class="section-no">02 · 设计</div><div><h2>同源受控测试</h2><p class="section-intro">两条原生720p视频分别生成重新编码的720p输入和下采样480p输入，保证两条支路的编码代际一致。</p></div></div>
+    <div class="pipeline">
+      <div class="stage"><b>原生720p母版</b><span>两组Seedance内容<br>各361帧</span></div><div class="arrow">→</div>
+      <div class="stage"><b>受控输入</b><span>重新编码720p<br>下采样480p</span></div><div class="arrow">→</div>
+      <div class="stage"><b>四路4K输出</b><span>Lanczos · Tencent<br>BytePlus Fast · Standard</span></div>
+    </div>
+    <div class="observation"><b>证据边界：</b>母版只有720p，没有真实4K参考。因此这些样本可以比较路线和输入分辨率，却不能证明输出距离真实4K有多近，也不能据此计算有意义的全参考4K VMAF、PSNR或SSIM。</div>
+  </section>
+
+  <section id="full">
+    <div class="section-head"><div class="section-no">03 · 全图</div><div><h2>输入与三种增强结果</h2><p class="section-intro">图中的 Input enlarged 是把原始480p或720p输入用Lanczos放大到同一显示尺寸，没有AI细节重建。它用于判断三种付费增强相对原始输入增加了什么。</p></div></div>
+    <div id="full-galleries"></div>
+  </section>
+
+  <section id="crop">
+    <div class="section-head"><div class="section-no">04 · Crop</div><div><h2>局部Crop对比</h2><p class="section-intro">输出先统一到3840×2160，再裁取相同的960×720区域。报告使用原始PNG。</p></div></div>
+    <div id="crop-galleries"></div>
+    <div class="observation">Tencent的毛发、冰面边缘和背景纹理最锐，但没有真实4K参考，不能判断这些纹理是否真实。Standard在部分人脸、睫毛和毛发上略优于Fast，其他画面接近。</div>
+  </section>
+
+  <section id="resolution">
+    <div class="section-head"><div class="section-no">05 · 分辨率</div><div><h2>同一影片的480p与720p输入</h2><p class="section-intro">固定影片、处理方案和帧号，只改变输入分辨率。每张图直接比较该方案从480p和720p生成的4K结果。</p></div></div>
+    <div id="resolution-galleries"></div>
+    <div class="observation">当前两组样本中，720p输入通常保留更清楚的轮廓和局部结构，但并非每一帧都能看出明显差距。Tencent在部分毛发和边缘区域的差别更容易辨认；BytePlus两档的差别相对较小。多名同事在常规观看中没有感知到明显差异。</div>
+  </section>
+
+  <section id="spec">
+    <div class="section-head"><div class="section-no">06 · 参数</div><div><h2>处理配置与实际输出</h2></div></div>
+    <h3>三种付费增强与Lanczos基线</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>路线</th><th>核心处理</th><th>分辨率 / 帧率</th><th>编码与码率</th><th>音频</th></tr></thead>
+      <tbody>
+        <tr><td>Tencent 327007</td><td>AIGC场景；大模型增强 strong；TSC。大模型修复、综合增强、去毛刺及独立插帧、超分、HDR、低光、色彩、降噪、去划痕开关关闭</td><td>短边2160，长边等比；帧率随源</td><td>MP4 / H.264；VBR；CRF=0；压缩率自动；平均码率上限16000 Kbps；8-bit</td><td>AAC 96 Kbps、44.1 kHz、双声道</td></tr>
+        <tr><td>BytePlus Fast</td><td>Johor / sr-test；AIGC content；Fast；无强度选项；AI super resolution</td><td>目标4K；Match source file；不插帧</td><td>目标30000 Kbps；MP4 / H.264 High / yuv420p，约30.43至30.62 Mbps</td><td>AAC、44.1 kHz、双声道</td></tr>
+        <tr><td>BytePlus Standard/Natural</td><td>Johor / sr-test；AIGC content；Standard；Natural version；AI super resolution；结构、运动、风格管理、特效专家均已配置</td><td>目标4K；Match source file；不插帧</td><td>目标30000 Kbps；MP4 / H.264 High / yuv420p，约29.44至31.41 Mbps</td><td>AAC、44.1 kHz、双声道</td></tr>
+        <tr><td>FFmpeg Lanczos</td><td>传统Lanczos插值，无AI重建；setsar=1</td><td>480p支路3842×2160；720p支路3840×2160；帧率透传</td><td>libx264；preset slow；CRF 18；yuv420p；约21.88至23.11 Mbps；faststart</td><td>copy</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note" style="margin-top:16px">Tencent控制台的CRF=0属于其VBR模板字段，不能按FFmpeg/libx264的无损CRF 0解释。</p>
+    <h3>FFmpeg普通放大基线命令</h3>
+    <pre class="command"># 480p支路
+ffmpeg -n -hide_banner -loglevel warning -stats -i INPUT_480P.mp4 \
+  -map 0:v:0 -map '0:a?' -vf 'scale=3842:2160:flags=lanczos,setsar=1' \
+  -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p \
+  -fps_mode passthrough -c:a copy -movflags +faststart OUTPUT_480P_4K.mp4
+
+# 720p支路：仅将scale改为3840:2160，其余参数相同</pre>
+    <h3>实际输出媒体参数</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>路线</th><th>输出尺寸</th><th>视频码率</th><th>单文件大小</th><th>色彩元数据</th><th>帧率 / 帧数</th></tr></thead>
+      <tbody>
+        <tr><td>Lanczos</td><td>480p支路 3842×2160<br>720p支路 3840×2160</td><td>21.881至23.109 Mbps</td><td>41.396至43.707 MB</td><td>未显式报告</td><td>24fps / 361</td></tr>
+        <tr><td>Tencent 327007</td><td>480p支路 3842×2160<br>720p支路 3840×2160</td><td>13.667至14.665 Mbps</td><td>25.893至27.768 MB</td><td>未显式报告</td><td>约24fps / 361</td></tr>
+        <tr><td>BytePlus Fast</td><td>480p支路 3844×2160<br>720p支路 3840×2160</td><td>30.430至30.622 Mbps</td><td>57.472至57.829 MB</td><td>显式BT.709</td><td>24fps / 361</td></tr>
+        <tr><td>BytePlus Standard</td><td>全部3840×2160</td><td>29.444至31.414 Mbps</td><td>55.616至59.321 MB</td><td>未显式报告</td><td>24fps / 361</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note" style="margin-top:16px">Fast明确写入BT.709，而Standard、Tencent和Lanczos未被ffprobe识别出对应标签。这是交付契约和播放链的元数据一致性风险，目前没有证据表明已经产生可见色偏。</p>
+  </section>
+
+  <section id="cost">
+    <div class="section-head"><div class="section-no">07 · 成本</div><div><h2>三条路线的官方计费</h2><p class="section-intro">统一按本次输出规格4K、24fps比较官方按量计费价格。</p></div></div>
+    <div class="cost-grid">
+      <article class="cost"><div class="name">BytePlus Fast</div><div class="price">$0.8264</div><div class="unit">每输出分钟 · 4K · ≤30fps</div><div class="meter"><i style="width:37.58%"></i></div></article>
+      <article class="cost"><div class="name">BytePlus Standard/Natural</div><div class="price">$1.6528</div><div class="unit">每输出分钟 · 4K · ≤30fps</div><div class="meter"><i style="width:75.16%"></i></div></article>
+      <article class="cost"><div class="name">Tencent 327007</div><div class="price">$2.1991</div><div class="unit">每输出分钟 · 4K · ≤30fps · Singapore</div><div class="meter"><i style="width:100%"></i></div></article>
+    </div>
+    <h3>计费组成</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>路线</th><th>官方计费项</th><th>计费依据</th><th>官方单价</th><th>相对Fast</th></tr></thead>
+      <tbody>
+        <tr><td>BytePlus Fast</td><td>Video enhancement · Fast</td><td>处理后输出时长、增强档位、输出分辨率与帧率</td><td>$0.8264/min</td><td>1.00×</td></tr>
+        <tr><td>BytePlus Standard/Natural</td><td>Video enhancement · Standard</td><td>处理后输出时长、增强档位、输出分辨率与帧率</td><td>$1.6528/min</td><td>2.00×</td></tr>
+        <tr><td>Tencent 327007</td><td>大模型视频增强 $2.0458/min<br>H.264 4K TSC $0.1533/min</td><td>增强后/转码后输出时长、4K、≤30fps、Singapore</td><td><b>$2.1991/min</b></td><td>2.66×</td></tr>
+      </tbody>
+    </table></div>
+    <div class="observation"><b>官方价横向关系：</b>Standard是Fast的2倍；Tencent 327007的视频处理组合价约为Fast的2.66倍、Standard的1.33倍。Tencent官方说明增强任务还会收取转码费，因此这里将模板已启用的大模型增强和H.264 4K TSC相加。BytePlus主表只列视频增强费；官方另列H.264 4K普通转码$0.0495/min，但增强定价章节没有说明该项会自动叠加，因此不并入三条路线主表。</div>
+    <p class="note" style="margin-top:16px">价格单位均为USD/输出分钟。以上不含Seedance生成、音频、存储、出网/CDN、跨区传输、失败重试、折扣和资源包；Tencent模板开启AAC，但现有模板信息不能确认其按普通音频转码还是音频TSC计费，因此未并入主表。</p>
+  </section>
+
+  <section id="sources">
+    <div class="section-head"><div class="section-no">08 · 资料</div><div><h2>报告附件与官方资料</h2></div></div>
+    <div class="links">
+      <a href="video-super-resolution-solution-evaluation.md">Markdown完整底稿</a>
+      <a href="https://docs.byteplus.com/en/docs/byteplus-vod/docs-pay-as-you-go-pricing">BytePlus VOD官方定价</a>
+      <a href="https://intl.cloud.tencent.com/document/product/1041/49204?lang=en&amp;pg=">Tencent MPS官方定价</a>
+    </div>
+  </section>
+
+  <footer class="footer"><span>AI生成视频云端超分与增强方案调研 · Draft 1.0</span><span>本页可离线打开；外部链接需要联网。</span></footer>
+</main>
+
+<dialog id="lightbox"><button type="button" aria-label="关闭">×</button><img alt="放大的画质对比图"></dialog>
+<script>
+const groups=[
+  {id:'cat-480p',title:'猫与人物 · 480p输入'},
+  {id:'cat-720p',title:'猫与人物 · 720p输入'},
+  {id:'bear-480p',title:'北极熊 · 480p输入'},
+  {id:'bear-720p',title:'北极熊 · 720p输入'}
+];
+const frames=[
+  {n:'072',label:'第72帧 · 约3秒'},
+  {n:'192',label:'第192帧 · 约8秒'},
+  {n:'312',label:'第312帧 · 约13秒'}
+];
+const cropSlug={
+  'cat-072':'cat-in-street','cat-192':'cat-fur-and-ear','cat-312':'child-face-and-hair',
+  'bear-072':'distant-polar-bear-and-ice','bear-192':'polar-bear-and-tree-texture','bear-312':'polar-bear-eye-and-fur'
+};
+const cropZh={
+  'cat-072':'街景中的猫','cat-192':'猫毛与耳缘','cat-312':'儿童面部与发丝',
+  'bear-072':'远处北极熊与冰面','bear-192':'北极熊与树木纹理','bear-312':'北极熊眼睛与毛发'
+};
+function galleryBlock(g,type){
+  const kind=g.id.startsWith('cat')?'cat':'bear';
+  const cards=frames.map(f=>{
+    const file=type==='full'
+      ?`assets/video-sr-report/full/${g.id}-frame${f.n}-four-way.png`
+      :`assets/video-sr-report/crop/${g.id}-frame${f.n}-${cropSlug[`${kind}-${f.n}`]}.png`;
+    const detail=type==='full'?f.label:`${f.label} · ${cropZh[`${kind}-${f.n}`]}`;
+    return `<figure><button type="button" data-full="${file}" aria-label="放大查看${detail}"><img loading="lazy" src="${file}" alt="${g.title}，${detail}，四路方案对比"></button><figcaption><b>${detail}</b></figcaption></figure>`;
+  }).join('');
+  return `<div class="gallery-block"><div class="gallery-head"><h3>${g.title}</h3></div><div class="gallery ${type==='crop'?'crop-gallery':''}">${cards}</div></div>`;
+}
+document.querySelector('#full-galleries').innerHTML=groups.map(g=>galleryBlock(g,'full')).join('');
+document.querySelector('#crop-galleries').innerHTML=groups.map(g=>galleryBlock(g,'crop')).join('');
+
+const resolutionMethods=[
+  {id:'tencent',title:'Tencent 327007'},
+  {id:'fast',title:'BytePlus Fast'},
+  {id:'standard',title:'BytePlus Standard/Natural'}
+];
+function resolutionGallery(method){
+  const cards=['cat','bear'].flatMap(kind=>frames.map(f=>{
+    const file=`assets/video-sr-report/resolution/${method.id}-${kind}-frame${f.n}-${cropSlug[`${kind}-${f.n}`]}.png`;
+    const content=kind==='cat'?'猫与人物':'北极熊';
+    const detail=`${content} · ${f.label}`;
+    return `<figure><button type="button" data-full="${file}" aria-label="放大查看${method.title}，${detail}，480p与720p输入对比"><img loading="lazy" src="${file}" alt="${method.title}，${detail}，480p与720p输入生成的4K结果"></button><figcaption><b>${detail}</b></figcaption></figure>`;
+  })).join('');
+  return `<div class="gallery-block"><div class="gallery-head"><h3>${method.title}</h3></div><div class="gallery resolution-gallery">${cards}</div></div>`;
+}
+document.querySelector('#resolution-galleries').innerHTML=resolutionMethods.map(resolutionGallery).join('');
+
+const dialog=document.querySelector('#lightbox');
+const dialogImg=dialog.querySelector('img');
+document.addEventListener('click',e=>{
+  const button=e.target.closest('[data-full]');
+  if(!button)return;
+  dialogImg.src=button.dataset.full;
+  dialogImg.alt=button.querySelector('img').alt;
+  dialog.showModal();
+});
+dialog.querySelector('button').addEventListener('click',()=>dialog.close());
+dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close()});
+</script>
+</body>
+</html>
