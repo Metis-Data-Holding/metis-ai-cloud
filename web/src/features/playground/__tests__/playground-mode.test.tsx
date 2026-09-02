@@ -75,4 +75,17 @@ describe('Playground mode navigation', () => {
     await user.click(videoTab)
     expect(videoTab).toHaveAttribute('aria-selected', 'true')
   })
+
+  test('keeps the video panel in the constrained flex height chain', async () => {
+    const user = userEvent.setup()
+    render(<Playground />)
+
+    await user.click(screen.getByRole('tab', { name: 'Video generation' }))
+
+    expect(screen.getByText('video playground').parentElement).toHaveClass(
+      'flex',
+      'min-h-0',
+      'overflow-hidden'
+    )
+  })
 })

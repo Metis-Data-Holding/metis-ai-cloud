@@ -158,7 +158,7 @@ export function Playground() {
       <TabsContent value='chat' className='min-h-0 overflow-hidden'>
         <ChatPlayground />
       </TabsContent>
-      <TabsContent value='video' className='min-h-0 overflow-hidden'>
+      <TabsContent value='video' className='flex min-h-0 overflow-hidden'>
         <VideoPlayground />
       </TabsContent>
     </Tabs>
