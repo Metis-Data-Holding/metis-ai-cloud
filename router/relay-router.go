@@ -59,6 +59,13 @@ func SetRelayRouter(router *gin.Engine) {
 		})
 	}
 
+	videoReferenceRouter := router.Group("/v1/video-reference-files")
+	videoReferenceRouter.Use(middleware.RouteTag("relay"))
+	{
+		videoReferenceRouter.GET("/:file_id/content", controller.GetVideoReferenceContent)
+		videoReferenceRouter.HEAD("/:file_id/content", controller.GetVideoReferenceContent)
+	}
+
 	playgroundRouter := router.Group("/pg")
 	playgroundRouter.Use(middleware.RouteTag("relay"))
 	playgroundRouter.Use(middleware.SystemPerformanceCheck())

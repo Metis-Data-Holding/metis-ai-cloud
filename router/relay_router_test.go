@@ -99,6 +99,8 @@ func TestRelayRouterRegistersPlaygroundVideoRoutes(t *testing.T) {
 	}
 
 	for _, expected := range []string{
+		"GET /v1/video-reference-files/:file_id/content",
+		"HEAD /v1/video-reference-files/:file_id/content",
 		"POST /pg/videos",
 		"GET /pg/videos/:task_id",
 		"GET /pg/videos/:task_id/content",
