@@ -16,12 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { ArrowLeftRightIcon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
 import { ImagePlusIcon, Trash2Icon, VideoIcon } from 'lucide-react'
 import { type ChangeEvent, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button, buttonVariants } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
 import { uploadVideoReference } from '../../api'
@@ -42,6 +43,8 @@ const MAX_REFERENCE_IMAGES = 9
 const MAX_REFERENCE_VIDEOS = 3
 const IMAGE_ACCEPT =
   'image/jpeg,image/png,image/webp,image/bmp,image/tiff,image/gif,image/heic,image/heif,.heic,.heif'
+const VIDEO_ACCEPT = 'video/mp4,video/quicktime,.mp4,.mov'
+const REFERENCE_CONTENT_ACCEPT = `${IMAGE_ACCEPT},${VIDEO_ACCEPT}`
 const SUPPORTED_IMAGE_MIME_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -59,11 +62,6 @@ interface VideoReferenceInputProps {
   onContentChange: (content: VideoInputContent[]) => void
   onValidityChange: (valid: boolean) => void
   disabled?: boolean
-}
-
-interface VideoUrlField {
-  id: number
-  value: string
 }
 
 interface UploadedReferenceVideo {
@@ -103,19 +101,6 @@ function isSupportedImage(file: File): boolean {
   return /\.(jpe?g|png|webp|bmp|tiff?|gif|heic|heif)$/i.test(file.name)
 }
 
-function isValidReferenceVideoUrl(value: string): boolean {
-  const trimmed = value.trim()
-  if (trimmed.startsWith('asset://')) {
-    return trimmed.length > 'asset://'.length
-  }
-  try {
-    const url = new URL(trimmed)
-    return url.protocol === 'http:' || url.protocol === 'https:'
-  } catch {
-    return false
-  }
-}
-
 function imageContent(url: string, role: VideoImageRole): VideoInputContent {
   return { type: 'image_url', image_url: { url }, role }
 }
@@ -136,21 +121,15 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
   const { t } = useTranslation()
   const [imageError, setImageError] = useState('')
   const [videoError, setVideoError] = useState('')
-  const [videoUrls, setVideoUrls] = useState<VideoUrlField[]>([
-    { id: 0, value: '' },
-  ])
   const [uploadedVideos, setUploadedVideos] = useState<
     UploadedReferenceVideo[]
   >([])
   const [isUploadingVideo, setIsUploadingVideo] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const nextVideoUrlId = useRef(1)
   const uploadGeneration = useRef(0)
   const interactionDisabled = props.disabled || isUploadingVideo
 
   useEffect(() => {
-    setVideoUrls([{ id: 0, value: '' }])
-    nextVideoUrlId.current = 1
     setImageError('')
     setVideoError('')
     setUploadedVideos([])
@@ -160,33 +139,20 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
   }, [props.mode])
 
   const videoContents = (
-    urls: VideoUrlField[],
     uploads: UploadedReferenceVideo[]
-  ): VideoInputContent[] => [
-    ...uploads.map((upload) => ({
+  ): VideoInputContent[] =>
+    uploads.map((upload) => ({
       type: 'video_url' as const,
       video_url: { url: upload.url },
       role: 'reference_video' as const,
-    })),
-    ...urls
-      .map((field) => field.value.trim())
-      .filter(isValidReferenceVideoUrl)
-      .map((url) => ({
-        type: 'video_url' as const,
-        video_url: { url },
-        role: 'reference_video' as const,
-      })),
-  ]
+    }))
 
-  const syncVideoContent = (
-    urls: VideoUrlField[],
-    uploads: UploadedReferenceVideo[]
-  ) => {
+  const syncVideoContent = (uploads: UploadedReferenceVideo[]) => {
     const withoutVideo = props.content.filter(
       (item) => item.role !== 'reference_video'
     )
     props.onContentChange(
-      sortContent([...withoutVideo, ...videoContents(urls, uploads)])
+      sortContent([...withoutVideo, ...videoContents(uploads)])
     )
   }
 
@@ -198,21 +164,34 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
     props.onContentChange(sortContent(content))
   }
 
-  const handleImages = async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleReferenceContent = async (
+    event: ChangeEvent<HTMLInputElement>
+  ) => {
     const files = [...(event.currentTarget.files ?? [])]
     event.currentTarget.value = ''
+    if (files.length === 0) {
+      return
+    }
+    const currentGeneration = uploadGeneration.current
+    const imageFiles = files.filter(
+      (file) =>
+        isSupportedImage(file) ||
+        (!file.type.startsWith('video/') && !/\.(mp4|mov)$/i.test(file.name))
+    )
+    const imageFileSet = new Set(imageFiles)
+    const videoFiles = files.filter((file) => !imageFileSet.has(file))
     const currentImages = props.content.filter(
       (item) => item.role === 'reference_image'
     )
-    if (currentImages.length + files.length > MAX_REFERENCE_IMAGES) {
+    if (currentImages.length + imageFiles.length > MAX_REFERENCE_IMAGES) {
       setImageError(t('You can add up to 9 reference images.'))
       return
     }
-    if (files.some((file) => !isSupportedImage(file))) {
+    if (imageFiles.some((file) => !isSupportedImage(file))) {
       setImageError(t('Choose a supported image file.'))
       return
     }
-    if (files.some((file) => file.size >= MAX_IMAGE_BYTES)) {
+    if (imageFiles.some((file) => file.size >= MAX_IMAGE_BYTES)) {
       setImageError(t('Each image must be smaller than 30 MB.'))
       return
     }
@@ -221,22 +200,138 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
       0
     )
     if (
-      currentBytes + files.reduce((total, file) => total + file.size, 0) >
+      currentBytes + imageFiles.reduce((total, file) => total + file.size, 0) >
       MAX_COMBINED_IMAGE_BYTES
     ) {
       setImageError(t('The combined image size is too large.'))
       return
     }
+    if (uploadedVideos.length + videoFiles.length > MAX_REFERENCE_VIDEOS) {
+      setVideoError(t('You can add up to 3 reference videos.'))
+      return
+    }
+    const fileErrors = new Set(videoFiles.map(validateReferenceVideoFile))
+    if (fileErrors.has('format')) {
+      setVideoError(t('Choose an MP4 or MOV video.'))
+      return
+    }
+    if (fileErrors.has('size')) {
+      setVideoError(t('Each reference video must not exceed 80 MB.'))
+      return
+    }
+    const finishVideoSelection = () => {
+      if (currentGeneration === uploadGeneration.current) {
+        setIsUploadingVideo(false)
+        setUploadProgress(0)
+        props.onValidityChange(true)
+      }
+    }
+    if (videoFiles.length > 0) {
+      setIsUploadingVideo(true)
+      setUploadProgress(0)
+      setVideoError('')
+      props.onValidityChange(false)
+    }
+
+    let nextContent = props.content
     try {
-      const urls = await Promise.all(files.map(readFileAsDataUrl))
+      const urls = await Promise.all(imageFiles.map(readFileAsDataUrl))
       const existingUrls = new Set(props.content.map(contentUrl))
       const newImages = urls
         .filter((url) => !existingUrls.has(url))
         .map((url) => imageContent(url, 'reference_image'))
-      props.onContentChange(sortContent([...props.content, ...newImages]))
+      nextContent = sortContent([...props.content, ...newImages])
       setImageError('')
     } catch {
       setImageError(t('Unable to read the selected image.'))
+      finishVideoSelection()
+      return
+    }
+
+    if (videoFiles.length === 0) {
+      props.onContentChange(nextContent)
+      setVideoError('')
+      return
+    }
+
+    let durations: number[]
+    try {
+      durations = await Promise.all(videoFiles.map(readReferenceVideoDuration))
+    } catch {
+      setVideoError(t('Unable to upload the reference video.'))
+      finishVideoSelection()
+      return
+    }
+    let totalDuration = uploadedVideos.reduce(
+      (total, upload) => total + upload.duration,
+      0
+    )
+    for (const duration of durations) {
+      const durationError = validateReferenceVideoDuration(
+        duration,
+        totalDuration
+      )
+      if (durationError === 'duration') {
+        setVideoError(
+          t('Each reference video must be between 2 and 15 seconds.')
+        )
+        finishVideoSelection()
+        return
+      }
+      if (durationError === 'total-duration') {
+        setVideoError(t('Reference videos must total no more than 15 seconds.'))
+        finishVideoSelection()
+        return
+      }
+      totalDuration += duration
+    }
+    if (currentGeneration !== uploadGeneration.current) {
+      return
+    }
+
+    const newUploads: UploadedReferenceVideo[] = []
+    try {
+      for (const [index, file] of videoFiles.entries()) {
+        const uploaded = await uploadVideoReference(file, (progress) => {
+          setUploadProgress(
+            Math.round(((index + progress / 100) / videoFiles.length) * 100)
+          )
+        })
+        newUploads.push({
+          id: uploaded.id,
+          url: uploaded.url,
+          name: uploaded.name,
+          size: uploaded.size,
+          duration: durations[index],
+        })
+      }
+      if (currentGeneration !== uploadGeneration.current) {
+        return
+      }
+      const nextUploaded = [...uploadedVideos, ...newUploads]
+      setUploadedVideos(nextUploaded)
+      const withoutVideo = nextContent.filter(
+        (item) => item.role !== 'reference_video'
+      )
+      props.onContentChange(
+        sortContent([...withoutVideo, ...videoContents(nextUploaded)])
+      )
+    } catch {
+      if (currentGeneration === uploadGeneration.current) {
+        if (newUploads.length > 0) {
+          const nextUploaded = [...uploadedVideos, ...newUploads]
+          setUploadedVideos(nextUploaded)
+          const withoutVideo = nextContent.filter(
+            (item) => item.role !== 'reference_video'
+          )
+          props.onContentChange(
+            sortContent([...withoutVideo, ...videoContents(nextUploaded)])
+          )
+        }
+        setVideoError(t('Unable to upload the reference video.'))
+      }
+    } finally {
+      finishVideoSelection()
     }
   }
 
@@ -272,123 +367,35 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
     }
   }
 
-  const handleVideoUrl = (index: number, value: string) => {
-    const nextUrls = videoUrls.map((field, itemIndex) =>
-      itemIndex === index ? { ...field, value } : field
-    )
-    setVideoUrls(nextUrls)
-    const invalid = nextUrls.some(
-      (field) =>
-        field.value.trim() !== '' && !isValidReferenceVideoUrl(field.value)
-    )
-    const tooMany = videoContents(nextUrls, uploadedVideos).length > 3
-    props.onValidityChange(!invalid && !tooMany && !isUploadingVideo)
-    if (tooMany) {
-      setVideoError(t('You can add up to 3 reference videos.'))
-    } else if (invalid) {
-      setVideoError(t('Enter a public video URL or an asset ID.'))
-    } else {
-      setVideoError('')
-    }
-    syncVideoContent(nextUrls, uploadedVideos)
-  }
-
-  const removeVideoUrl = (index: number) => {
-    const nextUrls = videoUrls.filter((_, itemIndex) => itemIndex !== index)
-    setVideoUrls(nextUrls.length > 0 ? nextUrls : [{ id: 0, value: '' }])
-    const invalid = nextUrls.some(
-      (field) => field.value !== '' && !isValidReferenceVideoUrl(field.value)
-    )
-    props.onValidityChange(!invalid)
-    setVideoError(invalid ? t('Enter a public video URL or an asset ID.') : '')
-    syncVideoContent(nextUrls, uploadedVideos)
-  }
-
-  const handleLocalVideo = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0]
-    event.currentTarget.value = ''
-    if (!file) {
-      return
-    }
-    if (
-      videoContents(videoUrls, uploadedVideos).length >= MAX_REFERENCE_VIDEOS
-    ) {
-      setVideoError(t('You can add up to 3 reference videos.'))
-      return
-    }
-    const fileError = validateReferenceVideoFile(file)
-    if (fileError === 'format') {
-      setVideoError(t('Choose an MP4 or MOV video.'))
-      return
-    }
-    if (fileError === 'size') {
-      setVideoError(t('Each reference video must not exceed 80 MB.'))
-      return
-    }
-
-    const currentGeneration = uploadGeneration.current
-    setIsUploadingVideo(true)
-    setUploadProgress(0)
-    setVideoError('')
-    props.onValidityChange(false)
-    try {
-      const duration = await readReferenceVideoDuration(file)
-      const existingDuration = uploadedVideos.reduce(
-        (total, upload) => total + upload.duration,
-        0
-      )
-      const durationError = validateReferenceVideoDuration(
-        duration,
-        existingDuration
-      )
-      if (durationError === 'duration') {
-        setVideoError(
-          t('Each reference video must be between 2 and 15 seconds.')
-        )
-        return
-      }
-      if (durationError === 'total-duration') {
-        setVideoError(t('Reference videos must total no more than 15 seconds.'))
-        return
-      }
-      const uploaded = await uploadVideoReference(file, setUploadProgress)
-      if (currentGeneration !== uploadGeneration.current) {
-        return
-      }
-      const nextUploaded = [
-        ...uploadedVideos,
-        {
-          id: uploaded.id,
-          url: uploaded.url,
-          name: uploaded.name,
-          size: uploaded.size,
-          duration,
-        },
-      ]
-      setUploadedVideos(nextUploaded)
-      syncVideoContent(videoUrls, nextUploaded)
-      setVideoError('')
-    } catch {
-      if (currentGeneration === uploadGeneration.current) {
-        setVideoError(t('Unable to upload the reference video.'))
-      }
-    } finally {
-      if (currentGeneration === uploadGeneration.current) {
-        setIsUploadingVideo(false)
-        setUploadProgress(0)
-        const invalidURL = videoUrls.some(
-          (field) =>
-            field.value.trim() !== '' && !isValidReferenceVideoUrl(field.value)
-        )
-        props.onValidityChange(!invalidURL)
-      }
-    }
-  }
-
   const removeUploadedVideo = (id: string) => {
     const nextUploaded = uploadedVideos.filter((upload) => upload.id !== id)
     setUploadedVideos(nextUploaded)
-    syncVideoContent(videoUrls, nextUploaded)
+    syncVideoContent(nextUploaded)
+  }
+
+  const swapFrames = () => {
+    const firstFrame = props.content.find(
+      (content) => content.role === 'first_frame'
+    )
+    const lastFrame = props.content.find(
+      (content) => content.role === 'last_frame'
+    )
+    if (!firstFrame || !lastFrame) {
+      return
+    }
+    props.onContentChange(
+      sortContent(
+        props.content.map((item) => {
+          if (item.role === 'first_frame') {
+            return { ...item, role: 'last_frame' }
+          }
+          if (item.role === 'last_frame') {
+            return { ...item, role: 'first_frame' }
+          }
+          return item
+        })
+      )
+    )
   }
 
   const removeAt = (index: number) => {
@@ -485,16 +492,16 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
                 )
               })}
             <input
-              id='video-reference-images'
+              id='video-reference-content'
               type='file'
-              accept={IMAGE_ACCEPT}
+              accept={REFERENCE_CONTENT_ACCEPT}
               multiple
               className='sr-only'
               disabled={interactionDisabled}
-              onChange={(event) => void handleImages(event)}
+              onChange={(event) => void handleReferenceContent(event)}
             />
             <label
-              htmlFor='video-reference-images'
+              htmlFor='video-reference-content'
               className={cn(
                 buttonVariants({ variant: 'outline' }),
                 'border-dashed',
@@ -502,7 +509,11 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
               )}
             >
               <ImagePlusIcon aria-hidden='true' />
-              {t('Add reference images')}
+              {isUploadingVideo
+                ? t('Uploading video {{progress}}%', {
+                    progress: uploadProgress,
+                  })
+                : t('Add reference content')}
             </label>
           </div>
           <div className='flex flex-col gap-2'>
@@ -535,103 +546,26 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
                 </Button>
               </div>
             ))}
-            <input
-              id='video-reference-local-video'
-              type='file'
-              accept='video/mp4,video/quicktime,.mp4,.mov'
-              className='sr-only'
-              disabled={
-                interactionDisabled ||
-                videoContents(videoUrls, uploadedVideos).length >=
-                  MAX_REFERENCE_VIDEOS
-              }
-              onChange={(event) => void handleLocalVideo(event)}
-            />
-            <label
-              htmlFor='video-reference-local-video'
-              className={cn(
-                buttonVariants({ variant: 'outline' }),
-                'w-fit border-dashed',
-                (interactionDisabled ||
-                  videoContents(videoUrls, uploadedVideos).length >=
-                    MAX_REFERENCE_VIDEOS) &&
-                  'pointer-events-none opacity-50'
-              )}
-            >
-              <VideoIcon aria-hidden='true' />
-              {isUploadingVideo
-                ? t('Uploading video {{progress}}%', {
-                    progress: uploadProgress,
-                  })
-                : t('Upload local reference video')}
-            </label>
-            {videoUrls.map((field, index) => (
-              <div key={field.id} className='flex min-w-0 gap-2'>
-                <div className='relative min-w-0 flex-1'>
-                  <VideoIcon
-                    aria-hidden='true'
-                    className='text-muted-foreground absolute top-2 left-2.5 size-4'
-                  />
-                  <Input
-                    aria-label={t('Reference video URL {{number}}', {
-                      number: index + 1,
-                    })}
-                    placeholder={t(
-                      'Public video URL or asset:// ID (optional)'
-                    )}
-                    className='pl-8'
-                    value={field.value}
-                    disabled={
-                      interactionDisabled ||
-                      uploadedVideos.length >= MAX_REFERENCE_VIDEOS
-                    }
-                    onChange={(event) =>
-                      handleVideoUrl(index, event.currentTarget.value)
-                    }
-                  />
-                </div>
-                {videoUrls.length > 1 ? (
-                  <Button
-                    type='button'
-                    size='icon'
-                    variant='ghost'
-                    aria-label={t('Remove reference video {{number}}', {
-                      number: index + 1,
-                    })}
-                    disabled={interactionDisabled}
-                    onClick={() => removeVideoUrl(index)}
-                  >
-                    <Trash2Icon aria-hidden='true' />
-                  </Button>
-                ) : null}
-              </div>
-            ))}
-            {videoUrls.length + uploadedVideos.length < MAX_REFERENCE_VIDEOS ? (
-              <Button
-                type='button'
-                variant='outline'
-                className='w-fit border-dashed'
-                disabled={interactionDisabled}
-                onClick={() => {
-                  setVideoUrls([
-                    ...videoUrls,
-                    { id: nextVideoUrlId.current, value: '' },
-                  ])
-                  nextVideoUrlId.current += 1
-                }}
-              >
-                <VideoIcon aria-hidden='true' />
-                {t('Add reference video')}
-              </Button>
-            ) : null}
           </div>
         </>
       ) : (
         <div className='flex min-w-0 items-center gap-3'>
           {frameSlot('first_frame', t('First frame'))}
-          <span className='text-muted-foreground' aria-hidden='true'>
-            →
-          </span>
+          <Button
+            type='button'
+            size='icon-sm'
+            variant='outline'
+            className='shrink-0 rounded-full'
+            aria-label={t('Swap first and last frames')}
+            disabled={
+              props.disabled ||
+              !props.content.some((item) => item.role === 'first_frame') ||
+              !props.content.some((item) => item.role === 'last_frame')
+            }
+            onClick={swapFrames}
+          >
+            <HugeiconsIcon icon={ArrowLeftRightIcon} aria-hidden='true' />
+          </Button>
           {frameSlot('last_frame', t('Last frame (optional)'))}
         </div>
       )}

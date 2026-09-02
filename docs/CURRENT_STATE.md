@@ -15,7 +15,7 @@
 - Local Model Provider、普通用户 API、Streaming、Usage / Billing 与 Serving Benchmark 均已形成真实验证证据。
 - 当前容量结论：老板现场建议并发 1～2；并发 4 已通过 30 分钟稳定性验证。将 LM Studio 预测槽位放宽至 6 只获得约 9.9% 吞吐增益，同时 TTFT P50 增加约 72.9%。
 - 加权路由 baseline：同一 `google/gemma-4-31b` 入口已验证按权重选择本地 Gemma 或映射到 DeepSeek；20 个短请求实际分布 13 / 7，30 个混合 Streaming 请求零错误。
-- Seedance 视频能力：Dreamina Seedance 2.0 / 2.0 Fast 的动态任务计费、Playground 文生视频、异步轮询、预览与下载已合入并完成公网生成验收；参考图片、首尾帧和本地参考视频输入已在功能分支实现，尚未合并、部署或做本地视频真实 Provider 验收。
+- Seedance 视频能力：Dreamina Seedance 2.0 / 2.0 Fast 的动态任务计费、Playground 文生视频、异步轮询、预览与下载已合入并完成公网生成验收；参考图片与首帧生成已完成公网验收，本地参考视频及统一参考内容入口已合入，尚待部署和真实 Provider 验收。
 - 网关容量 baseline：固定延迟 Mock 短时闭环中，非流式 100 VU、Streaming 25 VU 通过，下一档分别在 200 / 50 VU 触发延迟停止线。
 - 网关稳定性：Streaming 20 VU 运行 30 分钟，完成 42779 请求，其中 6 次 HTTP 503，错误率 0.014%；容器无重启、OOM 或内存持续增长。
 - 下一主 Milestone：完善老板 Demo 交付，归因网关稳定性轮次中的 6 次 HTTP 503，并设计开放到达率与真实服务器复测。
@@ -150,7 +150,7 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 
 ## 9. 下一步行动
 
-1. 合并并部署 Playground 本地参考视频功能后，使用 MP4 / MOV 文件完成上传、任务提交、BytePlus 拉取、生成结果及临时文件清理验收，并核对任务日志与实际扣费。
+1. 部署 Playground 本地参考视频功能后，使用 MP4 / MOV 文件完成上传、任务提交、BytePlus 拉取、生成结果及临时文件清理验收，并核对任务日志与实际扣费；同时补验尾帧输入和首尾帧交换。
 2. 完善老板汇报稿、架构图、HTML/PDF/PPT 交付与现场 Demo 脚本。
 3. 对网关 Streaming 30 分钟轮次中的 6 次 HTTP 503 做 many-models、Cloudflare 和 Mock 日志交叉归因。
 4. 使用开放到达率模型和多轮重复运行，形成可用于容量规划的区间，不把固定 VU 换算为用户数。

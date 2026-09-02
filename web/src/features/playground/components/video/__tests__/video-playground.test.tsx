@@ -125,7 +125,7 @@ describe('VideoPlayground', () => {
     const resolution1080 = await screen.findByRole('button', { name: '1080p' })
     await user.click(resolution1080)
     await user.upload(
-      screen.getByLabelText('Add reference images'),
+      screen.getByLabelText('Add reference content'),
       new File(['image'], 'reference.png', { type: 'image/png' })
     )
 
@@ -220,20 +220,48 @@ describe('VideoPlayground', () => {
     expect(await screen.findByText('Task submitted')).toBeVisible()
   })
 
-  test('submits uploaded images and a public video as reference content', async () => {
+  test('selects mixed local media through one reference content control', async () => {
     const user = userEvent.setup()
+    vi.mocked(uploadVideoReference)
+      .mockResolvedValueOnce({
+        id: 'first-video-reference.mp4',
+        url: 'https://many-models.example/first-video.mp4',
+        name: 'first.mp4',
+        content_type: 'video/mp4',
+        size: 5,
+      })
+      .mockResolvedValueOnce({
+        id: 'second-video-reference.mov',
+        url: 'https://many-models.example/second-video.mov',
+        name: 'second.mov',
+        content_type: 'video/quicktime',
+        size: 6,
+      })
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
     expect(
       await screen.findByRole('button', { name: 'Reference generation' })
     ).toHaveAttribute('aria-pressed', 'true')
-    await user.upload(
-      screen.getByLabelText('Add reference images'),
-      new File(['image'], 'subject.png', { type: 'image/png' })
+    const image = new File(['image'], 'subject.png', { type: 'image/png' })
+    const firstVideo = new File(['first'], 'first.mp4', { type: 'video/mp4' })
+    const secondVideo = new File(['second'], 'second.mov', {
+      type: 'video/quicktime',
+    })
+    await user.upload(screen.getByLabelText('Add reference content'), [
+      image,
+      firstVideo,
+      secondVideo,
+    ])
+    expect(await screen.findByAltText('Reference image 1')).toBeVisible()
+    expect(await screen.findByText('first.mp4')).toBeVisible()
+    expect(await screen.findByText('second.mov')).toBeVisible()
+    expect(uploadVideoReference).toHaveBeenCalledWith(
+      firstVideo,
+      expect.any(Function)
     )
-    await user.type(
-      screen.getByLabelText('Reference video URL 1'),
-      'https://example.com/motion.mp4'
+    expect(uploadVideoReference).toHaveBeenCalledWith(
+      secondVideo,
+      expect.any(Function)
     )
     await user.type(
       screen.getByLabelText('Prompt'),
@@ -253,7 +281,16 @@ describe('VideoPlayground', () => {
               }),
               {
                 type: 'video_url',
-                video_url: { url: 'https://example.com/motion.mp4' },
+                video_url: {
+                  url: 'https://many-models.example/first-video.mp4',
+                },
+                role: 'reference_video',
+              },
+              {
+                type: 'video_url',
+                video_url: {
+                  url: 'https://many-models.example/second-video.mov',
+                },
                 role: 'reference_video',
               },
             ],
@@ -269,10 +306,7 @@ describe('VideoPlayground', () => {
 
     await screen.findByRole('button', { name: 'Reference generation' })
     const file = new File(['video'], 'motion.mp4', { type: 'video/mp4' })
-    await user.upload(
-      screen.getByLabelText('Upload local reference video'),
-      file
-    )
+    await user.upload(screen.getByLabelText('Add reference content'), file)
 
     expect(await screen.findByText('motion.mp4')).toBeVisible()
     expect(uploadVideoReference).toHaveBeenCalledWith(
@@ -309,10 +343,7 @@ describe('VideoPlayground', () => {
     await screen.findByRole('button', { name: 'Reference generation' })
     const file = new File(['video'], 'large.mp4', { type: 'video/mp4' })
     Object.defineProperty(file, 'size', { value: 80 * 1024 * 1024 + 1 })
-    await user.upload(
-      screen.getByLabelText('Upload local reference video'),
-      file
-    )
+    await user.upload(screen.getByLabelText('Add reference content'), file)
 
     expect(
       await screen.findByText('Each reference video must not exceed 80 MB.')
@@ -328,7 +359,7 @@ describe('VideoPlayground', () => {
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
     await screen.findByRole('button', { name: 'Reference generation' })
-    const input = screen.getByLabelText('Upload local reference video')
+    const input = screen.getByLabelText('Add reference content')
     await user.upload(
       input,
       new File(['first'], 'first.mp4', { type: 'video/mp4' })
@@ -347,54 +378,19 @@ describe('VideoPlayground', () => {
     expect(uploadVideoReference).toHaveBeenCalledTimes(1)
   })
 
-  test('submits up to three public videos as reference content', async () => {
-    const user = userEvent.setup()
+  test('does not expose reference video URL controls', async () => {
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
     await screen.findByRole('button', { name: 'Reference generation' })
-    await user.type(
-      screen.getByLabelText('Reference video URL 1'),
-      'https://example.com/first.mp4'
-    )
-    await user.click(
-      screen.getByRole('button', { name: 'Add reference video' })
-    )
-    await user.type(
-      screen.getByLabelText('Reference video URL 2'),
-      'asset://second-video'
-    )
-    await user.click(
-      screen.getByRole('button', { name: 'Add reference video' })
-    )
-    await user.type(
-      screen.getByLabelText('Reference video URL 3'),
-      'https://example.com/third.mov'
+    expect(screen.getByLabelText('Add reference content')).toHaveAttribute(
+      'multiple'
     )
     expect(
       screen.queryByRole('button', { name: 'Add reference video' })
     ).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Generate video' }))
-
-    await waitFor(() =>
-      expect(submitVideoGeneration).toHaveBeenCalledWith(
-        'default',
-        expect.objectContaining({
-          metadata: expect.objectContaining({
-            content: [
-              expect.objectContaining({
-                video_url: { url: 'https://example.com/first.mp4' },
-              }),
-              expect.objectContaining({
-                video_url: { url: 'asset://second-video' },
-              }),
-              expect.objectContaining({
-                video_url: { url: 'https://example.com/third.mov' },
-              }),
-            ],
-          }),
-        })
-      )
-    )
+    expect(
+      screen.queryByLabelText('Reference video URL 1')
+    ).not.toBeInTheDocument()
   })
 
   test('requires a first frame and clears reference content when modes change', async () => {
@@ -402,7 +398,7 @@ describe('VideoPlayground', () => {
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
     await user.upload(
-      await screen.findByLabelText('Add reference images'),
+      await screen.findByLabelText('Add reference content'),
       new File(['reference'], 'reference.png', { type: 'image/png' })
     )
     expect(await screen.findByAltText('Reference image 1')).toBeVisible()
@@ -444,13 +440,64 @@ describe('VideoPlayground', () => {
     )
   })
 
-  test('rejects excessive images and invalid reference video URLs', async () => {
+  test('swaps the first and last frames before submission', async () => {
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await user.click(
+      await screen.findByRole('button', { name: 'First and last frames' })
+    )
+    expect(
+      screen.getByRole('group', { name: 'First and last frames' })
+    ).toBeVisible()
+    const swapButton = screen.getByRole('button', {
+      name: 'Swap first and last frames',
+    })
+    expect(swapButton).toBeDisabled()
+
+    await user.upload(
+      screen.getByLabelText('First frame'),
+      new File(['first'], 'first.png', { type: 'image/png' })
+    )
+    await user.upload(
+      screen.getByLabelText('Last frame (optional)'),
+      new File(['last'], 'last.png', { type: 'image/png' })
+    )
+    await waitFor(() => expect(swapButton).toBeEnabled())
+    await user.click(swapButton)
+    await user.type(screen.getByLabelText('Prompt'), 'Transition between them')
+    await user.click(screen.getByRole('button', { name: 'Generate video' }))
+
+    await waitFor(() =>
+      expect(submitVideoGeneration).toHaveBeenCalledWith(
+        'default',
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            content: [
+              {
+                type: 'image_url',
+                image_url: { url: 'data:image/png;base64,bGFzdA==' },
+                role: 'first_frame',
+              },
+              {
+                type: 'image_url',
+                image_url: { url: 'data:image/png;base64,Zmlyc3Q=' },
+                role: 'last_frame',
+              },
+            ],
+          }),
+        })
+      )
+    )
+  })
+
+  test('rejects excessive reference images', async () => {
     const user = userEvent.setup()
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
     await screen.findByRole('button', { name: 'Reference generation' })
     await user.upload(
-      screen.getByLabelText('Add reference images'),
+      screen.getByLabelText('Add reference content'),
       [...Array(10).keys()].map(
         (index) =>
           new File(['image'], `reference-${index}.png`, { type: 'image/png' })
@@ -459,29 +506,13 @@ describe('VideoPlayground', () => {
     expect(
       await screen.findByText('You can add up to 9 reference images.')
     ).toBeVisible()
-
-    await user.type(screen.getByLabelText('Prompt'), 'A moving subject')
-    await user.type(screen.getByLabelText('Reference video URL 1'), 'localhost')
-    expect(
-      await screen.findByText('Enter a public video URL or an asset ID.')
-    ).toBeVisible()
-    await user.upload(
-      screen.getByLabelText('Add reference images'),
-      new File(['image'], 'valid.png', { type: 'image/png' })
-    )
-    expect(
-      screen.getByText('Enter a public video URL or an asset ID.')
-    ).toBeVisible()
-    expect(
-      screen.getByRole('button', { name: 'Generate video' })
-    ).toBeDisabled()
   })
 
   test('rejects image formats that BytePlus does not support', async () => {
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
     await screen.findByRole('button', { name: 'Reference generation' })
-    fireEvent.change(screen.getByLabelText('Add reference images'), {
+    fireEvent.change(screen.getByLabelText('Add reference content'), {
       target: {
         files: [
           new File(['<svg />'], 'reference.svg', { type: 'image/svg+xml' }),

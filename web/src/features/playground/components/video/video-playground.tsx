@@ -296,7 +296,7 @@ export function VideoPlayground() {
                   <FieldLegend id='video-reference-label' variant='label'>
                     {generationMode === 'reference'
                       ? t('Reference content')
-                      : t('Keyframes')}
+                      : t('First and last frames')}
                   </FieldLegend>
                   <VideoReferenceInput
                     mode={generationMode}
