@@ -53,7 +53,9 @@ export async function uploadVideoReference(
     skipErrorHandler: true,
     onUploadProgress: (event) => {
       if (event.total && event.total > 0) {
-        onProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)))
+        onProgress?.(
+          Math.min(100, Math.round((event.loaded / event.total) * 100))
+        )
       }
     },
   })

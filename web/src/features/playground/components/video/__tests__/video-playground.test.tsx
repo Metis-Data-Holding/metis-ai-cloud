@@ -28,7 +28,9 @@ import {
   getVideoContent,
   getVideoGeneration,
   submitVideoGeneration,
+  uploadVideoReference,
 } from '../../../api'
+import { readReferenceVideoDuration } from '../../../lib/video/video-reference-upload'
 import { VideoPlayground } from '../video-playground'
 
 vi.mock('../../../api', () => ({
@@ -37,7 +39,16 @@ vi.mock('../../../api', () => ({
   getVideoContent: vi.fn(),
   getVideoGeneration: vi.fn(),
   submitVideoGeneration: vi.fn(),
+  uploadVideoReference: vi.fn(),
 }))
+
+vi.mock(
+  '../../../lib/video/video-reference-upload',
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    readReferenceVideoDuration: vi.fn(),
+  })
+)
 
 function createWrapper() {
   const client = new QueryClient({
@@ -77,6 +88,14 @@ describe('VideoPlayground', () => {
     vi.mocked(getVideoContent).mockImplementation(
       () => new Promise(() => undefined)
     )
+    vi.mocked(readReferenceVideoDuration).mockResolvedValue(5)
+    vi.mocked(uploadVideoReference).mockResolvedValue({
+      id: 'abcdefghijklmnopqrstuvwx.mp4',
+      url: 'https://many-models.example/v1/video-reference-files/abcdefghijklmnopqrstuvwx.mp4/content?expires=1&access=signed',
+      name: 'motion.mp4',
+      content_type: 'video/mp4',
+      size: 5,
+    })
   })
 
   test('shows only the supported resolution choices for Seedance Fast', async () => {
@@ -242,6 +261,90 @@ describe('VideoPlayground', () => {
         })
       )
     )
+  })
+
+  test('uploads a local reference video and submits its signed URL', async () => {
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await screen.findByRole('button', { name: 'Reference generation' })
+    const file = new File(['video'], 'motion.mp4', { type: 'video/mp4' })
+    await user.upload(
+      screen.getByLabelText('Upload local reference video'),
+      file
+    )
+
+    expect(await screen.findByText('motion.mp4')).toBeVisible()
+    expect(uploadVideoReference).toHaveBeenCalledWith(
+      file,
+      expect.any(Function)
+    )
+    await user.type(screen.getByLabelText('Prompt'), 'Follow this movement')
+    await user.click(screen.getByRole('button', { name: 'Generate video' }))
+
+    await waitFor(() =>
+      expect(submitVideoGeneration).toHaveBeenCalledWith(
+        'default',
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            content: [
+              {
+                type: 'video_url',
+                video_url: {
+                  url: 'https://many-models.example/v1/video-reference-files/abcdefghijklmnopqrstuvwx.mp4/content?expires=1&access=signed',
+                },
+                role: 'reference_video',
+              },
+            ],
+          }),
+        })
+      )
+    )
+  })
+
+  test('rejects a local video larger than 80 MB before upload', async () => {
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await screen.findByRole('button', { name: 'Reference generation' })
+    const file = new File(['video'], 'large.mp4', { type: 'video/mp4' })
+    Object.defineProperty(file, 'size', { value: 80 * 1024 * 1024 + 1 })
+    await user.upload(
+      screen.getByLabelText('Upload local reference video'),
+      file
+    )
+
+    expect(
+      await screen.findByText('Each reference video must not exceed 80 MB.')
+    ).toBeVisible()
+    expect(uploadVideoReference).not.toHaveBeenCalled()
+  })
+
+  test('rejects local reference videos whose combined duration exceeds 15 seconds', async () => {
+    const user = userEvent.setup()
+    vi.mocked(readReferenceVideoDuration)
+      .mockResolvedValueOnce(8)
+      .mockResolvedValueOnce(8)
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await screen.findByRole('button', { name: 'Reference generation' })
+    const input = screen.getByLabelText('Upload local reference video')
+    await user.upload(
+      input,
+      new File(['first'], 'first.mp4', { type: 'video/mp4' })
+    )
+    expect(await screen.findByText('motion.mp4')).toBeVisible()
+    await user.upload(
+      input,
+      new File(['second'], 'second.mp4', { type: 'video/mp4' })
+    )
+
+    expect(
+      await screen.findByText(
+        'Reference videos must total no more than 15 seconds.'
+      )
+    ).toBeVisible()
+    expect(uploadVideoReference).toHaveBeenCalledTimes(1)
   })
 
   test('submits up to three public videos as reference content', async () => {
