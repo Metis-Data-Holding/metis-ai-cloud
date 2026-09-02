@@ -167,6 +167,14 @@ export interface VideoReferenceContent {
   role: 'reference_video'
 }
 
+export interface VideoReferenceUpload {
+  id: string
+  url: string
+  name: string
+  content_type: 'video/mp4' | 'video/quicktime'
+  size: number
+}
+
 export type VideoInputContent = VideoImageContent | VideoReferenceContent
 export type VideoTaskStatus =
   | 'unknown'

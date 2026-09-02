@@ -25,6 +25,7 @@ import type {
   ModelOption,
   GroupOption,
   VideoGenerationRequest,
+  VideoReferenceUpload,
   VideoTask,
 } from './types'
 
@@ -40,6 +41,23 @@ export async function sendChatCompletion(
     skipErrorHandler: true,
   } as Record<string, unknown>)
   return res.data
+}
+
+export async function uploadVideoReference(
+  file: File,
+  onProgress?: (progress: number) => void
+): Promise<VideoReferenceUpload> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await api.post(API_ENDPOINTS.VIDEO_REFERENCE_FILES, formData, {
+    skipErrorHandler: true,
+    onUploadProgress: (event) => {
+      if (event.total && event.total > 0) {
+        onProgress?.(Math.min(100, Math.round((event.loaded / event.total) * 100)))
+      }
+    },
+  })
+  return res.data.data
 }
 
 /**
