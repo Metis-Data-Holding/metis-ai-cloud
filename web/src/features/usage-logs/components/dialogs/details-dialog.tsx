@@ -80,6 +80,7 @@ import {
 } from '../../lib/format'
 import {
   getLogTypeConfig,
+  getUsageLogTypeLabelKey,
   isPerCallBilling,
   isTimingLogType,
 } from '../../lib/utils'
@@ -506,6 +507,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
   const details = props.log.content ?? ''
   const other = parseLogOther(props.log.other)
   const typeConfig = getLogTypeConfig(props.log.type)
+  const typeLabelKey = getUsageLogTypeLabelKey(props.log.type, other)
 
   const isViolation = isViolationFeeLog(other)
   const isRefund = props.log.type === 6
@@ -644,7 +646,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
         <>
           {t('Log Details')}
           <StatusBadge
-            label={t(typeConfig.label)}
+            label={t(typeLabelKey)}
             variant={typeConfig.color as StatusBadgeProps['variant']}
             size='sm'
             copyable={false}

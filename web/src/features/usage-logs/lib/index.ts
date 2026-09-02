@@ -39,6 +39,7 @@ export {
   isDisplayableLogType,
   isTimingLogType,
   getLogTypeConfig,
+  getUsageLogTypeLabelKey,
   isPerCallBilling,
   getDefaultTimeRange,
   buildQueryParams,
