@@ -114,7 +114,7 @@ jobs:
       contents: read
       packages: read
     steps:
-      - name: Deploy through restricted release command
+      - name: Reuse existing release or deploy new image
         shell: bash
         env:
           RELEASE_COMMIT: ${{ needs.build.outputs.commit }}
@@ -126,6 +126,15 @@ jobs:
           [[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           image_ref="${IMAGE_NAME}@${IMAGE_DIGEST}"
+
+          # A commit remains pinned to its first verified image. This also keeps
+          # repeated runs compatible with the release command already on ECS.
+          if printf '%s\n' "$GHCR_TOKEN" \
+            | sudo /usr/local/sbin/metis-ai-cloud-release \
+                rollback "$RELEASE_COMMIT" "$GITHUB_ACTOR"; then
+            exit 0
+          fi
+
           printf '%s\n' "$GHCR_TOKEN" \
             | sudo /usr/local/sbin/metis-ai-cloud-release \
                 deploy "$RELEASE_COMMIT" "$image_ref" "$GITHUB_ACTOR"

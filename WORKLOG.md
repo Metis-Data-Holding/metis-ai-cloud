@@ -117,3 +117,11 @@
 - 前端以异步任务方式轮询状态，成功后通过带登录态的 Blob 请求完成页面预览和本地下载；首版只支持文生视频，不包含素材上传、取消与历史任务管理。
 - 增加视频模型协议筛选、Playground 鉴权与路由、表单约束、轮询和模式切换测试，并补齐 7 种前端语言。
 - 本轮为本地功能分支实现；尚未合并、部署或使用真实 BytePlus Provider 验收。
+
+## 2026-09-02
+
+### GitHub Actions 重复部署修复
+
+- 定位同一 commit 重跑时镜像 manifest digest 变化与不可变 release 绑定冲突，导致部署阶段拒绝覆盖既有镜像。
+- 部署 Workflow 优先复用同 commit 的已有 release，并保持对 ECS 当前受限发布命令的兼容；发布脚本同步支持直接重复部署复用首个已验证镜像。
+- 增加同 commit、不同 digest 的回归测试；发布脚本测试、Bash 语法、ShellCheck、actionlint 与 diff 检查通过。

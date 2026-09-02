@@ -300,11 +300,29 @@ deploy() {
   local commit="$1"
   local image="$2"
   local actor="$3"
-  local release
+  local release="$ROOT/releases/$commit"
+  local stored_image
 
   validate_commit "$commit"
   validate_ghcr_image "$image"
   registry_login "$actor"
+
+  if [[ -d "$release" ]]; then
+    validate_release "$release"
+    stored_image="$(release_image "$release")"
+    if [[ "$stored_image" != "$image" ]]; then
+      warn "commit already has an immutable release; reusing its stored image"
+    fi
+    if [[ "$stored_image" == "$GHCR_PREFIX"* ]]; then
+      pull_ghcr_image "$stored_image" "$commit"
+    else
+      [[ "$stored_image" == "$image" ]] \
+        || die "existing immutable release points to a different image"
+    fi
+    activate_release "$release"
+    return 0
+  fi
+
   pull_ghcr_image "$image" "$commit"
   release="$(prepare_release "$commit" "$image")"
   activate_release "$release"

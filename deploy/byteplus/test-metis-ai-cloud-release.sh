@@ -141,6 +141,13 @@ printf 'token\n' | run_release deploy "$GOOD_COMMIT" "$GOOD_IMAGE" github-user >
 assert_eq "$(basename "$(readlink "$ROOT/current")")" "$GOOD_COMMIT"
 assert_eq "$(cat "$ROOT/releases/$GOOD_COMMIT/.release.env")" "METIS_IMAGE=$GOOD_IMAGE"
 
+REBUILT_DIGEST="sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+REBUILT_IMAGE="ghcr.io/metis-data-holding/metis-ai-cloud@$REBUILT_DIGEST"
+printf 'token\n' | run_release deploy "$GOOD_COMMIT" "$REBUILT_IMAGE" github-user >/dev/null
+assert_eq "$(basename "$(readlink "$ROOT/current")")" "$GOOD_COMMIT"
+assert_eq "$(cat "$ROOT/releases/$GOOD_COMMIT/.release.env")" "METIS_IMAGE=$GOOD_IMAGE"
+assert_eq "$(cat "$DOCKER_STATE")" "$GOOD_IMAGE"
+
 BAD_COMMIT="2222222222222222222222222222222222222222"
 BAD_DIGEST="sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 BAD_IMAGE="ghcr.io/metis-data-holding/metis-ai-cloud@$BAD_DIGEST"
