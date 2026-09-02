@@ -13,6 +13,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// PlaygroundSessionOnly keeps browser-only Playground helpers from accepting
+// dashboard personal access tokens. The main Playground relay uses the same
+// restriction while building its temporary token context.
+func PlaygroundSessionOnly() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.GetBool("use_access_token") {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"code":    "PLAYGROUND_SESSION_REQUIRED",
+				"message": "dashboard session required",
+			})
+			return
+		}
+		c.Next()
+	}
+}
+
 // PlaygroundVideoAuth converts an authenticated dashboard user into the
 // temporary token context expected by the shared video relay pipeline.
 func PlaygroundVideoAuth() gin.HandlerFunc {

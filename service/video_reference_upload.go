@@ -32,6 +32,7 @@ var (
 	ErrVideoReferenceTooLarge      = errors.New("video reference is too large")
 	ErrVideoReferenceUnsupported   = errors.New("video reference format is unsupported")
 	ErrVideoReferenceInvalid       = errors.New("video reference is invalid")
+	videoReferenceRawIDPattern     = regexp.MustCompile(`^[0-9A-Za-z]{24}$`)
 	videoReferenceFilePattern      = regexp.MustCompile(`^[0-9A-Za-z]{24}\.(mp4|mov)$`)
 	videoReferenceUploadingPattern = regexp.MustCompile(`^[0-9A-Za-z]{24}\.(mp4|mov)\.uploading$`)
 )
@@ -101,7 +102,7 @@ func SaveVideoReference(reader io.Reader, originalName string, declaredSize int6
 		return VideoReferenceUpload{}, err
 	}
 	id, err := options.NewID()
-	if err != nil || !regexp.MustCompile(`^[0-9A-Za-z]{24}$`).MatchString(id) {
+	if err != nil || !videoReferenceRawIDPattern.MatchString(id) {
 		return VideoReferenceUpload{}, ErrVideoReferenceInvalid
 	}
 	extension := strings.ToLower(filepath.Ext(strings.TrimSpace(originalName)))
@@ -223,12 +224,19 @@ func OpenVideoReference(directory, fileID string) (*os.File, string, error) {
 		return nil, "", ErrVideoReferenceInvalid
 	}
 	path := filepath.Join(directory, fileID)
+	pathInfo, err := os.Lstat(path)
+	if err != nil {
+		return nil, "", err
+	}
+	if !pathInfo.Mode().IsRegular() {
+		return nil, "", ErrVideoReferenceInvalid
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, "", err
 	}
 	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() {
+	if err != nil || !info.Mode().IsRegular() || !os.SameFile(pathInfo, info) {
 		_ = file.Close()
 		if err != nil {
 			return nil, "", err

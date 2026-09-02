@@ -67,6 +67,21 @@ func TestPlaygroundVideoAuthRejectsDashboardAccessToken(t *testing.T) {
 	assert.Contains(t, recorder.Body.String(), "access token")
 }
 
+func TestPlaygroundSessionOnlyRejectsDashboardAccessToken(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	router := gin.New()
+	reached := false
+	router.POST("/api/playground/video-reference-files", func(c *gin.Context) {
+		c.Set("use_access_token", true)
+	}, PlaygroundSessionOnly(), func(*gin.Context) {
+		reached = true
+	})
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/playground/video-reference-files", nil))
+
+	assert.Equal(t, http.StatusForbidden, recorder.Code)
+	assert.False(t, reached)
+}
+
 func TestPlaygroundVideoAuthRejectsUnavailableGroup(t *testing.T) {
 	require.NoError(t, appI18n.Init())
 	original := setting.UserUsableGroups2JSONString()

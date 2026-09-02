@@ -84,6 +84,19 @@ func TestVerifyVideoReferenceAccessRejectsExpiryAndTampering(t *testing.T) {
 	assert.False(t, VerifyVideoReferenceAccess(access+"x", "abcdefghijklmnopqrstuvwx.mp4", expires.Unix(), time.Unix(1_700_000_000, 0)))
 }
 
+func TestOpenVideoReferenceRejectsSymbolicLinks(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.mp4")
+	require.NoError(t, os.WriteFile(target, []byte("video"), 0o600))
+	fileID := "abcdefghijklmnopqrstuvwx.mp4"
+	require.NoError(t, os.Symlink(target, filepath.Join(dir, fileID)))
+
+	file, _, err := OpenVideoReference(dir, fileID)
+
+	assert.Nil(t, file)
+	assert.ErrorIs(t, err, ErrVideoReferenceInvalid)
+}
+
 func TestCleanupVideoReferenceUploadsUsesSeparateTTLs(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Unix(1_700_000_000, 0)
