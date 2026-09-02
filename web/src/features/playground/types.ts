@@ -152,6 +152,22 @@ export interface GroupOption {
 
 export type VideoResolution = '480p' | '720p' | '1080p' | '4k'
 export type VideoAspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4'
+export type VideoGenerationMode = 'reference' | 'keyframes'
+export type VideoImageRole = 'reference_image' | 'first_frame' | 'last_frame'
+
+export interface VideoImageContent {
+  type: 'image_url'
+  image_url: { url: string }
+  role: VideoImageRole
+}
+
+export interface VideoReferenceContent {
+  type: 'video_url'
+  video_url: { url: string }
+  role: 'reference_video'
+}
+
+export type VideoInputContent = VideoImageContent | VideoReferenceContent
 export type VideoTaskStatus =
   | 'unknown'
   | 'queued'
@@ -166,6 +182,8 @@ export interface VideoGenerationConfig {
   resolution: VideoResolution
   ratio: VideoAspectRatio
   generateAudio: boolean
+  mode: VideoGenerationMode
+  content: VideoInputContent[]
 }
 
 export interface VideoGenerationRequest {
@@ -176,6 +194,7 @@ export interface VideoGenerationRequest {
     resolution: VideoResolution
     ratio: VideoAspectRatio
     generate_audio: boolean
+    content?: VideoInputContent[]
   }
 }
 

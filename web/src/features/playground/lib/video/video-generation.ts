@@ -34,33 +34,49 @@ export function isSupportedVideoPlaygroundModel(model: string): boolean {
   )
 }
 
-export function getVideoResolutionOptions(model: string): VideoResolution[] {
+export function getVideoResolutionOptions(
+  model: string,
+  hasImageInput = false
+): VideoResolution[] {
   if (model.toLowerCase().includes('seedance-2-0-fast')) {
     return FAST_RESOLUTIONS
   }
-  return FULL_RESOLUTIONS
+  return hasImageInput
+    ? FULL_RESOLUTIONS.filter((resolution) => resolution !== '1080p')
+    : FULL_RESOLUTIONS
 }
 
 export function normalizeVideoResolution(
   model: string,
-  resolution: VideoResolution
+  resolution: VideoResolution,
+  hasImageInput = false
 ): VideoResolution {
-  const options = getVideoResolutionOptions(model)
+  const options = getVideoResolutionOptions(model, hasImageInput)
   return options.includes(resolution) ? resolution : '720p'
 }
 
 export function buildVideoGenerationRequest(
   config: VideoGenerationConfig
 ): VideoGenerationRequest {
+  const hasImageInput = config.content.some((item) => item.type === 'image_url')
+  const metadata: VideoGenerationRequest['metadata'] = {
+    resolution: normalizeVideoResolution(
+      config.model,
+      config.resolution,
+      hasImageInput
+    ),
+    ratio: config.ratio,
+    generate_audio: config.generateAudio,
+  }
+  if (config.content.length > 0) {
+    metadata.content = config.content
+  }
+
   return {
     model: config.model,
     prompt: config.prompt.trim(),
     seconds: config.seconds,
-    metadata: {
-      resolution: normalizeVideoResolution(config.model, config.resolution),
-      ratio: config.ratio,
-      generate_audio: config.generateAudio,
-    },
+    metadata,
   }
 }
 

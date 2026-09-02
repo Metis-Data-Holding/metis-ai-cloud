@@ -89,8 +89,14 @@ import {
   isSupportedVideoPlaygroundModel,
   normalizeVideoResolution,
 } from '../../lib/video/video-generation'
-import type { GroupOption, ModelOption } from '../../types'
+import type {
+  GroupOption,
+  ModelOption,
+  VideoGenerationMode,
+  VideoInputContent,
+} from '../../types'
 import { VideoGenerationResult } from './video-generation-result'
+import { VideoReferenceInput } from './video-reference-input'
 import { VideoSegmentedControl } from './video-segmented-control'
 
 const EMPTY_GROUPS: GroupOption[] = []
@@ -104,21 +110,27 @@ const DEFAULT_VALUES: VideoFormValues = {
   resolution: '720p',
   ratio: '16:9',
   generateAudio: false,
+  mode: 'reference',
 }
 
 export function VideoPlayground() {
   const { t } = useTranslation()
   const [selectedGroup, setSelectedGroup] = useState<string>(DEFAULT_GROUP)
+  const [inputContent, setInputContent] = useState<VideoInputContent[]>([])
+  const [inputContentValid, setInputContentValid] = useState(true)
   const generation = useVideoGeneration()
   const form = useForm<VideoFormValues>({
     resolver: zodResolver(videoFormSchema),
     defaultValues: DEFAULT_VALUES,
   })
   const selectedModel = form.watch('model')
+  const prompt = form.watch('prompt')
   const selectedResolution = form.watch('resolution')
   const selectedSeconds = form.watch('seconds')
   const selectedRatio = form.watch('ratio')
   const generateAudio = form.watch('generateAudio')
+  const generationMode = form.watch('mode')
+  const hasImageInput = inputContent.some((item) => item.type === 'image_url')
 
   const groupsQuery = useQuery({
     queryKey: ['playground', 'video-groups'],
@@ -134,7 +146,7 @@ export function VideoPlayground() {
     isSupportedVideoPlaygroundModel(model.value)
   )
   const resolutions = selectedModel
-    ? getVideoResolutionOptions(selectedModel)
+    ? getVideoResolutionOptions(selectedModel, hasImageInput)
     : []
 
   useEffect(() => {
@@ -171,12 +183,13 @@ export function VideoPlayground() {
   useEffect(() => {
     const nextResolution = normalizeVideoResolution(
       selectedModel,
-      selectedResolution
+      selectedResolution,
+      hasImageInput
     )
     if (nextResolution !== selectedResolution) {
       form.setValue('resolution', nextResolution)
     }
-  }, [form, selectedModel, selectedResolution])
+  }, [form, hasImageInput, selectedModel, selectedResolution])
 
   const handleGroupChange = (value: string) => {
     setSelectedGroup(value)
@@ -186,7 +199,10 @@ export function VideoPlayground() {
 
   const handleSubmit = form.handleSubmit(async (values) => {
     try {
-      await generation.submit(values.group, buildVideoGenerationRequest(values))
+      await generation.submit(
+        values.group,
+        buildVideoGenerationRequest({ ...values, content: inputContent })
+      )
     } catch {
       // The mutation exposes the provider error in the result panel.
     }
@@ -194,6 +210,18 @@ export function VideoPlayground() {
 
   const optionLoadError = groupsQuery.error || modelsQuery.error
   const noVideoModels = !modelsQuery.isPending && models.length === 0
+  const hasFirstFrame = inputContent.some((item) => item.role === 'first_frame')
+  const inputContentMissing =
+    (generationMode === 'keyframes' && !hasFirstFrame) ||
+    (generationMode === 'reference' &&
+      inputContent.length === 0 &&
+      prompt.trim() === '')
+
+  const handleModeChange = (mode: VideoGenerationMode) => {
+    form.setValue('mode', mode)
+    setInputContent([])
+    setInputContentValid(true)
+  }
 
   return (
     <div className='min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6'>
@@ -202,7 +230,7 @@ export function VideoPlayground() {
           <CardHeader>
             <CardTitle>{t('Create a video')}</CardTitle>
             <CardDescription>
-              {t('Submit an asynchronous Seedance text-to-video task.')}
+              {t('Submit an asynchronous Seedance video generation task.')}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -247,6 +275,37 @@ export function VideoPlayground() {
                     </EmptyHeader>
                   </Empty>
                 ) : null}
+
+                <FieldSet className='min-w-0'>
+                  <FieldLegend id='video-mode-label' variant='label'>
+                    {t('Generation mode')}
+                  </FieldLegend>
+                  <VideoSegmentedControl
+                    labelledBy='video-mode-label'
+                    value={generationMode}
+                    options={[
+                      { value: 'reference', label: t('Reference generation') },
+                      { value: 'keyframes', label: t('First and last frames') },
+                    ]}
+                    onValueChange={handleModeChange}
+                    disabled={generation.isSubmitting || noVideoModels}
+                  />
+                </FieldSet>
+
+                <FieldSet className='min-w-0'>
+                  <FieldLegend id='video-reference-label' variant='label'>
+                    {generationMode === 'reference'
+                      ? t('Reference content')
+                      : t('Keyframes')}
+                  </FieldLegend>
+                  <VideoReferenceInput
+                    mode={generationMode}
+                    content={inputContent}
+                    onContentChange={setInputContent}
+                    onValidityChange={setInputContentValid}
+                    disabled={generation.isSubmitting || noVideoModels}
+                  />
+                </FieldSet>
 
                 <Field data-invalid={Boolean(form.formState.errors.prompt)}>
                   <FieldLabel htmlFor='video-prompt'>{t('Prompt')}</FieldLabel>
@@ -367,7 +426,9 @@ export function VideoPlayground() {
                 generation.isSubmitting ||
                 modelsQuery.isPending ||
                 noVideoModels ||
-                selectedModel === ''
+                selectedModel === '' ||
+                inputContentMissing ||
+                !inputContentValid
               }
             >
               {generation.isSubmitting ? (
