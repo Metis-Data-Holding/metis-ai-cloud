@@ -44,6 +44,7 @@ import { parseLogOther } from '../lib/format'
 import { TASK_MOBILE_SUMMARY_FIELDS } from '../lib/task-mobile-layout'
 import {
   getLogTypeConfig,
+  getUsageLogTypeLabelKey,
   isDisplayableLogType,
   isTimingLogType,
 } from '../lib/utils'
@@ -154,17 +155,15 @@ function SummaryField<TData>({
   )
 }
 
-function MobileLogTimeStatus({
-  createdAt,
-  type,
-}: {
-  createdAt: unknown
-  type: unknown
-}) {
+function MobileLogTimeStatus({ log }: { log?: UsageLog }) {
   const { t } = useTranslation()
-  const timestamp = typeof createdAt === 'number' ? createdAt : undefined
-  const logType = typeof type === 'number' ? type : undefined
+  const timestamp = log?.created_at
+  const logType = log?.type
   const config = getLogTypeConfig(logType ?? LOG_TYPE_ENUM.UNKNOWN)
+  const labelKey = getUsageLogTypeLabelKey(
+    logType ?? LOG_TYPE_ENUM.UNKNOWN,
+    log ? parseLogOther(log.other) : null
+  )
   const variant = config.color as StatusVariant
 
   return (
@@ -182,7 +181,7 @@ function MobileLogTimeStatus({
           className={cn('size-1.5 shrink-0 rounded-full', dotColorMap[variant])}
           aria-hidden='true'
         />
-        <span>{t(config.label)}</span>
+        <span>{t(labelKey)}</span>
       </div>
     </div>
   )
@@ -333,10 +332,7 @@ function CommonLogsCard<TData>({
 
       <div className='grid grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)] gap-1.5'>
         <div className='bg-muted/20 min-w-0 rounded-md px-2 py-1.5'>
-          <MobileLogTimeStatus
-            createdAt={rowData?.created_at}
-            type={rowData?.type}
-          />
+          <MobileLogTimeStatus log={rowData} />
         </div>
         <SummaryField
           cell={cells.get('channel')}

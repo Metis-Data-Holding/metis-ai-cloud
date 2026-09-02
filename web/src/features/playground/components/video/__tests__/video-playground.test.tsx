@@ -83,6 +83,9 @@ describe('VideoPlayground', () => {
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
     expect(await screen.findByRole('button', { name: '480p' })).toBeVisible()
+    expect(
+      screen.queryByText('Text-to-video only in this first version.')
+    ).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '720p' })).toBeVisible()
     expect(
       screen.queryByRole('button', { name: '1080p' })

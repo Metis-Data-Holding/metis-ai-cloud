@@ -238,10 +238,12 @@ export interface LogOtherData {
   fee_quota?: number
   // Reject / intercept reason (admin)
   reject_reason?: string
-  // Task-related fields (for refund logs, type=6)
+  // Task-related billing fields
   is_task?: boolean
   task_id?: string
   reason?: string
+  pre_consumed_quota?: number
+  actual_quota?: number
   // Subscription billing fields
   subscription_plan_id?: string
   subscription_plan_title?: string

@@ -62,7 +62,6 @@ import {
 } from '@/components/ui/empty'
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -261,9 +260,6 @@ export function VideoPlayground() {
                     disabled={generation.isSubmitting || noVideoModels}
                     {...form.register('prompt')}
                   />
-                  <FieldDescription>
-                    {t('Text-to-video only in this first version.')}
-                  </FieldDescription>
                   {form.formState.errors.prompt ? (
                     <FieldError>
                       {t(form.formState.errors.prompt.message ?? '')}

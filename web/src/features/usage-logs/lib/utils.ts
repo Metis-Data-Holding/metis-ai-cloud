@@ -29,6 +29,7 @@ import {
 } from '../api'
 import {
   LOG_TYPES,
+  LOG_TYPE_ENUM,
   DISPLAYABLE_LOG_TYPES,
   TIMING_LOG_TYPES,
 } from '../constants'
@@ -38,6 +39,7 @@ import type {
   FetchLogsConfig,
   GetMidjourneyLogsParams,
   GetTaskLogsParams,
+  LogOtherData,
 } from '../types'
 
 export { buildQueryParams } from './query-params'
@@ -65,6 +67,29 @@ export function isTimingLogType(type: number): boolean {
  */
 export function getLogTypeConfig(type: number) {
   return LOG_TYPES.find((t) => t.value === type) || LOG_TYPES[0]
+}
+
+/**
+ * Derive a context-aware label for asynchronous task billing logs.
+ */
+export function getUsageLogTypeLabelKey(
+  type: number,
+  other: LogOtherData | null
+): string {
+  if (
+    type === LOG_TYPE_ENUM.CONSUME &&
+    typeof other?.pre_consumed_quota === 'number' &&
+    typeof other.actual_quota === 'number' &&
+    other.actual_quota > other.pre_consumed_quota
+  ) {
+    return 'Additional charge'
+  }
+
+  if (type === LOG_TYPE_ENUM.CONSUME && other?.is_task === true) {
+    return 'Pre-consumed'
+  }
+
+  return getLogTypeConfig(type).label
 }
 
 /**

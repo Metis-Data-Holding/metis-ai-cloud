@@ -54,6 +54,7 @@ import {
   isDisplayableLogType,
   isTimingLogType,
   getLogTypeConfig,
+  getUsageLogTypeLabelKey,
   isPerCallBilling,
 } from '../../lib/utils'
 import type { LogOtherData } from '../../types'
@@ -304,6 +305,10 @@ export function useCommonLogsColumns(
         const log = row.original
         const timestamp = row.getValue('created_at') as number
         const config = getLogTypeConfig(log.type)
+        const labelKey = getUsageLogTypeLabelKey(
+          log.type,
+          parseLogOther(log.other)
+        )
 
         return (
           <div className='flex min-w-0 flex-col gap-0.5'>
@@ -311,7 +316,7 @@ export function useCommonLogsColumns(
               {formatTimestampToDate(timestamp)}
             </span>
             <StatusBadge
-              label={t(config.label)}
+              label={t(labelKey)}
               variant={config.color as StatusBadgeProps['variant']}
               size='sm'
               copyable={false}
