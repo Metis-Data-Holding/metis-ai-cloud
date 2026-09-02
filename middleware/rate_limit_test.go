@@ -93,6 +93,27 @@ func TestRedisUserRateLimiterUsesSharedFixedWindow(t *testing.T) {
 	assert.Equal(t, 23*time.Second, redisServer.TTL(key))
 }
 
+func TestUploadRateLimitRejectsEleventhRequestPerMinute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	previousRedisEnabled := common.RedisEnabled
+	common.RedisEnabled = false
+	t.Cleanup(func() { common.RedisEnabled = previousRedisEnabled })
+
+	router := gin.New()
+	require.NoError(t, router.SetTrustedProxies(nil))
+	router.GET("/upload", UploadRateLimit(), func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
+	remoteAddr := "192.0.2.80:12345"
+	for range common.UploadRateLimitNum {
+		assert.Equal(t, http.StatusNoContent, performRateLimitRequest(router, "/upload", remoteAddr).Code)
+	}
+	response := performRateLimitRequest(router, "/upload", remoteAddr)
+	assert.Equal(t, http.StatusTooManyRequests, response.Code)
+	assert.Equal(t, "60", response.Header().Get("Retry-After"))
+}
+
 func TestRedisEmailVerificationRateLimiterPreservesResponseAndTTL(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	redisServer, _ := useRateLimitMiniRedis(t)
