@@ -22,6 +22,28 @@ func RegisterScheduledSystemTasks() {
 	service.RegisterSystemTaskHandler(modelUpdateHandler{})
 	service.RegisterSystemTaskHandler(midjourneyPollHandler{})
 	service.RegisterSystemTaskHandler(asyncTaskPollHandler{})
+	service.RegisterSystemTaskHandler(videoReferenceCleanupHandler{})
+}
+
+type videoReferenceCleanupHandler struct{}
+
+func (videoReferenceCleanupHandler) Type() string {
+	return model.SystemTaskTypeVideoReferenceCleanup
+}
+
+func (videoReferenceCleanupHandler) Enabled() bool { return true }
+
+func (videoReferenceCleanupHandler) Interval() time.Duration { return time.Hour }
+
+func (videoReferenceCleanupHandler) NewPayload() any { return nil }
+
+func (videoReferenceCleanupHandler) Run(_ context.Context, task *model.SystemTask, runnerID string) {
+	result, err := service.CleanupVideoReferenceUploads(service.VideoReferenceUploadDirectory(), time.Now())
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, result, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, result, nil)
 }
 
 // channelTestHandler runs the scheduled "test all channels" job. Enablement and
