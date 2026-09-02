@@ -112,6 +112,16 @@ describe('VideoPlayground', () => {
     expect(screen.queryByRole('button', { name: '4k' })).not.toBeInTheDocument()
   })
 
+  test('shows a pointer cursor for the reference content picker', async () => {
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    const input = await screen.findByLabelText('Add reference content')
+
+    expect(input).toBeInstanceOf(HTMLInputElement)
+    if (!(input instanceof HTMLInputElement)) return
+    expect(input.labels?.[0]).toHaveClass('cursor-pointer')
+  })
+
   test('removes 1080p when a Seedance 2.0 task includes image input', async () => {
     vi.mocked(getUserModels).mockResolvedValue([
       {

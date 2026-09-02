@@ -504,7 +504,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
               htmlFor='video-reference-content'
               className={cn(
                 buttonVariants({ variant: 'outline' }),
-                'border-dashed',
+                'cursor-pointer border-dashed',
                 interactionDisabled && 'pointer-events-none opacity-50'
               )}
             >
