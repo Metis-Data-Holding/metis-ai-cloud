@@ -37,6 +37,8 @@ describe('video generation request', () => {
         resolution: '480p',
         ratio: '16:9',
         generateAudio: false,
+        mode: 'reference',
+        content: [],
       })
     ).toEqual({
       model: 'dreamina-seedance-2-0-fast-260128',
@@ -50,6 +52,78 @@ describe('video generation request', () => {
     })
   })
 
+  test('adds multimodal reference content to the provider metadata', () => {
+    expect(
+      buildVideoGenerationRequest({
+        model: 'dreamina-seedance-2-0-260128',
+        prompt: 'Use the subject from image 1 and motion from video 1',
+        seconds: 5,
+        resolution: '720p',
+        ratio: '16:9',
+        generateAudio: false,
+        mode: 'reference',
+        content: [
+          {
+            type: 'image_url',
+            image_url: { url: 'data:image/png;base64,AAAA' },
+            role: 'reference_image',
+          },
+          {
+            type: 'video_url',
+            video_url: { url: 'https://example.com/motion.mp4' },
+            role: 'reference_video',
+          },
+        ],
+      })
+    ).toEqual(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          content: [
+            {
+              type: 'image_url',
+              image_url: { url: 'data:image/png;base64,AAAA' },
+              role: 'reference_image',
+            },
+            {
+              type: 'video_url',
+              video_url: { url: 'https://example.com/motion.mp4' },
+              role: 'reference_video',
+            },
+          ],
+        }),
+      })
+    )
+  })
+
+  test('adds first and optional last frame roles in order', () => {
+    const request = buildVideoGenerationRequest({
+      model: 'dreamina-seedance-2-0-fast-260128',
+      prompt: 'A natural transition',
+      seconds: 5,
+      resolution: '720p',
+      ratio: '16:9',
+      generateAudio: false,
+      mode: 'keyframes',
+      content: [
+        {
+          type: 'image_url',
+          image_url: { url: 'data:image/png;base64,FIRST' },
+          role: 'first_frame',
+        },
+        {
+          type: 'image_url',
+          image_url: { url: 'data:image/png;base64,LAST' },
+          role: 'last_frame',
+        },
+      ],
+    })
+
+    expect(request.metadata.content?.map((item) => item.role)).toEqual([
+      'first_frame',
+      'last_frame',
+    ])
+  })
+
   test.each([5, 15])('accepts a duration of %s seconds', (seconds) => {
     expect(
       videoFormSchema.safeParse({
@@ -60,6 +134,7 @@ describe('video generation request', () => {
         resolution: '480p',
         ratio: '16:9',
         generateAudio: false,
+        mode: 'reference',
       }).success
     ).toBe(true)
   })
@@ -74,8 +149,24 @@ describe('video generation request', () => {
         resolution: '480p',
         ratio: '16:9',
         generateAudio: false,
+        mode: 'reference',
       }).success
     ).toBe(false)
+  })
+
+  test('allows an empty prompt for media-led generation', () => {
+    expect(
+      videoFormSchema.safeParse({
+        group: 'default',
+        model: 'dreamina-seedance-2-0-fast-260128',
+        prompt: '',
+        seconds: 5,
+        resolution: '720p',
+        ratio: '16:9',
+        generateAudio: false,
+        mode: 'keyframes',
+      }).success
+    ).toBe(true)
   })
 })
 
@@ -106,6 +197,15 @@ describe('video model constraints', () => {
       '1080p',
       '4k',
     ])
+  })
+
+  test('excludes 1080p and normalizes it to 720p when an image is provided', () => {
+    expect(
+      getVideoResolutionOptions('dreamina-seedance-2-0-260128', true)
+    ).toEqual(['480p', '720p', '4k'])
+    expect(
+      normalizeVideoResolution('dreamina-seedance-2-0-260128', '1080p', true)
+    ).toBe('720p')
   })
 
   test('falls back to 720p when a model change invalidates the resolution', () => {
