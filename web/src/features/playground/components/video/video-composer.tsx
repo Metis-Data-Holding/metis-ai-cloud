@@ -26,7 +26,7 @@ import {
   SendIcon,
   VideoIcon,
 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { type CSSProperties, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -100,6 +100,7 @@ type VideoComposerProps = {
 export function VideoComposer(props: VideoComposerProps) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
+  const [referenceTrayExpanded, setReferenceTrayExpanded] = useState(false)
   const [mentionRange, setMentionRange] = useState<{
     start: number
     end: number
@@ -176,16 +177,32 @@ export function VideoComposer(props: VideoComposerProps) {
         <div
           data-slot='video-reference-area'
           className={cn(
-            'min-w-0 shrink-0 self-stretch',
+            'min-w-0 shrink-0 self-stretch transition-[width] duration-200',
             props.mode === 'keyframes'
               ? 'w-full sm:w-[22rem] sm:max-w-[46%]'
-              : 'w-full sm:w-auto sm:max-w-[46%]'
+              : cn(
+                  'w-full sm:max-w-[46%]',
+                  referenceTrayExpanded
+                    ? 'sm:w-[min(46%,var(--expanded-reference-width))] sm:overflow-hidden'
+                    : 'sm:w-28 sm:overflow-visible'
+                )
           )}
+          style={
+            props.mode === 'reference'
+              ? ({
+                  '--expanded-reference-width': `${Math.min(
+                    56,
+                    (referenceAssets.length + 1) * 7.5
+                  )}rem`,
+                } as CSSProperties)
+              : undefined
+          }
         >
           <VideoReferenceInput
             mode={props.mode}
             content={props.inputContent}
             onContentChange={props.onInputContentChange}
+            onExpandedChange={setReferenceTrayExpanded}
             onValidityChange={props.onInputValidityChange}
             disabled={props.disabled}
             variant='composer'

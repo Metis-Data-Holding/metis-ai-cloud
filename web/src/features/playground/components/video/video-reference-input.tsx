@@ -51,6 +51,7 @@ const MAX_IMAGE_BYTES = 30 * 1024 * 1024
 const MAX_COMBINED_IMAGE_BYTES = 45 * 1024 * 1024
 const MAX_REFERENCE_IMAGES = 9
 const MAX_REFERENCE_VIDEOS = 3
+const REFERENCE_CARD_ROTATIONS = [-5, 4, -3, 5] as const
 const IMAGE_ACCEPT =
   'image/jpeg,image/png,image/webp,image/bmp,image/tiff,image/gif,image/heic,image/heif,.heic,.heif'
 const VIDEO_ACCEPT = 'video/mp4,video/quicktime,.mp4,.mov'
@@ -70,6 +71,7 @@ interface VideoReferenceInputProps {
   mode: VideoGenerationMode
   content: VideoInputContent[]
   onContentChange: (content: VideoInputContent[]) => void
+  onExpandedChange?: (expanded: boolean) => void
   onValidityChange: (valid: boolean) => void
   disabled?: boolean
   variant?: 'default' | 'composer'
@@ -131,6 +133,7 @@ function sortFrameContent(content: VideoInputContent[]): VideoInputContent[] {
 
 export function VideoReferenceInput(props: VideoReferenceInputProps) {
   const { t } = useTranslation()
+  const { onExpandedChange } = props
   const [imageError, setImageError] = useState('')
   const [videoError, setVideoError] = useState('')
   const [uploadedVideos, setUploadedVideos] = useState<
@@ -140,6 +143,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [suppressReferenceExpansion, setSuppressReferenceExpansion] =
     useState(false)
+  const [referenceExpanded, setReferenceExpanded] = useState(false)
   const uploadGeneration = useRef(0)
   const interactionDisabled = props.disabled || isUploadingVideo
 
@@ -150,8 +154,10 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
     setIsUploadingVideo(false)
     setUploadProgress(0)
     setSuppressReferenceExpansion(false)
+    setReferenceExpanded(false)
+    onExpandedChange?.(false)
     uploadGeneration.current += 1
-  }, [props.mode])
+  }, [props.mode, onExpandedChange])
 
   const replaceRole = (role: VideoImageRole, next?: VideoInputContent) => {
     const content = props.content.filter((item) => item.role !== role)
@@ -171,6 +177,8 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
     }
     event.currentTarget.blur()
     setSuppressReferenceExpansion(true)
+    setReferenceExpanded(false)
+    onExpandedChange?.(false)
     const currentGeneration = uploadGeneration.current
     const imageFiles = files.filter(
       (file) =>
@@ -417,13 +425,21 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
         data-slot='video-reference-asset'
         data-kind={asset.kind}
         className={cn(
-          'border-border bg-muted/20 relative size-28 shrink-0 overflow-hidden rounded-xl border shadow-sm transition-[margin,transform] duration-200',
-          index === 0 ? 'sm:ml-0' : 'sm:-ml-[6.5rem]',
+          'border-border bg-muted/20 relative size-28 origin-bottom shrink-0 overflow-hidden rounded-xl border shadow-sm transition-[margin,transform] duration-200',
           'ml-2',
-          !suppressReferenceExpansion &&
-            'sm:group-hover/reference:ml-2 sm:group-focus-within/reference:ml-2'
+          index === 0 && 'sm:ml-0',
+          index > 0 && referenceExpanded && 'sm:ml-2',
+          index > 0 && !referenceExpanded && 'sm:-ml-[6.5rem]',
+          referenceExpanded
+            ? 'sm:rotate-0'
+            : 'sm:rotate-[var(--collapsed-reference-rotation)]'
         )}
-        style={{ zIndex: index + 1 }}
+        style={
+          {
+            zIndex: index + 1,
+            '--collapsed-reference-rotation': `${REFERENCE_CARD_ROTATIONS[index % REFERENCE_CARD_ROTATIONS.length]}deg`,
+          } as CSSProperties
+        }
       >
         {asset.kind === 'image' ? (
           <img
@@ -456,7 +472,10 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
           size='icon-xs'
           variant='secondary'
           aria-label={t('Remove {{name}}', { name: label })}
-          className='absolute top-1 left-1 opacity-0 transition-opacity group-hover/reference:opacity-100 focus-visible:opacity-100'
+          className={cn(
+            'absolute top-1 left-1 opacity-0 transition-opacity focus-visible:opacity-100',
+            referenceExpanded && 'group-hover/reference:opacity-100'
+          )}
           disabled={interactionDisabled}
           onClick={() => removeAt(asset.contentIndex)}
         >
@@ -524,31 +543,46 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
       {props.mode === 'reference' ? (
         <div
           data-slot='video-reference-tray'
+          data-expanded={referenceExpanded}
           className={cn(
-            'group/reference relative flex h-28 min-w-0 max-w-full items-start overflow-x-auto overflow-y-hidden transition-[width] duration-200 sm:overflow-visible',
-            referenceAssets.length === 0
-              ? 'w-28'
-              : cn(
-                  'w-full sm:w-28',
-                  !suppressReferenceExpansion &&
-                    'sm:hover:w-[var(--expanded-reference-width)] sm:focus-within:w-[var(--expanded-reference-width)]'
-                )
+            'group/reference relative flex h-28 min-w-0 max-w-full items-start overflow-x-auto overflow-y-hidden transition-[width] duration-200',
+            referenceAssets.length === 0 || !referenceExpanded
+              ? 'w-28 sm:overflow-visible'
+              : 'w-full sm:overflow-x-auto'
           )}
-          onPointerLeave={() => setSuppressReferenceExpansion(false)}
+          onPointerEnter={() => {
+            if (referenceAssets.length === 0 || suppressReferenceExpansion) {
+              return
+            }
+            setReferenceExpanded(true)
+            onExpandedChange?.(true)
+          }}
+          onPointerLeave={() => {
+            setSuppressReferenceExpansion(false)
+            setReferenceExpanded(false)
+            onExpandedChange?.(false)
+          }}
           onFocusCapture={(event) => {
             if (event.target instanceof HTMLInputElement) {
               return
             }
             setSuppressReferenceExpansion(false)
+            if (referenceAssets.length > 0) {
+              setReferenceExpanded(true)
+              onExpandedChange?.(true)
+            }
           }}
-          style={
-            {
-              '--expanded-reference-width': `${Math.min(
-                56,
-                (referenceAssets.length + 1) * 7.5
-              )}rem`,
-            } as CSSProperties
-          }
+          onBlurCapture={(event) => {
+            const nextTarget = event.relatedTarget
+            if (
+              nextTarget instanceof Node &&
+              event.currentTarget.contains(nextTarget)
+            ) {
+              return
+            }
+            setReferenceExpanded(false)
+            onExpandedChange?.(false)
+          }}
         >
           <input
             id='video-reference-content'
@@ -568,10 +602,9 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
               props.variant === 'composer' &&
                 'aspect-square flex-col justify-center gap-1 rounded-xl px-2 text-xs',
               referenceAssets.length > 0 &&
-                'sm:w-0 sm:border-0 sm:px-0 sm:opacity-0',
-              referenceAssets.length > 0 &&
-                !suppressReferenceExpansion &&
-                'sm:group-hover/reference:w-28 sm:group-hover/reference:border sm:group-hover/reference:px-2 sm:group-hover/reference:opacity-100 sm:group-focus-within/reference:w-28 sm:group-focus-within/reference:border sm:group-focus-within/reference:px-2 sm:group-focus-within/reference:opacity-100',
+                (referenceExpanded
+                  ? 'sm:w-28 sm:border sm:px-2 sm:opacity-100'
+                  : 'sm:w-0 sm:border-0 sm:px-0 sm:opacity-0'),
               interactionDisabled && 'pointer-events-none opacity-50'
             )}
             data-slot='video-reference-picker'
@@ -596,8 +629,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
               }}
               className={cn(
                 'bg-background hover:bg-muted absolute bottom-0 z-20 hidden size-8 cursor-pointer items-center justify-center rounded-full border shadow-sm transition-opacity sm:flex',
-                !suppressReferenceExpansion &&
-                  'sm:group-hover/reference:opacity-0 sm:group-focus-within/reference:opacity-0',
+                referenceExpanded && 'pointer-events-none opacity-0',
                 interactionDisabled && 'pointer-events-none opacity-50'
               )}
             >

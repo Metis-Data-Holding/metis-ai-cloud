@@ -480,11 +480,45 @@ describe('VideoPlayground', () => {
     if (!tray) {
       throw new Error('Reference tray not found')
     }
-    expect(tray).not.toHaveClass('sm:hover:w-[var(--expanded-reference-width)]')
+    expect(tray).toHaveAttribute('data-expanded', 'false')
 
     fireEvent.pointerLeave(tray)
+    fireEvent.pointerEnter(tray)
 
-    expect(tray).toHaveClass('sm:hover:w-[var(--expanded-reference-width)]')
+    expect(tray).toHaveAttribute('data-expanded', 'true')
+  })
+
+  test('expands multiple reference assets within the composer layout and uses stable card rotations', async () => {
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    const input = await screen.findByLabelText('Add reference content')
+    await user.upload(input, [
+      new File(['first-image'], 'subject.png', { type: 'image/png' }),
+      new File(['second-image'], 'setting.png', { type: 'image/png' }),
+    ])
+
+    expect(await screen.findByText('Image 2')).toBeVisible()
+    const tray = input.closest('[data-slot="video-reference-tray"]')
+    expect(tray).not.toBeNull()
+    if (!tray) {
+      throw new Error('Reference tray not found')
+    }
+    const cards = tray.querySelectorAll('[data-slot="video-reference-asset"]')
+    expect(cards).toHaveLength(2)
+    expect(cards[0]).toHaveStyle('--collapsed-reference-rotation: -5deg')
+    expect(cards[1]).toHaveStyle('--collapsed-reference-rotation: 4deg')
+
+    fireEvent.pointerLeave(tray)
+    fireEvent.pointerEnter(tray)
+
+    expect(cards[0]).toHaveClass('sm:rotate-0')
+    expect(cards[1]).toHaveClass('sm:rotate-0')
+    expect(tray).toHaveClass('sm:overflow-x-auto')
+    expect(tray.closest('[data-slot="video-reference-area"]')).toHaveClass(
+      'sm:w-[min(46%,var(--expanded-reference-width))]',
+      'sm:overflow-hidden'
+    )
   })
 
   test('preserves mixed upload order and inserts stable media mentions', async () => {
