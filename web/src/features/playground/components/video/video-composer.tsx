@@ -20,6 +20,7 @@ import {
   ArrowDownLeft01Icon,
   ArrowUpRight01Icon,
   AiVideoIcon,
+  Film01Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ChevronDownIcon, SendIcon } from 'lucide-react'
@@ -38,6 +39,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -110,12 +112,23 @@ export function VideoComposer(props: VideoComposerProps) {
       onSubmit={submit}
       className='relative w-full'
       groupClassName={cn(
-        'bg-background border-border/70 rounded-2xl overflow-hidden shadow-lg ring-1 ring-foreground/5 transition-[min-height] duration-200 focus-within:border-primary/45 focus-within:ring-primary/15',
+        'bg-card border-border/70 has-disabled:bg-card has-disabled:opacity-100 dark:bg-card dark:has-disabled:bg-card rounded-2xl overflow-hidden shadow-lg ring-1 ring-foreground/5 transition-[min-height] duration-200 focus-within:border-primary/45 focus-within:ring-primary/15',
         expanded ? 'min-h-[54rem]' : 'min-h-72'
       )}
     >
-      <div className='flex min-w-0 flex-1 flex-col gap-3 p-3 sm:flex-row sm:p-4'>
-        <div className='min-w-0 shrink-0 sm:max-w-[46%]'>
+      <div
+        data-slot='video-composer-content'
+        className='flex min-w-0 flex-1 flex-col items-stretch gap-3 p-3 sm:flex-row sm:p-4'
+      >
+        <div
+          data-slot='video-reference-area'
+          className={cn(
+            'min-w-0 shrink-0 self-stretch',
+            props.mode === 'keyframes'
+              ? 'w-full sm:w-[22rem] sm:max-w-[46%]'
+              : 'w-full sm:w-auto sm:max-w-[46%]'
+          )}
+        >
           <VideoReferenceInput
             mode={props.mode}
             content={props.inputContent}
@@ -125,7 +138,10 @@ export function VideoComposer(props: VideoComposerProps) {
             variant='composer'
           />
         </div>
-        <div className='relative min-h-28 min-w-0 flex-1'>
+        <div
+          data-slot='video-prompt-area'
+          className='relative min-h-28 min-w-0 flex-1 self-stretch'
+        >
           <PromptInputTextarea
             aria-label={t('Prompt')}
             autoComplete='off'
@@ -139,7 +155,7 @@ export function VideoComposer(props: VideoComposerProps) {
               'Describe the scene, motion, camera, lighting, and style...'
             )}
             className={cn(
-              'max-h-none min-h-28 resize-none pr-12 text-base leading-7',
+              'h-full max-h-none min-h-28 resize-none pr-12 text-base leading-7',
               expanded && 'min-h-[44rem]'
             )}
           />
@@ -163,7 +179,7 @@ export function VideoComposer(props: VideoComposerProps) {
         </div>
       </div>
 
-      <PromptInputFooter className='border-border/60 bg-muted/20 flex-wrap border-t px-3 py-2.5'>
+      <PromptInputFooter className='border-border/60 bg-card flex-wrap border-t px-3 py-2.5'>
         <div className='flex min-w-0 flex-1 flex-wrap items-center gap-1'>
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -180,19 +196,34 @@ export function VideoComposer(props: VideoComposerProps) {
               <span>{modeLabel}</span>
               <ChevronDownIcon data-icon='inline-end' />
             </DropdownMenuTrigger>
-            <DropdownMenuContent side='top' sideOffset={8}>
+            <DropdownMenuContent
+              side='top'
+              sideOffset={8}
+              className='w-64 rounded-2xl p-2'
+            >
               <DropdownMenuGroup>
+                <DropdownMenuLabel className='px-3 py-2 text-sm'>
+                  {t('Generation mode')}
+                </DropdownMenuLabel>
                 <DropdownMenuRadioGroup
                   value={props.mode}
                   onValueChange={(value) =>
                     props.onModeChange(value as VideoGenerationMode)
                   }
                 >
-                  <DropdownMenuRadioItem value='reference'>
-                    {t('Reference generation')}
+                  <DropdownMenuRadioItem
+                    value='reference'
+                    className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
+                  >
+                    <HugeiconsIcon icon={AiVideoIcon} aria-hidden='true' />
+                    <span>{t('Reference generation')}</span>
                   </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value='keyframes'>
-                    {t('First and last frames')}
+                  <DropdownMenuRadioItem
+                    value='keyframes'
+                    className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
+                  >
+                    <HugeiconsIcon icon={Film01Icon} aria-hidden='true' />
+                    <span>{t('First and last frames')}</span>
                   </DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
               </DropdownMenuGroup>

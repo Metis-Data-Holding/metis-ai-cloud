@@ -409,7 +409,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
     const item = props.content.find((content) => content.role === role)
     const inputId = `video-${role}`
     return (
-      <div className='relative min-w-0 flex-1'>
+      <div className='relative h-full min-w-0 flex-1'>
         <input
           id={inputId}
           type='file'
@@ -421,7 +421,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
         <label
           htmlFor={inputId}
           className={cn(
-            'border-border bg-muted/30 hover:bg-muted/60 flex h-28 cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border border-dashed transition-colors',
+            'border-border bg-muted/30 hover:bg-muted/60 flex h-full min-h-28 cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border border-dashed transition-colors',
             props.disabled && 'pointer-events-none opacity-50'
           )}
         >
@@ -456,10 +456,13 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
   }
 
   return (
-    <div className='flex min-w-0 flex-col gap-3'>
+    <div
+      data-slot='video-reference-input'
+      className='flex h-full min-w-0 flex-col items-start gap-3'
+    >
       {props.mode === 'reference' ? (
         <>
-          <div className='flex flex-wrap gap-2'>
+          <div className='flex h-full flex-wrap items-start justify-start gap-2'>
             {props.content
               .filter((item) => item.role === 'reference_image')
               .map((item, index) => {
@@ -508,9 +511,10 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
                 buttonVariants({ variant: 'outline' }),
                 'cursor-pointer border-dashed',
                 props.variant === 'composer' &&
-                  'size-24 flex-col justify-center gap-1 rounded-xl px-2 text-xs',
+                  'h-full min-h-28 w-28 flex-col justify-center gap-1 rounded-xl px-2 text-xs',
                 interactionDisabled && 'pointer-events-none opacity-50'
               )}
+              data-slot='video-reference-picker'
             >
               <ImagePlusIcon aria-hidden='true' />
               {isUploadingVideo
@@ -557,7 +561,10 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
           </div>
         </>
       ) : (
-        <div className='flex min-w-0 items-center gap-3'>
+        <div
+          data-slot='video-keyframe-inputs'
+          className='flex h-full min-h-28 w-full min-w-0 items-center gap-3'
+        >
           {frameSlot('first_frame', t('First frame'))}
           <Button
             type='button'
@@ -574,7 +581,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
           >
             <HugeiconsIcon icon={ArrowLeftRightIcon} aria-hidden='true' />
           </Button>
-          {frameSlot('last_frame', t('Last frame (optional)'))}
+          {frameSlot('last_frame', t('Last frame'))}
         </div>
       )}
       {imageError ? (

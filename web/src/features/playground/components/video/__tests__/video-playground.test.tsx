@@ -120,7 +120,30 @@ describe('VideoPlayground', () => {
     expect(
       await screen.findByTestId('video-playground-layout')
     ).toHaveAttribute('data-layout', 'centered')
-    expect(screen.getByRole('textbox', { name: 'Prompt' })).toBeVisible()
+    const prompt = screen.getByRole('textbox', { name: 'Prompt' })
+    expect(prompt).toBeVisible()
+    expect(prompt.closest('[data-slot="input-group"]')).toHaveClass(
+      'bg-card',
+      'has-disabled:opacity-100'
+    )
+    expect(prompt.closest('[data-slot="video-prompt-area"]')).toHaveClass(
+      'min-h-28'
+    )
+    const referenceInput = screen.getByLabelText('Add reference content')
+    expect(referenceInput).toBeInstanceOf(HTMLInputElement)
+    if (!(referenceInput instanceof HTMLInputElement)) return
+    expect(referenceInput.labels?.[0]).toHaveAttribute(
+      'data-slot',
+      'video-reference-picker'
+    )
+    expect(referenceInput.labels?.[0]).toHaveClass(
+      'h-full',
+      'min-h-28',
+      'w-28'
+    )
+    expect(
+      referenceInput.closest('[data-slot="video-reference-input"]')
+    ).toHaveClass('items-start')
     expect(
       screen.getByRole('button', {
         name: 'Video settings: 16:9, 720p, 5s, audio off, 1 video',
@@ -162,10 +185,30 @@ describe('VideoPlayground', () => {
         name: 'Generation mode: Reference generation',
       })
     )
+    const menuLabel = screen.getByText('Generation mode', {
+      selector: '[data-slot="dropdown-menu-label"]',
+    })
+    expect(menuLabel).toBeVisible()
+    expect(menuLabel.closest('[data-slot="dropdown-menu-content"]')).toHaveClass(
+      'w-64',
+      'rounded-2xl'
+    )
+    expect(
+      screen.getByRole('menuitemradio', { name: 'Reference generation' })
+    ).toHaveClass('data-checked:bg-accent')
     await user.click(
       screen.getByRole('menuitemradio', { name: 'First and last frames' })
     )
     expect(screen.getByLabelText('First frame')).toBeVisible()
+    expect(screen.getByLabelText('Last frame')).toBeVisible()
+    expect(
+      screen.queryByLabelText('Last frame (optional)')
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByLabelText('First frame').closest(
+        '[data-slot="video-keyframe-inputs"]'
+      )
+    ).toHaveClass('items-center')
 
     const expand = screen.getByRole('button', { name: 'Expand prompt input' })
     expect(expand).toHaveAttribute('aria-expanded', 'false')
@@ -591,7 +634,7 @@ describe('VideoPlayground', () => {
 
     await selectGenerationMode(user, 'First and last frames')
     expect(screen.getByLabelText('First frame')).toBeVisible()
-    expect(screen.getByLabelText('Last frame (optional)')).toBeVisible()
+    expect(screen.getByLabelText('Last frame')).toBeVisible()
     const swapButton = screen.getByRole('button', {
       name: 'Swap first and last frames',
     })
@@ -602,7 +645,7 @@ describe('VideoPlayground', () => {
       new File(['first'], 'first.png', { type: 'image/png' })
     )
     await user.upload(
-      screen.getByLabelText('Last frame (optional)'),
+      screen.getByLabelText('Last frame'),
       new File(['last'], 'last.png', { type: 'image/png' })
     )
     await waitFor(() => expect(swapButton).toBeEnabled())
