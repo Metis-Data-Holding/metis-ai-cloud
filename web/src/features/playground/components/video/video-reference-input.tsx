@@ -91,7 +91,9 @@ function readFileAsDataUrl(file: File): Promise<string> {
       () => resolve(String(reader.result ?? '')),
       { once: true }
     )
-    reader.addEventListener('error', () => reject(reader.error), { once: true })
+    reader.addEventListener('error', () => reject(reader.error), {
+      once: true,
+    })
     reader.readAsDataURL(file)
   })
 }
@@ -136,6 +138,8 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
   >([])
   const [isUploadingVideo, setIsUploadingVideo] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [suppressReferenceExpansion, setSuppressReferenceExpansion] =
+    useState(false)
   const uploadGeneration = useRef(0)
   const interactionDisabled = props.disabled || isUploadingVideo
 
@@ -145,6 +149,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
     setUploadedVideos([])
     setIsUploadingVideo(false)
     setUploadProgress(0)
+    setSuppressReferenceExpansion(false)
     uploadGeneration.current += 1
   }, [props.mode])
 
@@ -164,6 +169,8 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
     if (files.length === 0) {
       return
     }
+    event.currentTarget.blur()
+    setSuppressReferenceExpansion(true)
     const currentGeneration = uploadGeneration.current
     const imageFiles = files.filter(
       (file) =>
@@ -412,7 +419,9 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
         className={cn(
           'border-border bg-muted/20 relative size-28 shrink-0 overflow-hidden rounded-xl border shadow-sm transition-[margin,transform] duration-200',
           index === 0 ? 'sm:ml-0' : 'sm:-ml-[6.5rem]',
-          'ml-2 sm:group-hover/reference:ml-2 sm:group-focus-within/reference:ml-2'
+          'ml-2',
+          !suppressReferenceExpansion &&
+            'sm:group-hover/reference:ml-2 sm:group-focus-within/reference:ml-2'
         )}
         style={{ zIndex: index + 1 }}
       >
@@ -519,8 +528,19 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
             'group/reference relative flex h-28 min-w-0 max-w-full items-start overflow-x-auto overflow-y-hidden transition-[width] duration-200 sm:overflow-visible',
             referenceAssets.length === 0
               ? 'w-28'
-              : 'w-full sm:w-28 sm:hover:w-[var(--expanded-reference-width)] sm:focus-within:w-[var(--expanded-reference-width)]'
+              : cn(
+                  'w-full sm:w-28',
+                  !suppressReferenceExpansion &&
+                    'sm:hover:w-[var(--expanded-reference-width)] sm:focus-within:w-[var(--expanded-reference-width)]'
+                )
           )}
+          onPointerLeave={() => setSuppressReferenceExpansion(false)}
+          onFocusCapture={(event) => {
+            if (event.target instanceof HTMLInputElement) {
+              return
+            }
+            setSuppressReferenceExpansion(false)
+          }}
           style={
             {
               '--expanded-reference-width': `${Math.min(
@@ -548,7 +568,10 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
               props.variant === 'composer' &&
                 'aspect-square flex-col justify-center gap-1 rounded-xl px-2 text-xs',
               referenceAssets.length > 0 &&
-                'sm:w-0 sm:border-0 sm:px-0 sm:opacity-0 sm:group-hover/reference:w-28 sm:group-hover/reference:border sm:group-hover/reference:px-2 sm:group-hover/reference:opacity-100 sm:group-focus-within/reference:w-28 sm:group-focus-within/reference:border sm:group-focus-within/reference:px-2 sm:group-focus-within/reference:opacity-100',
+                'sm:w-0 sm:border-0 sm:px-0 sm:opacity-0',
+              referenceAssets.length > 0 &&
+                !suppressReferenceExpansion &&
+                'sm:group-hover/reference:w-28 sm:group-hover/reference:border sm:group-hover/reference:px-2 sm:group-hover/reference:opacity-100 sm:group-focus-within/reference:w-28 sm:group-focus-within/reference:border sm:group-focus-within/reference:px-2 sm:group-focus-within/reference:opacity-100',
               interactionDisabled && 'pointer-events-none opacity-50'
             )}
             data-slot='video-reference-picker'
@@ -572,7 +595,9 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
                 left: `${6 + Math.min(referenceAssets.length - 1, 4) * 0.5}rem`,
               }}
               className={cn(
-                'bg-background hover:bg-muted absolute bottom-0 z-20 hidden size-8 cursor-pointer items-center justify-center rounded-full border shadow-sm transition-opacity sm:flex sm:group-hover/reference:opacity-0 sm:group-focus-within/reference:opacity-0',
+                'bg-background hover:bg-muted absolute bottom-0 z-20 hidden size-8 cursor-pointer items-center justify-center rounded-full border shadow-sm transition-opacity sm:flex',
+                !suppressReferenceExpansion &&
+                  'sm:group-hover/reference:opacity-0 sm:group-focus-within/reference:opacity-0',
                 interactionDisabled && 'pointer-events-none opacity-50'
               )}
             >

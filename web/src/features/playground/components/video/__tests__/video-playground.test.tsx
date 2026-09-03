@@ -464,6 +464,29 @@ describe('VideoPlayground', () => {
     expect(await screen.findByText('Task submitted')).toBeVisible()
   })
 
+  test('keeps the reference tray collapsed after the first upload until the pointer leaves', async () => {
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    const input = await screen.findByLabelText('Add reference content')
+    await user.upload(
+      input,
+      new File(['first-image'], 'subject.png', { type: 'image/png' })
+    )
+
+    expect(await screen.findByText('Image 1')).toBeVisible()
+    const tray = input.closest('[data-slot="video-reference-tray"]')
+    expect(tray).not.toBeNull()
+    if (!tray) {
+      throw new Error('Reference tray not found')
+    }
+    expect(tray).not.toHaveClass('sm:hover:w-[var(--expanded-reference-width)]')
+
+    fireEvent.pointerLeave(tray)
+
+    expect(tray).toHaveClass('sm:hover:w-[var(--expanded-reference-width)]')
+  })
+
   test('preserves mixed upload order and inserts stable media mentions', async () => {
     const user = userEvent.setup()
     vi.mocked(uploadVideoReference)
