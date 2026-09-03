@@ -122,6 +122,10 @@ describe('VideoPlayground', () => {
     ).toHaveAttribute('data-layout', 'centered')
     const prompt = screen.getByRole('textbox', { name: 'Prompt' })
     expect(prompt).toBeVisible()
+    expect(prompt).toHaveAttribute(
+      'placeholder',
+      'Use @ to quickly reference uploaded files, for example: use the motion from @Video 1 to generate a video in which the characters from @Image 2 and @Image 3 fight.'
+    )
     expect(
       screen.queryByText(
         'Submit an asynchronous Seedance video generation task.'
@@ -460,7 +464,7 @@ describe('VideoPlayground', () => {
     expect(await screen.findByText('Task submitted')).toBeVisible()
   })
 
-  test('selects mixed local media through one reference content control', async () => {
+  test('preserves mixed upload order and inserts stable media mentions', async () => {
     const user = userEvent.setup()
     vi.mocked(uploadVideoReference)
       .mockResolvedValueOnce({
@@ -484,31 +488,30 @@ describe('VideoPlayground', () => {
         name: 'Generation mode: Reference generation',
       })
     ).toBeVisible()
-    const image = new File(['image'], 'subject.png', { type: 'image/png' })
+    const firstImage = new File(['first-image'], 'subject.png', {
+      type: 'image/png',
+    })
     const firstVideo = new File(['first'], 'first.mp4', { type: 'video/mp4' })
-    const secondVideo = new File(['second'], 'second.mov', {
-      type: 'video/quicktime',
+    const secondImage = new File(['second-image'], 'setting.png', {
+      type: 'image/png',
     })
     await user.upload(screen.getByLabelText('Add reference content'), [
-      image,
+      firstImage,
       firstVideo,
-      secondVideo,
+      secondImage,
     ])
     expect(await screen.findByAltText('Reference image 1')).toBeVisible()
-    expect(await screen.findByText('first.mp4')).toBeVisible()
-    expect(await screen.findByText('second.mov')).toBeVisible()
+    expect(await screen.findByText('Image 1')).toBeVisible()
+    expect(await screen.findByText('Video 1')).toBeVisible()
+    expect(await screen.findByText('Image 2')).toBeVisible()
     expect(uploadVideoReference).toHaveBeenCalledWith(
       firstVideo,
       expect.any(Function)
     )
-    expect(uploadVideoReference).toHaveBeenCalledWith(
-      secondVideo,
-      expect.any(Function)
-    )
-    await user.type(
-      screen.getByLabelText('Prompt'),
-      'Use image 1 as the subject and video 1 for motion'
-    )
+    const prompt = screen.getByLabelText('Prompt')
+    await user.type(prompt, 'Use @')
+    await user.click(await screen.findByRole('option', { name: '@Video 1' }))
+    expect(prompt).toHaveValue('Use @Video 1 ')
     await user.click(screen.getByRole('button', { name: 'Generate video' }))
 
     await waitFor(() =>
@@ -528,18 +531,43 @@ describe('VideoPlayground', () => {
                 },
                 role: 'reference_video',
               },
-              {
-                type: 'video_url',
-                video_url: {
-                  url: 'https://many-models.example/second-video.mov',
-                },
-                role: 'reference_video',
-              },
+              expect.objectContaining({
+                type: 'image_url',
+                role: 'reference_image',
+              }),
             ],
           }),
         })
       )
     )
+  })
+
+  test('keeps 1080p for reference-video-only generation and removes it after adding an image', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getUserModels).mockResolvedValue([
+      {
+        label: 'dreamina-seedance-2-0-260128',
+        value: 'dreamina-seedance-2-0-260128',
+      },
+    ])
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await user.upload(
+      await screen.findByLabelText('Add reference content'),
+      new File(['video'], 'motion.mp4', { type: 'video/mp4' })
+    )
+    await openVideoSettings(user)
+    expect(screen.getByRole('button', { name: '1080p' })).toBeVisible()
+    await user.keyboard('{Escape}')
+
+    await user.upload(
+      screen.getByLabelText('Add reference content'),
+      new File(['image'], 'subject.png', { type: 'image/png' })
+    )
+    await openVideoSettings(user)
+    expect(
+      screen.queryByRole('button', { name: '1080p' })
+    ).not.toBeInTheDocument()
   })
 
   test('uploads a local reference video and submits its signed URL', async () => {
@@ -552,7 +580,7 @@ describe('VideoPlayground', () => {
     const file = new File(['video'], 'motion.mp4', { type: 'video/mp4' })
     await user.upload(screen.getByLabelText('Add reference content'), file)
 
-    expect(await screen.findByText('motion.mp4')).toBeVisible()
+    expect(await screen.findByText('Video 1')).toBeVisible()
     expect(uploadVideoReference).toHaveBeenCalledWith(
       file,
       expect.any(Function)
@@ -612,7 +640,7 @@ describe('VideoPlayground', () => {
       input,
       new File(['first'], 'first.mp4', { type: 'video/mp4' })
     )
-    expect(await screen.findByText('motion.mp4')).toBeVisible()
+    expect(await screen.findByText('Video 1')).toBeVisible()
     await user.upload(
       input,
       new File(['second'], 'second.mp4', { type: 'video/mp4' })

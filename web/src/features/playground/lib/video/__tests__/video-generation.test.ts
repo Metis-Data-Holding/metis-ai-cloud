@@ -95,6 +95,34 @@ describe('video generation request', () => {
     )
   })
 
+  test('preserves cross-media order used by ModelArk mention numbering', () => {
+    const content = [
+      {
+        type: 'video_url' as const,
+        video_url: { url: 'https://example.com/motion.mp4' },
+        role: 'reference_video' as const,
+      },
+      {
+        type: 'image_url' as const,
+        image_url: { url: 'data:image/png;base64,AAAA' },
+        role: 'reference_image' as const,
+      },
+    ]
+
+    expect(
+      buildVideoGenerationRequest({
+        model: 'dreamina-seedance-2-0-260128',
+        prompt: 'Use @Video 1 with @Image 1',
+        seconds: 5,
+        resolution: '720p',
+        ratio: '16:9',
+        generateAudio: true,
+        mode: 'reference',
+        content,
+      }).metadata.content
+    ).toEqual(content)
+  })
+
   test('adds first and optional last frame roles in order', () => {
     const request = buildVideoGenerationRequest({
       model: 'dreamina-seedance-2-0-fast-260128',

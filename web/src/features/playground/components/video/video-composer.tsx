@@ -20,11 +20,13 @@ import { AiVideoIcon, Film01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ChevronDownIcon,
+  ImagePlusIcon,
   Maximize2Icon,
   Minimize2Icon,
   SendIcon,
+  VideoIcon,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -52,6 +54,7 @@ import {
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
+import { getVideoReferenceAssets } from '../../lib/video/video-reference-assets'
 import type {
   GroupOption,
   ModelOption,
@@ -97,6 +100,13 @@ type VideoComposerProps = {
 export function VideoComposer(props: VideoComposerProps) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
+  const [mentionRange, setMentionRange] = useState<{
+    start: number
+    end: number
+    query: string
+  } | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const referenceAssets = getVideoReferenceAssets(props.inputContent)
   const modeLabel =
     props.mode === 'reference'
       ? t('Reference generation')
@@ -106,6 +116,46 @@ export function VideoComposer(props: VideoComposerProps) {
     : t('Expand prompt input')
 
   const submit = (_message: PromptInputMessage) => props.onSubmit()
+
+  const assetLabel = (asset: (typeof referenceAssets)[number]) =>
+    t(asset.kind === 'image' ? 'Image {{number}}' : 'Video {{number}}', {
+      number: asset.number,
+    })
+
+  const handlePromptChange = (value: string, caret: number | null) => {
+    props.onPromptChange(value)
+    if (props.mode !== 'reference' || referenceAssets.length === 0) {
+      setMentionRange(null)
+      return
+    }
+    const end = caret ?? value.length
+    const match = value.slice(0, end).match(/@[^@\s]*$/u)
+    setMentionRange(
+      match
+        ? { start: end - match[0].length, end, query: match[0].slice(1) }
+        : null
+    )
+  }
+
+  const insertMention = (mention: string) => {
+    if (!mentionRange) return
+    const nextPrompt = `${props.prompt.slice(0, mentionRange.start)}@${mention} ${props.prompt.slice(mentionRange.end)}`
+    const nextCaret = mentionRange.start + mention.length + 2
+    props.onPromptChange(nextPrompt)
+    setMentionRange(null)
+    queueMicrotask(() => {
+      textareaRef.current?.focus()
+      textareaRef.current?.setSelectionRange(nextCaret, nextCaret)
+    })
+  }
+
+  const mentionOptions = mentionRange
+    ? referenceAssets.filter((asset) =>
+        assetLabel(asset)
+          .toLocaleLowerCase()
+          .includes(mentionRange.query.toLocaleLowerCase())
+      )
+    : []
 
   return (
     <PromptInput
@@ -146,6 +196,7 @@ export function VideoComposer(props: VideoComposerProps) {
           className='relative min-h-28 min-w-0 flex-1 self-stretch'
         >
           <PromptInputTextarea
+            ref={textareaRef}
             aria-label={t('Prompt')}
             autoComplete='off'
             autoCorrect='off'
@@ -153,12 +204,46 @@ export function VideoComposer(props: VideoComposerProps) {
             spellCheck={false}
             disabled={props.disabled}
             value={props.prompt}
-            onChange={(event) => props.onPromptChange(event.target.value)}
+            onChange={(event) =>
+              handlePromptChange(
+                event.currentTarget.value,
+                event.currentTarget.selectionStart
+              )
+            }
             placeholder={t(
-              'Describe the scene, motion, camera, lighting, and style...'
+              'Use @ to quickly reference uploaded files, for example: use the motion from @Video 1 to generate a video in which the characters from @Image 2 and @Image 3 fight.'
             )}
             className='h-full max-h-none min-h-28 resize-none pr-12 text-base leading-7'
           />
+          {mentionRange && mentionOptions.length > 0 ? (
+            <div
+              role='listbox'
+              aria-label={t('Reference content')}
+              className='border-border bg-popover absolute bottom-0 left-2 z-30 flex max-h-24 min-w-44 flex-col gap-1 overflow-y-auto rounded-xl border p-1.5 shadow-lg'
+            >
+              {mentionOptions.map((asset) => {
+                const label = assetLabel(asset)
+                return (
+                  <button
+                    key={`${asset.kind}-${asset.number}`}
+                    type='button'
+                    role='option'
+                    aria-selected='false'
+                    className='hover:bg-accent focus-visible:bg-accent flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none'
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => insertMention(label)}
+                  >
+                    {asset.kind === 'video' ? (
+                      <VideoIcon aria-hidden='true' className='size-4' />
+                    ) : (
+                      <ImagePlusIcon aria-hidden='true' className='size-4' />
+                    )}
+                    <span>@{label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
           <Tooltip>
             <TooltipTrigger
               render={
