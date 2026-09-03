@@ -5609,6 +5609,16 @@
     "Zhipu V4": "Zhipu V 4",
     "Zoom": "ズーム",
     "Add reference content": "参照コンテンツを追加",
-    "Swap first and last frames": "開始・終了フレームを入れ替える"
+    "Swap first and last frames": "開始・終了フレームを入れ替える",
+    "audio off": "音声なし",
+    "audio on": "音声あり",
+    "Collapse prompt input": "プロンプト入力欄を縮小",
+    "Expand prompt input": "プロンプト入力欄を拡大",
+    "Generation mode: {{mode}}": "生成モード：{{mode}}",
+    "Generation quantity": "生成数",
+    "Video settings": "動画設定",
+    "Video settings: {{ratio}}, {{resolution}}, {{seconds}}s, {{audio}}, {{videos}}": "動画設定：{{ratio}}、{{resolution}}、{{seconds}}秒、{{audio}}、{{videos}}",
+    "{{count}} video": "{{count}}本の動画",
+    "{{count}} videos": "{{count}}本の動画"
   }
 }

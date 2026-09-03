@@ -5609,6 +5609,16 @@
     "Zhipu V4": "智谱 V4",
     "Zoom": "缩放",
     "Add reference content": "添加参考内容",
-    "Swap first and last frames": "交换首尾帧"
+    "Swap first and last frames": "交换首尾帧",
+    "audio off": "静音",
+    "audio on": "有声",
+    "Collapse prompt input": "收起提示词输入框",
+    "Expand prompt input": "展开提示词输入框",
+    "Generation mode: {{mode}}": "生成模式：{{mode}}",
+    "Generation quantity": "生成数量",
+    "Video settings": "视频设置",
+    "Video settings: {{ratio}}, {{resolution}}, {{seconds}}s, {{audio}}, {{videos}}": "视频设置：{{ratio}}、{{resolution}}、{{seconds}} 秒、{{audio}}、{{videos}}",
+    "{{count}} video": "{{count}} 条视频",
+    "{{count}} videos": "{{count}} 条视频"
   }
 }

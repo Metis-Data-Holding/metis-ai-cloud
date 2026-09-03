@@ -27,7 +27,7 @@ import {
   submitVideoGeneration,
 } from '../../api'
 import type { VideoGenerationRequest, VideoTask } from '../../types'
-import { useVideoGeneration } from '../use-video-generation'
+import { useVideoGeneration, useVideoTask } from '../use-video-generation'
 
 vi.mock('../../api', () => ({
   getVideoContent: vi.fn(),
@@ -75,7 +75,7 @@ function createWrapper() {
   }
 }
 
-describe('useVideoGeneration', () => {
+describe('video generation hooks', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.mocked(submitVideoGeneration).mockResolvedValue(queuedTask)
@@ -92,16 +92,53 @@ describe('useVideoGeneration', () => {
     vi.restoreAllMocks()
   })
 
-  test('submits, polls to completion, and loads an authenticated preview blob', async () => {
+  test('submits the requested number of independent tasks in order', async () => {
+    vi.mocked(submitVideoGeneration)
+      .mockResolvedValueOnce(queuedTask)
+      .mockResolvedValueOnce({ ...queuedTask, id: 'task-video-2' })
+      .mockResolvedValueOnce({ ...queuedTask, id: 'task-video-3' })
     const { result } = renderHook(() => useVideoGeneration(), {
       wrapper: createWrapper(),
     })
 
     await act(async () => {
-      await result.current.submit('default', request)
+      await result.current.submit('default', request, 3)
     })
 
-    expect(submitVideoGeneration).toHaveBeenCalledWith('default', request)
+    expect(submitVideoGeneration).toHaveBeenCalledTimes(3)
+    expect(result.current.tasks.map((task) => task.id)).toEqual([
+      'task-video-1',
+      'task-video-2',
+      'task-video-3',
+    ])
+  })
+
+  test('keeps submitted tasks when a later task fails', async () => {
+    vi.mocked(submitVideoGeneration)
+      .mockResolvedValueOnce(queuedTask)
+      .mockRejectedValueOnce(new Error('Quota is not enough'))
+    const { result } = renderHook(() => useVideoGeneration(), {
+      wrapper: createWrapper(),
+    })
+
+    await act(async () => {
+      await expect(
+        result.current.submit('default', request, 4)
+      ).rejects.toThrow('Quota is not enough')
+    })
+
+    expect(submitVideoGeneration).toHaveBeenCalledTimes(2)
+    await waitFor(() => expect(result.current.tasks).toEqual([queuedTask]))
+    await waitFor(() =>
+      expect(result.current.submitError).toBe('Quota is not enough')
+    )
+  })
+
+  test('polls one task to completion and loads an authenticated preview blob', async () => {
+    const { result } = renderHook(() => useVideoTask(queuedTask), {
+      wrapper: createWrapper(),
+    })
+
     expect(result.current.task).toEqual(queuedTask)
 
     await act(async () => {
@@ -115,20 +152,14 @@ describe('useVideoGeneration', () => {
     expect(getVideoContent).toHaveBeenCalledWith('task-video-1')
   })
 
-  test('keeps a completed failure terminal and exposes the upstream message', async () => {
+  test('keeps a completed failure terminal and exposes the upstream message', () => {
     const failedTask: VideoTask = {
       ...queuedTask,
       status: 'failed',
       error: { code: 'provider_failed', message: 'Provider rejected prompt' },
     }
-    vi.mocked(submitVideoGeneration).mockResolvedValue(failedTask)
-
-    const { result } = renderHook(() => useVideoGeneration(), {
+    const { result } = renderHook(() => useVideoTask(failedTask), {
       wrapper: createWrapper(),
-    })
-
-    await act(async () => {
-      await result.current.submit('default', request)
     })
 
     expect(result.current.task).toEqual(failedTask)

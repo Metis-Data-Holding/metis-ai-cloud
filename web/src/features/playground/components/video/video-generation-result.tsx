@@ -2,9 +2,9 @@
 Copyright (C) 2023-2026 QuantumNous
 
 This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published by
-the Free Software Foundation, either version 3 of the License, or (at your option)
-any later version.
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -52,6 +52,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 
+import { useVideoTask } from '../../hooks/use-video-generation'
 import type { VideoTask } from '../../types'
 
 type VideoGenerationResultProps = {
@@ -244,5 +245,21 @@ export function VideoGenerationResult(props: VideoGenerationResultProps) {
         </CardFooter>
       ) : null}
     </Card>
+  )
+}
+
+export function VideoTaskResult({ initialTask }: { initialTask: VideoTask }) {
+  const generation = useVideoTask(initialTask)
+
+  return (
+    <VideoGenerationResult
+      task={generation.task}
+      taskError={generation.taskError}
+      statusError={generation.statusError}
+      contentError={generation.contentError}
+      videoUrl={generation.videoUrl}
+      onRetryStatus={() => void generation.retryStatus()}
+      onRetryContent={() => void generation.retryContent()}
+    />
   )
 }

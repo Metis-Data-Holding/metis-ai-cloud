@@ -5609,6 +5609,16 @@
     "Zhipu V4": "Zhipu V4",
     "Zoom": "Zoom",
     "Add reference content": "Добавить референсный контент",
-    "Swap first and last frames": "Поменять местами первый и последний кадры"
+    "Swap first and last frames": "Поменять местами первый и последний кадры",
+    "audio off": "без звука",
+    "audio on": "со звуком",
+    "Collapse prompt input": "Свернуть поле запроса",
+    "Expand prompt input": "Развернуть поле запроса",
+    "Generation mode: {{mode}}": "Режим генерации: {{mode}}",
+    "Generation quantity": "Количество генераций",
+    "Video settings": "Настройки видео",
+    "Video settings: {{ratio}}, {{resolution}}, {{seconds}}s, {{audio}}, {{videos}}": "Настройки видео: {{ratio}}, {{resolution}}, {{seconds}} с, {{audio}}, {{videos}}",
+    "{{count}} video": "{{count}} видео",
+    "{{count}} videos": "{{count}} видео"
   }
 }

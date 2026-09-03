@@ -63,6 +63,22 @@ function createWrapper() {
   }
 }
 
+async function openVideoSettings(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    await screen.findByRole('button', { name: /^Video settings:/ })
+  )
+}
+
+async function selectGenerationMode(
+  user: ReturnType<typeof userEvent.setup>,
+  mode: 'Reference generation' | 'First and last frames'
+) {
+  await user.click(
+    await screen.findByRole('button', { name: /^Generation mode:/ })
+  )
+  await user.click(screen.getByRole('menuitemradio', { name: mode }))
+}
+
 describe('VideoPlayground', () => {
   beforeEach(() => {
     vi.mocked(getUserGroups).mockResolvedValue([
@@ -98,10 +114,119 @@ describe('VideoPlayground', () => {
     })
   })
 
-  test('shows only the supported resolution choices for Seedance Fast', async () => {
+  test('starts with one unified composer centered in the available area', async () => {
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
-    expect(await screen.findByRole('button', { name: '480p' })).toBeVisible()
+    expect(
+      await screen.findByTestId('video-playground-layout')
+    ).toHaveAttribute('data-layout', 'centered')
+    expect(screen.getByRole('textbox', { name: 'Prompt' })).toBeVisible()
+    expect(
+      screen.getByRole('button', {
+        name: 'Video settings: 16:9, 720p, 5s, audio off, 1 video',
+      })
+    ).toBeVisible()
+    expect(
+      screen.queryByRole('group', { name: 'Aspect ratio' })
+    ).not.toBeInTheDocument()
+  })
+
+  test('opens video settings and changes every disclosed parameter', async () => {
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Video settings: 16:9, 720p, 5s, audio off, 1 video',
+      })
+    )
+    await user.click(screen.getByRole('button', { name: '9:16' }))
+    await user.click(screen.getByRole('button', { name: '480p' }))
+    await user.click(screen.getByRole('button', { name: '8s' }))
+    await user.click(screen.getByRole('button', { name: 'On' }))
+    await user.click(screen.getByRole('button', { name: '3' }))
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Video settings: 9:16, 480p, 8s, audio on, 3 videos',
+      })
+    ).toBeVisible()
+  })
+
+  test('uses a dropdown for generation mode and toggles the prompt height', async () => {
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Generation mode: Reference generation',
+      })
+    )
+    await user.click(
+      screen.getByRole('menuitemradio', { name: 'First and last frames' })
+    )
+    expect(screen.getByLabelText('First frame')).toBeVisible()
+
+    const expand = screen.getByRole('button', { name: 'Expand prompt input' })
+    expect(expand).toHaveAttribute('aria-expanded', 'false')
+    await user.click(expand)
+    expect(
+      screen.getByRole('button', { name: 'Collapse prompt input' })
+    ).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  test('submits the selected quantity and moves the composer below results', async () => {
+    const user = userEvent.setup()
+    vi.mocked(submitVideoGeneration)
+      .mockResolvedValueOnce({
+        id: 'task-video-1',
+        object: 'video',
+        model: 'dreamina-seedance-2-0-fast-260128',
+        status: 'queued',
+        progress: 0,
+        created_at: 1,
+      })
+      .mockResolvedValueOnce({
+        id: 'task-video-2',
+        object: 'video',
+        model: 'dreamina-seedance-2-0-fast-260128',
+        status: 'queued',
+        progress: 0,
+        created_at: 1,
+      })
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await user.type(
+      await screen.findByRole('textbox', { name: 'Prompt' }),
+      'A paper boat crossing a neon river'
+    )
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Video settings: 16:9, 720p, 5s, audio off, 1 video',
+      })
+    )
+    await user.click(screen.getByRole('button', { name: '2' }))
+    await user.keyboard('{Escape}')
+    const submit = screen.getByRole('button', { name: 'Generate video' })
+    expect(submit).toHaveTextContent('')
+    expect(submit).toBeEnabled()
+    fireEvent.click(submit)
+
+    await waitFor(() => expect(submitVideoGeneration).toHaveBeenCalledTimes(2))
+    expect(screen.getByTestId('video-playground-layout')).toHaveAttribute(
+      'data-layout',
+      'results'
+    )
+    expect(await screen.findByText('task-video-1')).toBeVisible()
+    expect(await screen.findByText('task-video-2')).toBeVisible()
+  })
+
+  test('shows only the supported resolution choices for Seedance Fast', async () => {
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await openVideoSettings(user)
+    expect(screen.getByRole('button', { name: '480p' })).toBeVisible()
     expect(
       screen.queryByText('Text-to-video only in this first version.')
     ).not.toBeInTheDocument()
@@ -132,7 +257,8 @@ describe('VideoPlayground', () => {
     const user = userEvent.setup()
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
-    const resolution1080 = await screen.findByRole('button', { name: '1080p' })
+    await openVideoSettings(user)
+    const resolution1080 = screen.getByRole('button', { name: '1080p' })
     await user.click(resolution1080)
     await user.upload(
       screen.getByLabelText('Add reference content'),
@@ -141,12 +267,10 @@ describe('VideoPlayground', () => {
 
     await waitFor(() =>
       expect(
-        screen.queryByRole('button', { name: '1080p' })
-      ).not.toBeInTheDocument()
-    )
-    expect(screen.getByRole('button', { name: '720p' })).toHaveAttribute(
-      'aria-pressed',
-      'true'
+        screen.getByRole('button', {
+          name: 'Video settings: 16:9, 720p, 5s, audio off, 1 video',
+        })
+      ).toBeVisible()
     )
   })
 
@@ -160,7 +284,8 @@ describe('VideoPlayground', () => {
     })
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
-    const firstDuration = await screen.findByRole('button', { name: '5s' })
+    await openVideoSettings(user)
+    const firstDuration = screen.getByRole('button', { name: '5s' })
     for (let seconds = 5; seconds <= 15; seconds += 1) {
       expect(
         screen.getByRole('button', { name: `${seconds}s` })
@@ -196,7 +321,9 @@ describe('VideoPlayground', () => {
       await screen.findByLabelText('Prompt'),
       'A paper boat crossing a neon river'
     )
+    await openVideoSettings(user)
     await user.click(screen.getByRole('button', { name: '15s' }))
+    await user.keyboard('{Escape}')
     await user.click(screen.getByRole('button', { name: 'Generate video' }))
 
     await waitFor(() =>
@@ -250,8 +377,10 @@ describe('VideoPlayground', () => {
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
     expect(
-      await screen.findByRole('button', { name: 'Reference generation' })
-    ).toHaveAttribute('aria-pressed', 'true')
+      await screen.findByRole('button', {
+        name: 'Generation mode: Reference generation',
+      })
+    ).toBeVisible()
     const image = new File(['image'], 'subject.png', { type: 'image/png' })
     const firstVideo = new File(['first'], 'first.mp4', { type: 'video/mp4' })
     const secondVideo = new File(['second'], 'second.mov', {
@@ -314,7 +443,9 @@ describe('VideoPlayground', () => {
     const user = userEvent.setup()
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
-    await screen.findByRole('button', { name: 'Reference generation' })
+    await screen.findByRole('button', {
+      name: 'Generation mode: Reference generation',
+    })
     const file = new File(['video'], 'motion.mp4', { type: 'video/mp4' })
     await user.upload(screen.getByLabelText('Add reference content'), file)
 
@@ -350,7 +481,9 @@ describe('VideoPlayground', () => {
     const user = userEvent.setup()
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
-    await screen.findByRole('button', { name: 'Reference generation' })
+    await screen.findByRole('button', {
+      name: 'Generation mode: Reference generation',
+    })
     const file = new File(['video'], 'large.mp4', { type: 'video/mp4' })
     Object.defineProperty(file, 'size', { value: 80 * 1024 * 1024 + 1 })
     await user.upload(screen.getByLabelText('Add reference content'), file)
@@ -368,7 +501,9 @@ describe('VideoPlayground', () => {
       .mockResolvedValueOnce(8)
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
-    await screen.findByRole('button', { name: 'Reference generation' })
+    await screen.findByRole('button', {
+      name: 'Generation mode: Reference generation',
+    })
     const input = screen.getByLabelText('Add reference content')
     await user.upload(
       input,
@@ -391,7 +526,9 @@ describe('VideoPlayground', () => {
   test('does not expose reference video URL controls', async () => {
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
-    await screen.findByRole('button', { name: 'Reference generation' })
+    await screen.findByRole('button', {
+      name: 'Generation mode: Reference generation',
+    })
     expect(screen.getByLabelText('Add reference content')).toHaveAttribute(
       'multiple'
     )
@@ -413,9 +550,7 @@ describe('VideoPlayground', () => {
     )
     expect(await screen.findByAltText('Reference image 1')).toBeVisible()
 
-    await user.click(
-      screen.getByRole('button', { name: 'First and last frames' })
-    )
+    await selectGenerationMode(user, 'First and last frames')
     expect(screen.queryByAltText('Reference image 1')).not.toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Generate video' })
@@ -454,12 +589,9 @@ describe('VideoPlayground', () => {
     const user = userEvent.setup()
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
-    await user.click(
-      await screen.findByRole('button', { name: 'First and last frames' })
-    )
-    expect(
-      screen.getByRole('group', { name: 'First and last frames' })
-    ).toBeVisible()
+    await selectGenerationMode(user, 'First and last frames')
+    expect(screen.getByLabelText('First frame')).toBeVisible()
+    expect(screen.getByLabelText('Last frame (optional)')).toBeVisible()
     const swapButton = screen.getByRole('button', {
       name: 'Swap first and last frames',
     })
@@ -505,7 +637,9 @@ describe('VideoPlayground', () => {
     const user = userEvent.setup()
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
-    await screen.findByRole('button', { name: 'Reference generation' })
+    await screen.findByRole('button', {
+      name: 'Generation mode: Reference generation',
+    })
     await user.upload(
       screen.getByLabelText('Add reference content'),
       [...Array(10).keys()].map(
@@ -521,7 +655,9 @@ describe('VideoPlayground', () => {
   test('rejects image formats that BytePlus does not support', async () => {
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
-    await screen.findByRole('button', { name: 'Reference generation' })
+    await screen.findByRole('button', {
+      name: 'Generation mode: Reference generation',
+    })
     fireEvent.change(screen.getByLabelText('Add reference content'), {
       target: {
         files: [
@@ -540,7 +676,8 @@ describe('VideoPlayground', () => {
     const user = userEvent.setup()
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
-    const audioOff = await screen.findByRole('button', { name: 'Off' })
+    await openVideoSettings(user)
+    const audioOff = screen.getByRole('button', { name: 'Off' })
     expect(audioOff).toHaveAttribute('aria-pressed', 'true')
     expect(
       screen.queryByText(
@@ -549,6 +686,7 @@ describe('VideoPlayground', () => {
     ).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'On' }))
+    await user.keyboard('{Escape}')
     await user.type(
       screen.getByLabelText('Prompt'),
       'A paper boat crossing a neon river'

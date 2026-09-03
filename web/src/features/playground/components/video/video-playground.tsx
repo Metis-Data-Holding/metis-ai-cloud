@@ -16,43 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { zodResolver } from '@hookform/resolvers/zod'
-/*
-Copyright (C) 2023-2026 QuantumNous
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published by
-the Free Software Foundation, either version 3 of the License, or (at your option)
-any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-For commercial licensing, please contact support@quantumnous.com
-*/
-import { AiMagicIcon, Alert02Icon } from '@hugeicons/core-free-icons'
+import { Alert02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
-import { ModelGroupSelector } from '@/components/model-group-selector'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import {
   Empty,
   EmptyDescription,
@@ -60,24 +31,10 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-  FieldLegend,
-  FieldSet,
-} from '@/components/ui/field'
-import { Spinner } from '@/components/ui/spinner'
-import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
 
 import { getUserGroups, getUserModels } from '../../api'
-import {
-  DEFAULT_GROUP,
-  VIDEO_ASPECT_RATIO_OPTIONS,
-  VIDEO_DURATION_OPTIONS,
-  VIDEO_ENDPOINT_TYPE,
-} from '../../constants'
+import { DEFAULT_GROUP, VIDEO_ENDPOINT_TYPE } from '../../constants'
 import { useVideoGeneration } from '../../hooks/use-video-generation'
 import {
   videoFormSchema,
@@ -95,9 +52,8 @@ import type {
   VideoGenerationMode,
   VideoInputContent,
 } from '../../types'
-import { VideoGenerationResult } from './video-generation-result'
-import { VideoReferenceInput } from './video-reference-input'
-import { VideoSegmentedControl } from './video-segmented-control'
+import { VideoComposer } from './video-composer'
+import { VideoTaskResult } from './video-generation-result'
 
 const EMPTY_GROUPS: GroupOption[] = []
 const EMPTY_MODELS: ModelOption[] = []
@@ -110,6 +66,7 @@ const DEFAULT_VALUES: VideoFormValues = {
   resolution: '720p',
   ratio: '16:9',
   generateAudio: false,
+  quantity: 1,
   mode: 'reference',
 }
 
@@ -120,16 +77,9 @@ export function VideoPlayground() {
   const [inputContentValid, setInputContentValid] = useState(true)
   const generation = useVideoGeneration()
   const form = useForm<VideoFormValues>({
-    resolver: zodResolver(videoFormSchema),
     defaultValues: DEFAULT_VALUES,
   })
-  const selectedModel = form.watch('model')
-  const prompt = form.watch('prompt')
-  const selectedResolution = form.watch('resolution')
-  const selectedSeconds = form.watch('seconds')
-  const selectedRatio = form.watch('ratio')
-  const generateAudio = form.watch('generateAudio')
-  const generationMode = form.watch('mode')
+  const values = form.watch()
   const hasImageInput = inputContent.some((item) => item.type === 'image_url')
 
   const groupsQuery = useQuery({
@@ -145,20 +95,13 @@ export function VideoPlayground() {
   const models = (modelsQuery.data ?? EMPTY_MODELS).filter((model) =>
     isSupportedVideoPlaygroundModel(model.value)
   )
-  const resolutions = selectedModel
-    ? getVideoResolutionOptions(selectedModel, hasImageInput)
+  const resolutions = values.model
+    ? getVideoResolutionOptions(values.model, hasImageInput)
     : []
 
   useEffect(() => {
-    if (groups.length === 0) {
-      return
-    }
-    const hasSelectedGroup = groups.some(
-      (group) => group.value === selectedGroup
-    )
-    if (hasSelectedGroup) {
-      return
-    }
+    if (groups.length === 0) return
+    if (groups.some((group) => group.value === selectedGroup)) return
     const fallback =
       groups.find((group) => group.value === DEFAULT_GROUP) ?? groups[0]
     setSelectedGroup(fallback.value)
@@ -166,30 +109,25 @@ export function VideoPlayground() {
   }, [form, groups, selectedGroup])
 
   useEffect(() => {
-    if (modelsQuery.isPending) {
-      return
-    }
-    const hasSelectedModel = models.some(
-      (model) => model.value === selectedModel
-    )
-    const nextModel = hasSelectedModel
-      ? selectedModel
+    if (modelsQuery.isPending) return
+    const nextModel = models.some((model) => model.value === values.model)
+      ? values.model
       : (models[0]?.value ?? '')
-    if (nextModel !== selectedModel) {
+    if (nextModel !== values.model) {
       form.setValue('model', nextModel, { shouldValidate: true })
     }
-  }, [form, models, modelsQuery.isPending, selectedModel])
+  }, [form, models, modelsQuery.isPending, values.model])
 
   useEffect(() => {
     const nextResolution = normalizeVideoResolution(
-      selectedModel,
-      selectedResolution,
+      values.model,
+      values.resolution,
       hasImageInput
     )
-    if (nextResolution !== selectedResolution) {
+    if (nextResolution !== values.resolution) {
       form.setValue('resolution', nextResolution)
     }
-  }, [form, hasImageInput, selectedModel, selectedResolution])
+  }, [form, hasImageInput, values.model, values.resolution])
 
   const handleGroupChange = (value: string) => {
     setSelectedGroup(value)
@@ -197,264 +135,154 @@ export function VideoPlayground() {
     form.setValue('model', '')
   }
 
-  const handleSubmit = form.handleSubmit(async (values) => {
-    try {
-      await generation.submit(
-        values.group,
-        buildVideoGenerationRequest({ ...values, content: inputContent })
-      )
-    } catch {
-      // The mutation exposes the provider error in the result panel.
-    }
-  })
-
-  const optionLoadError = groupsQuery.error || modelsQuery.error
-  const noVideoModels = !modelsQuery.isPending && models.length === 0
-  const hasFirstFrame = inputContent.some((item) => item.role === 'first_frame')
-  const inputContentMissing =
-    (generationMode === 'keyframes' && !hasFirstFrame) ||
-    (generationMode === 'reference' &&
-      inputContent.length === 0 &&
-      prompt.trim() === '')
-
   const handleModeChange = (mode: VideoGenerationMode) => {
     form.setValue('mode', mode)
     setInputContent([])
     setInputContentValid(true)
   }
 
+  const submit = async () => {
+    const parsedValues = videoFormSchema.safeParse(form.getValues())
+    if (!parsedValues.success) return
+    const submittedValues = parsedValues.data
+    try {
+      await generation.submit(
+        submittedValues.group,
+        buildVideoGenerationRequest({
+          ...submittedValues,
+          content: inputContent,
+        }),
+        submittedValues.quantity
+      )
+    } catch {
+      // Successful tasks remain visible when a later task fails.
+    }
+  }
+
+  const noVideoModels = !modelsQuery.isPending && models.length === 0
+  const composerDisabled = generation.isSubmitting || noVideoModels
+  const systemDisabled =
+    generation.isSubmitting || modelsQuery.isPending || noVideoModels
+  const hasFirstFrame = inputContent.some((item) => item.role === 'first_frame')
+  const inputContentMissing =
+    (values.mode === 'keyframes' && !hasFirstFrame) ||
+    (values.mode === 'reference' &&
+      inputContent.length === 0 &&
+      values.prompt.trim() === '')
+  const submitDisabled =
+    systemDisabled ||
+    values.model === '' ||
+    inputContentMissing ||
+    !inputContentValid
+  const hasResults = generation.tasks.length > 0
+  const optionLoadError = groupsQuery.error || modelsQuery.error
+
+  const composer = (
+    <VideoComposer
+      audio={values.generateAudio}
+      disabled={composerDisabled}
+      submitDisabled={submitDisabled}
+      groups={groups}
+      groupValue={selectedGroup}
+      inputContent={inputContent}
+      isSubmitting={generation.isSubmitting}
+      mode={values.mode}
+      models={models}
+      modelValue={values.model}
+      prompt={values.prompt}
+      quantity={values.quantity}
+      ratio={values.ratio}
+      resolution={values.resolution}
+      resolutions={resolutions}
+      seconds={values.seconds}
+      onAudioChange={(value) => form.setValue('generateAudio', value)}
+      onGroupChange={handleGroupChange}
+      onInputContentChange={setInputContent}
+      onInputValidityChange={setInputContentValid}
+      onModeChange={handleModeChange}
+      onModelChange={(value) =>
+        form.setValue('model', value, { shouldValidate: true })
+      }
+      onPromptChange={(value) => form.setValue('prompt', value)}
+      onQuantityChange={(value) => form.setValue('quantity', value)}
+      onRatioChange={(value) => form.setValue('ratio', value)}
+      onResolutionChange={(value) => form.setValue('resolution', value)}
+      onSecondsChange={(value) => form.setValue('seconds', value)}
+      onSubmit={submit}
+    />
+  )
+
   return (
-    <div className='min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6'>
-      <div className='mx-auto grid w-full max-w-6xl gap-5 lg:grid-cols-[minmax(20rem,0.85fr)_minmax(0,1.15fr)]'>
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('Create a video')}</CardTitle>
-            <CardDescription>
-              {t('Submit an asynchronous Seedance video generation task.')}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form id='video-generation-form' onSubmit={handleSubmit}>
-              <FieldGroup>
-                <Field>
-                  <FieldLabel>{t('Model and group')}</FieldLabel>
-                  <ModelGroupSelector
-                    selectedModel={selectedModel}
-                    models={models}
-                    onModelChange={(value) =>
-                      form.setValue('model', value, { shouldValidate: true })
-                    }
-                    selectedGroup={selectedGroup}
-                    groups={groups}
-                    onGroupChange={handleGroupChange}
-                    disabled={
-                      groupsQuery.isPending ||
-                      modelsQuery.isPending ||
-                      generation.isSubmitting
-                    }
-                  />
-                  {form.formState.errors.model ? (
-                    <FieldError>
-                      {t(form.formState.errors.model.message ?? '')}
-                    </FieldError>
-                  ) : null}
-                </Field>
+    <div
+      data-testid='video-playground-layout'
+      data-layout={hasResults ? 'results' : 'centered'}
+      className='relative flex min-h-0 flex-1 flex-col overflow-hidden'
+    >
+      {hasResults ? (
+        <div className='min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6'>
+          <div className='mx-auto grid w-full max-w-5xl gap-5 md:grid-cols-2'>
+            {generation.tasks.map((task) => (
+              <VideoTaskResult key={task.id} initialTask={task} />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className='flex min-h-0 flex-1 items-center overflow-y-auto px-4 py-8 sm:px-6'>
+          <div className='mx-auto flex w-full max-w-5xl flex-col gap-5'>
+            <div className='text-center'>
+              <h2 className='text-2xl font-semibold tracking-tight'>
+                {t('Create a video')}
+              </h2>
+              <p className='text-muted-foreground mt-1 text-sm'>
+                {t('Submit an asynchronous Seedance video generation task.')}
+              </p>
+            </div>
+            {composer}
+          </div>
+        </div>
+      )}
 
-                {noVideoModels ? (
-                  <Empty className='border'>
-                    <EmptyHeader>
-                      <EmptyMedia variant='icon'>
-                        <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
-                      </EmptyMedia>
-                      <EmptyTitle>{t('No video models available')}</EmptyTitle>
-                      <EmptyDescription>
-                        {t(
-                          'Choose another group or ask an administrator to enable a video model.'
-                        )}
-                      </EmptyDescription>
-                    </EmptyHeader>
-                  </Empty>
-                ) : null}
+      {hasResults ? (
+        <div className='bg-background/95 shrink-0 px-4 pt-3 pb-4 backdrop-blur sm:px-6'>
+          <div className='mx-auto w-full max-w-5xl'>{composer}</div>
+        </div>
+      ) : null}
 
-                <FieldSet className='min-w-0'>
-                  <FieldLegend id='video-mode-label' variant='label'>
-                    {t('Generation mode')}
-                  </FieldLegend>
-                  <VideoSegmentedControl
-                    labelledBy='video-mode-label'
-                    value={generationMode}
-                    options={[
-                      { value: 'reference', label: t('Reference generation') },
-                      { value: 'keyframes', label: t('First and last frames') },
-                    ]}
-                    onValueChange={handleModeChange}
-                    disabled={generation.isSubmitting || noVideoModels}
-                  />
-                </FieldSet>
-
-                <FieldSet className='min-w-0'>
-                  <FieldLegend id='video-reference-label' variant='label'>
-                    {generationMode === 'reference'
-                      ? t('Reference content')
-                      : t('First and last frames')}
-                  </FieldLegend>
-                  <VideoReferenceInput
-                    mode={generationMode}
-                    content={inputContent}
-                    onContentChange={setInputContent}
-                    onValidityChange={setInputContentValid}
-                    disabled={generation.isSubmitting || noVideoModels}
-                  />
-                </FieldSet>
-
-                <Field data-invalid={Boolean(form.formState.errors.prompt)}>
-                  <FieldLabel htmlFor='video-prompt'>{t('Prompt')}</FieldLabel>
-                  <Textarea
-                    id='video-prompt'
-                    rows={7}
-                    placeholder={t(
-                      'Describe the scene, motion, camera, lighting, and style...'
-                    )}
-                    aria-invalid={Boolean(form.formState.errors.prompt)}
-                    disabled={generation.isSubmitting || noVideoModels}
-                    {...form.register('prompt')}
-                  />
-                  {form.formState.errors.prompt ? (
-                    <FieldError>
-                      {t(form.formState.errors.prompt.message ?? '')}
-                    </FieldError>
-                  ) : null}
-                </Field>
-
-                <FieldSet className='min-w-0'>
-                  <FieldLegend id='video-duration-label' variant='label'>
-                    {t('Video duration')}
-                  </FieldLegend>
-                  <VideoSegmentedControl
-                    labelledBy='video-duration-label'
-                    value={String(selectedSeconds)}
-                    options={VIDEO_DURATION_OPTIONS.map((seconds) => ({
-                      value: String(seconds),
-                      label: t('{{value}}s', { value: seconds }),
-                    }))}
-                    onValueChange={(value) => {
-                      form.setValue('seconds', Number(value))
-                    }}
-                    disabled={generation.isSubmitting || noVideoModels}
-                    scrollable
-                    backwardLabel={t('Scroll duration backward')}
-                    forwardLabel={t('Scroll duration forward')}
-                  />
-                </FieldSet>
-
-                <FieldSet className='min-w-0'>
-                  <FieldLegend id='video-resolution-label' variant='label'>
-                    {t('Resolution')}
-                  </FieldLegend>
-                  <VideoSegmentedControl
-                    labelledBy='video-resolution-label'
-                    value={selectedResolution}
-                    options={resolutions.map((resolution) => ({
-                      value: resolution,
-                      label: resolution,
-                    }))}
-                    onValueChange={(resolution) => {
-                      form.setValue('resolution', resolution)
-                    }}
-                    disabled={generation.isSubmitting || noVideoModels}
-                  />
-                </FieldSet>
-
-                <FieldSet className='min-w-0'>
-                  <FieldLegend id='video-ratio-label' variant='label'>
-                    {t('Aspect ratio')}
-                  </FieldLegend>
-                  <VideoSegmentedControl
-                    labelledBy='video-ratio-label'
-                    value={selectedRatio}
-                    options={VIDEO_ASPECT_RATIO_OPTIONS.map((ratio) => ({
-                      value: ratio,
-                      label: ratio,
-                    }))}
-                    onValueChange={(ratio) => {
-                      form.setValue('ratio', ratio)
-                    }}
-                    disabled={generation.isSubmitting || noVideoModels}
-                  />
-                </FieldSet>
-
-                <FieldSet className='min-w-0'>
-                  <FieldLegend id='video-audio-label' variant='label'>
-                    {t('Output audio')}
-                  </FieldLegend>
-                  <VideoSegmentedControl
-                    labelledBy='video-audio-label'
-                    value={generateAudio ? 'on' : 'off'}
-                    options={[
-                      { value: 'on', label: t('On') },
-                      { value: 'off', label: t('Off') },
-                    ]}
-                    onValueChange={(value) => {
-                      form.setValue('generateAudio', value === 'on')
-                    }}
-                    disabled={generation.isSubmitting || noVideoModels}
-                  />
-                </FieldSet>
-
-                {optionLoadError || generation.submitError ? (
-                  <Alert variant='destructive'>
-                    <HugeiconsIcon
-                      icon={Alert02Icon}
-                      strokeWidth={2}
-                      aria-hidden='true'
-                    />
-                    <AlertTitle>{t('Unable to submit video task')}</AlertTitle>
-                    <AlertDescription>
-                      {generation.submitError ||
-                        t('Failed to load video options')}
-                    </AlertDescription>
-                  </Alert>
-                ) : null}
-              </FieldGroup>
-            </form>
-          </CardContent>
-          <CardFooter className='justify-end'>
-            <Button
-              form='video-generation-form'
-              type='submit'
-              disabled={
-                generation.isSubmitting ||
-                modelsQuery.isPending ||
-                noVideoModels ||
-                selectedModel === '' ||
-                inputContentMissing ||
-                !inputContentValid
-              }
-            >
-              {generation.isSubmitting ? (
-                <Spinner data-icon='inline-start' />
-              ) : (
-                <HugeiconsIcon
-                  icon={AiMagicIcon}
-                  strokeWidth={2}
-                  data-icon='inline-start'
-                />
+      {noVideoModels ? (
+        <Empty className='absolute inset-4 border'>
+          <EmptyHeader>
+            <EmptyMedia variant='icon'>
+              <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
+            </EmptyMedia>
+            <EmptyTitle>{t('No video models available')}</EmptyTitle>
+            <EmptyDescription>
+              {t(
+                'Choose another group or ask an administrator to enable a video model.'
               )}
-              {t('Generate video')}
-            </Button>
-          </CardFooter>
-        </Card>
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : null}
 
-        <VideoGenerationResult
-          task={generation.task}
-          taskError={generation.taskError}
-          statusError={generation.statusError}
-          contentError={generation.contentError}
-          videoUrl={generation.videoUrl}
-          onRetryStatus={() => void generation.retryStatus()}
-          onRetryContent={() => void generation.retryContent()}
-        />
-      </div>
+      {optionLoadError || generation.submitError ? (
+        <Alert
+          variant='destructive'
+          className={cn(
+            'absolute right-4 bottom-4 max-w-md',
+            hasResults && 'bottom-36'
+          )}
+        >
+          <HugeiconsIcon
+            icon={Alert02Icon}
+            strokeWidth={2}
+            aria-hidden='true'
+          />
+          <AlertTitle>{t('Unable to submit video task')}</AlertTitle>
+          <AlertDescription>
+            {generation.submitError || t('Failed to load video options')}
+          </AlertDescription>
+        </Alert>
+      ) : null}
     </div>
   )
 }

@@ -5609,6 +5609,16 @@
     "Zhipu V4": "Zhipu V4",
     "Zoom": "Zoom",
     "Add reference content": "Add reference content",
-    "Swap first and last frames": "Swap first and last frames"
+    "Swap first and last frames": "Swap first and last frames",
+    "audio off": "audio off",
+    "audio on": "audio on",
+    "Collapse prompt input": "Collapse prompt input",
+    "Expand prompt input": "Expand prompt input",
+    "Generation mode: {{mode}}": "Generation mode: {{mode}}",
+    "Generation quantity": "Generation quantity",
+    "Video settings": "Video settings",
+    "Video settings: {{ratio}}, {{resolution}}, {{seconds}}s, {{audio}}, {{videos}}": "Video settings: {{ratio}}, {{resolution}}, {{seconds}}s, {{audio}}, {{videos}}",
+    "{{count}} video": "{{count}} video",
+    "{{count}} videos": "{{count}} videos"
   }
 }

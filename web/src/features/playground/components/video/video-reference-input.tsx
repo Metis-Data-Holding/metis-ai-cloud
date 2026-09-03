@@ -62,6 +62,7 @@ interface VideoReferenceInputProps {
   onContentChange: (content: VideoInputContent[]) => void
   onValidityChange: (valid: boolean) => void
   disabled?: boolean
+  variant?: 'default' | 'composer'
 }
 
 interface UploadedReferenceVideo {
@@ -496,6 +497,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
               type='file'
               accept={REFERENCE_CONTENT_ACCEPT}
               multiple
+              aria-label={t('Add reference content')}
               className='sr-only'
               disabled={interactionDisabled}
               onChange={(event) => void handleReferenceContent(event)}
@@ -505,6 +507,8 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
               className={cn(
                 buttonVariants({ variant: 'outline' }),
                 'cursor-pointer border-dashed',
+                props.variant === 'composer' &&
+                  'size-24 flex-col justify-center gap-1 rounded-xl px-2 text-xs',
                 interactionDisabled && 'pointer-events-none opacity-50'
               )}
             >
@@ -513,7 +517,11 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
                 ? t('Uploading video {{progress}}%', {
                     progress: uploadProgress,
                   })
-                : t('Add reference content')}
+                : t(
+                    props.variant === 'composer'
+                      ? 'Reference content'
+                      : 'Add reference content'
+                  )}
             </label>
           </div>
           <div className='flex flex-col gap-2'>

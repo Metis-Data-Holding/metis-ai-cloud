@@ -5609,6 +5609,16 @@
     "Zhipu V4": "Zhipu V4",
     "Zoom": "Zoom",
     "Add reference content": "Thêm nội dung tham chiếu",
-    "Swap first and last frames": "Hoán đổi khung hình đầu và cuối"
+    "Swap first and last frames": "Hoán đổi khung hình đầu và cuối",
+    "audio off": "không âm thanh",
+    "audio on": "có âm thanh",
+    "Collapse prompt input": "Thu gọn ô nhập lời nhắc",
+    "Expand prompt input": "Mở rộng ô nhập lời nhắc",
+    "Generation mode: {{mode}}": "Chế độ tạo: {{mode}}",
+    "Generation quantity": "Số lượng tạo",
+    "Video settings": "Cài đặt video",
+    "Video settings: {{ratio}}, {{resolution}}, {{seconds}}s, {{audio}}, {{videos}}": "Cài đặt video: {{ratio}}, {{resolution}}, {{seconds}} giây, {{audio}}, {{videos}}",
+    "{{count}} video": "{{count}} video",
+    "{{count}} videos": "{{count}} video"
   }
 }
