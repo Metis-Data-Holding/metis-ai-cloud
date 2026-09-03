@@ -116,3 +116,27 @@ Run: `git status --short` and `git diff --check`，只纳入本任务文件。
 **Step 4: Trigger and verify deployment Action**
 
 使用仓库既有 GitHub Actions 手动触发 `Deploy BytePlus ECS`，等待 Action 完成并报告 workflow run URL 与真实结果。若不可变 release 冲突，先核对镜像与 release 标识，不覆盖已有 release。
+
+### Task 6: 校准组合输入框视觉
+
+**Files:**
+- Modify: `web/src/features/playground/components/video/video-composer.tsx`
+- Modify: `web/src/features/playground/components/video/video-reference-input.tsx`
+- Modify: `web/src/features/playground/components/video/__tests__/video-playground.test.tsx`
+- Modify if needed: `web/src/i18n/locales/{en,zh,zh-TW,fr,ja,ru,vi}.json`
+
+**Step 1: Write failing regression tests**
+
+覆盖参考入口左对齐、参考区与提示区等高、白色语义输入表面、宽模式菜单、首尾帧水平布局以及尾帧文案。
+
+**Step 2: Verify the tests fail for the current UI**
+
+Run: `cd web && ./node_modules/.bin/vitest run src/features/playground/components/video/__tests__/video-playground.test.tsx`
+
+**Step 3: Apply the minimum visual changes**
+
+复用现有 DropdownMenu、PromptInput 和参考内容上传组件，只调整组合方式、语义样式与响应式布局。
+
+**Step 4: Verify affected and full frontend checks**
+
+Run from `web/`: targeted Vitest, full Vitest, `tsgo -b`, affected-file oxlint and format check, then Rsbuild production build.
