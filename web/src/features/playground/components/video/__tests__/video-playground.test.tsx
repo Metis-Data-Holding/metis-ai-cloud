@@ -226,10 +226,39 @@ describe('VideoPlayground', () => {
 
     const expand = screen.getByRole('button', { name: 'Expand prompt input' })
     expect(expand).toHaveAttribute('aria-expanded', 'false')
-    await user.click(expand)
+    expect(expand.querySelectorAll('svg')).toHaveLength(2)
     expect(
-      screen.getByRole('button', { name: 'Collapse prompt input' })
-    ).toHaveAttribute('aria-expanded', 'true')
+      expand.querySelector('[data-slot="video-expand-icon"]')
+    ).toHaveAttribute('data-state', 'collapsed')
+    await user.click(expand)
+    const collapse = screen.getByRole('button', {
+      name: 'Collapse prompt input',
+    })
+    expect(collapse).toHaveAttribute('aria-expanded', 'true')
+    expect(collapse.querySelectorAll('svg')).toHaveLength(2)
+    expect(
+      collapse.querySelector('[data-slot="video-expand-icon"]')
+    ).toHaveAttribute('data-state', 'expanded')
+  })
+
+  test('keeps the collapsed content row at the reference control height', async () => {
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    const prompt = await screen.findByRole('textbox', { name: 'Prompt' })
+    const inputGroup = prompt.closest('[data-slot="input-group"]')
+    const contentRow = prompt.closest('[data-slot="video-composer-content"]')
+
+    expect(inputGroup).toHaveClass('min-h-0')
+    expect(inputGroup).not.toHaveClass('min-h-72')
+    expect(contentRow).toHaveClass('flex-none')
+
+    await user.click(
+      screen.getByRole('button', { name: 'Expand prompt input' })
+    )
+
+    expect(inputGroup).toHaveClass('min-h-[54rem]')
+    expect(contentRow).toHaveClass('flex-1')
   })
 
   test('submits the selected quantity and moves the composer below results', async () => {

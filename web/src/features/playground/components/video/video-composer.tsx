@@ -113,12 +113,15 @@ export function VideoComposer(props: VideoComposerProps) {
       className='relative w-full'
       groupClassName={cn(
         'bg-card border-border/70 has-disabled:bg-card has-disabled:opacity-100 dark:bg-card dark:has-disabled:bg-card items-stretch rounded-2xl overflow-hidden shadow-lg ring-1 ring-foreground/5 transition-[min-height] duration-200 focus-within:border-primary/45 focus-within:ring-primary/15',
-        expanded ? 'min-h-[54rem]' : 'min-h-72'
+        expanded ? 'min-h-[54rem]' : 'min-h-0'
       )}
     >
       <div
         data-slot='video-composer-content'
-        className='flex min-w-0 flex-1 flex-col items-stretch gap-3 p-3 sm:flex-row sm:p-4'
+        className={cn(
+          'flex min-w-0 flex-col items-stretch gap-3 p-3 sm:flex-row sm:p-4',
+          expanded ? 'flex-1' : 'flex-none'
+        )}
       >
         <div
           data-slot='video-reference-area'
@@ -170,9 +173,27 @@ export function VideoComposer(props: VideoComposerProps) {
                 />
               }
             >
-              <HugeiconsIcon
-                icon={expanded ? ArrowDownLeft01Icon : ArrowUpRight01Icon}
-              />
+              <span
+                data-slot='video-expand-icon'
+                data-state={expanded ? 'expanded' : 'collapsed'}
+                className='relative size-4'
+                aria-hidden='true'
+              >
+                <HugeiconsIcon
+                  icon={ArrowDownLeft01Icon}
+                  className={cn(
+                    'absolute size-3.5',
+                    expanded ? 'top-0 right-0' : 'bottom-0 left-0'
+                  )}
+                />
+                <HugeiconsIcon
+                  icon={ArrowUpRight01Icon}
+                  className={cn(
+                    'absolute size-3.5',
+                    expanded ? 'bottom-0 left-0' : 'top-0 right-0'
+                  )}
+                />
+              </span>
             </TooltipTrigger>
             <TooltipContent>{expandLabel}</TooltipContent>
           </Tooltip>
