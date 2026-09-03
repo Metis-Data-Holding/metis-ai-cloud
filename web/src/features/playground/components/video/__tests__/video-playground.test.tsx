@@ -122,6 +122,11 @@ describe('VideoPlayground', () => {
     ).toHaveAttribute('data-layout', 'centered')
     const prompt = screen.getByRole('textbox', { name: 'Prompt' })
     expect(prompt).toBeVisible()
+    expect(
+      screen.queryByText(
+        'Submit an asynchronous Seedance video generation task.'
+      )
+    ).not.toBeInTheDocument()
     expect(prompt.closest('[data-slot="input-group"]')).toHaveClass(
       'bg-card',
       'has-disabled:opacity-100',
@@ -141,11 +146,16 @@ describe('VideoPlayground', () => {
     expect(
       referenceInput.closest('[data-slot="video-reference-input"]')
     ).toHaveClass('items-start')
+    const settingsTrigger = screen.getByRole('button', {
+      name: 'Video settings: 16:9, 720p, 5s, audio off, 1 video',
+    })
+    expect(settingsTrigger).toBeVisible()
     expect(
-      screen.getByRole('button', {
-        name: 'Video settings: 16:9, 720p, 5s, audio off, 1 video',
-      })
-    ).toBeVisible()
+      settingsTrigger.querySelector('[data-slot="video-aspect-ratio-icon"]')
+    ).toHaveAttribute('data-ratio', '16:9')
+    expect(
+      document.querySelector('[data-slot="video-composer-footer"]')
+    ).not.toHaveClass('border-t')
     expect(
       screen.queryByRole('group', { name: 'Aspect ratio' })
     ).not.toBeInTheDocument()
@@ -160,6 +170,13 @@ describe('VideoPlayground', () => {
         name: 'Video settings: 16:9, 720p, 5s, audio off, 1 video',
       })
     )
+    for (const ratio of ['16:9', '9:16', '1:1', '4:3', '3:4']) {
+      expect(
+        screen
+          .getByRole('button', { name: ratio })
+          .querySelector('[data-slot="video-aspect-ratio-icon"]')
+      ).toHaveAttribute('data-ratio', ratio)
+    }
     await user.click(screen.getByRole('button', { name: '9:16' }))
     await user.click(screen.getByRole('button', { name: '480p' }))
     await user.click(screen.getByRole('button', { name: '8s' }))
@@ -226,19 +243,17 @@ describe('VideoPlayground', () => {
 
     const expand = screen.getByRole('button', { name: 'Expand prompt input' })
     expect(expand).toHaveAttribute('aria-expanded', 'false')
-    expect(expand.querySelectorAll('svg')).toHaveLength(2)
     expect(
       expand.querySelector('[data-slot="video-expand-icon"]')
-    ).toHaveAttribute('data-state', 'collapsed')
+    ).toHaveAttribute('data-icon', 'expand')
     await user.click(expand)
     const collapse = screen.getByRole('button', {
       name: 'Collapse prompt input',
     })
     expect(collapse).toHaveAttribute('aria-expanded', 'true')
-    expect(collapse.querySelectorAll('svg')).toHaveLength(2)
     expect(
       collapse.querySelector('[data-slot="video-expand-icon"]')
-    ).toHaveAttribute('data-state', 'expanded')
+    ).toHaveAttribute('data-icon', 'collapse')
   })
 
   test('keeps the collapsed content row at the reference control height', async () => {
@@ -257,7 +272,9 @@ describe('VideoPlayground', () => {
       screen.getByRole('button', { name: 'Expand prompt input' })
     )
 
-    expect(inputGroup).toHaveClass('min-h-[54rem]')
+    expect(inputGroup).toHaveClass('min-h-[min(36rem,calc(100dvh-14rem))]')
+    expect(inputGroup).not.toHaveClass('min-h-[54rem]')
+    expect(prompt).not.toHaveClass('min-h-[44rem]')
     expect(contentRow).toHaveClass('flex-1')
   })
 

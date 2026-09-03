@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
-import { useRef } from 'react'
+import { type ReactNode, useRef } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils'
 
 interface VideoSegmentedOption<T extends string> {
   value: T
-  label: string
+  label: ReactNode
 }
 
 interface VideoSegmentedControlProps<T extends string> {
@@ -37,6 +37,7 @@ interface VideoSegmentedControlProps<T extends string> {
   scrollable?: boolean
   backwardLabel?: string
   forwardLabel?: string
+  optionClassName?: string
 }
 
 export function VideoSegmentedControl<T extends string>({
@@ -48,6 +49,7 @@ export function VideoSegmentedControl<T extends string>({
   scrollable = false,
   backwardLabel,
   forwardLabel,
+  optionClassName,
 }: VideoSegmentedControlProps<T>) {
   const viewportRef = useRef<HTMLDivElement>(null)
 
@@ -105,7 +107,8 @@ export function VideoSegmentedControl<T extends string>({
               className={cn(
                 'hover:bg-background/60 min-w-14 flex-1 border-0 bg-transparent px-3 shadow-none',
                 'aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm',
-                'data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm'
+                'data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm',
+                optionClassName
               )}
             >
               {option.label}

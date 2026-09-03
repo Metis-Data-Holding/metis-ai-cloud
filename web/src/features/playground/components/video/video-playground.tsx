@@ -233,9 +233,6 @@ export function VideoPlayground() {
               <h2 className='text-2xl font-semibold tracking-tight'>
                 {t('Create a video')}
               </h2>
-              <p className='text-muted-foreground mt-1 text-sm'>
-                {t('Submit an asynchronous Seedance video generation task.')}
-              </p>
             </div>
             {composer}
           </div>

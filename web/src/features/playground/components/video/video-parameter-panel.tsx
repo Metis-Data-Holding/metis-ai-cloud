@@ -16,8 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Settings02Icon } from '@hugeicons/core-free-icons'
-import { HugeiconsIcon } from '@hugeicons/react'
 import { useTranslation } from 'react-i18next'
 
 import { PromptInputButton } from '@/components/ai-elements/prompt-input'
@@ -60,6 +58,29 @@ type VideoParameterPanelProps = {
   onSecondsChange: (value: number) => void
 }
 
+const ASPECT_RATIO_ICON_CLASSES: Record<VideoAspectRatio, string> = {
+  '16:9': 'h-2 w-4',
+  '9:16': 'h-4 w-2',
+  '1:1': 'size-3',
+  '4:3': 'h-3 w-4',
+  '3:4': 'h-4 w-3',
+}
+
+function VideoAspectRatioIcon(props: { ratio: VideoAspectRatio }) {
+  return (
+    <span
+      data-slot='video-aspect-ratio-icon'
+      data-ratio={props.ratio}
+      className='flex size-5 shrink-0 items-center justify-center'
+      aria-hidden='true'
+    >
+      <span
+        className={`${ASPECT_RATIO_ICON_CLASSES[props.ratio]} rounded-[2px] border-[1.5px] border-current`}
+      />
+    </span>
+  )
+}
+
 function VideoParameterContent(props: VideoParameterPanelProps) {
   const { t } = useTranslation()
 
@@ -74,10 +95,16 @@ function VideoParameterContent(props: VideoParameterPanelProps) {
           value={props.ratio}
           options={VIDEO_ASPECT_RATIO_OPTIONS.map((ratio) => ({
             value: ratio,
-            label: ratio,
+            label: (
+              <>
+                <VideoAspectRatioIcon ratio={ratio} />
+                <span>{ratio}</span>
+              </>
+            ),
           }))}
           onValueChange={props.onRatioChange}
           disabled={props.disabled}
+          optionClassName='h-14 flex-col gap-1 py-1.5'
         />
       </FieldSet>
 
@@ -177,7 +204,7 @@ export function VideoParameterPanel(props: VideoParameterPanelProps) {
       disabled={props.disabled}
       className='max-w-full min-w-0'
     >
-      <HugeiconsIcon icon={Settings02Icon} data-icon='inline-start' />
+      <VideoAspectRatioIcon ratio={props.ratio} />
       <span className='truncate'>
         {props.ratio} · {props.resolution} · {props.seconds}s · {audio} ·{' '}
         {videos}

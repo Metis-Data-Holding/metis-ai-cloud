@@ -16,14 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  ArrowDownLeft01Icon,
-  ArrowUpRight01Icon,
-  AiVideoIcon,
-  Film01Icon,
-} from '@hugeicons/core-free-icons'
+import { AiVideoIcon, Film01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { ChevronDownIcon, SendIcon } from 'lucide-react'
+import {
+  ChevronDownIcon,
+  Maximize2Icon,
+  Minimize2Icon,
+  SendIcon,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -113,7 +113,7 @@ export function VideoComposer(props: VideoComposerProps) {
       className='relative w-full'
       groupClassName={cn(
         'bg-card border-border/70 has-disabled:bg-card has-disabled:opacity-100 dark:bg-card dark:has-disabled:bg-card items-stretch rounded-2xl overflow-hidden shadow-lg ring-1 ring-foreground/5 transition-[min-height] duration-200 focus-within:border-primary/45 focus-within:ring-primary/15',
-        expanded ? 'min-h-[54rem]' : 'min-h-0'
+        expanded ? 'min-h-[min(36rem,calc(100dvh-14rem))]' : 'min-h-0'
       )}
     >
       <div
@@ -157,10 +157,7 @@ export function VideoComposer(props: VideoComposerProps) {
             placeholder={t(
               'Describe the scene, motion, camera, lighting, and style...'
             )}
-            className={cn(
-              'h-full max-h-none min-h-28 resize-none pr-12 text-base leading-7',
-              expanded && 'min-h-[44rem]'
-            )}
+            className='h-full max-h-none min-h-28 resize-none pr-12 text-base leading-7'
           />
           <Tooltip>
             <TooltipTrigger
@@ -173,34 +170,29 @@ export function VideoComposer(props: VideoComposerProps) {
                 />
               }
             >
-              <span
-                data-slot='video-expand-icon'
-                data-state={expanded ? 'expanded' : 'collapsed'}
-                className='relative size-4'
-                aria-hidden='true'
-              >
-                <HugeiconsIcon
-                  icon={ArrowDownLeft01Icon}
-                  className={cn(
-                    'absolute size-3.5',
-                    expanded ? 'top-0 right-0' : 'bottom-0 left-0'
-                  )}
+              {expanded ? (
+                <Minimize2Icon
+                  data-slot='video-expand-icon'
+                  data-icon='collapse'
+                  aria-hidden='true'
                 />
-                <HugeiconsIcon
-                  icon={ArrowUpRight01Icon}
-                  className={cn(
-                    'absolute size-3.5',
-                    expanded ? 'bottom-0 left-0' : 'top-0 right-0'
-                  )}
+              ) : (
+                <Maximize2Icon
+                  data-slot='video-expand-icon'
+                  data-icon='expand'
+                  aria-hidden='true'
                 />
-              </span>
+              )}
             </TooltipTrigger>
             <TooltipContent>{expandLabel}</TooltipContent>
           </Tooltip>
         </div>
       </div>
 
-      <PromptInputFooter className='border-border/60 bg-card flex-wrap border-t px-3 py-2.5'>
+      <PromptInputFooter
+        data-slot='video-composer-footer'
+        className='bg-card flex-wrap px-3 py-2.5'
+      >
         <div className='flex min-w-0 flex-1 flex-wrap items-center gap-1'>
           <DropdownMenu>
             <DropdownMenuTrigger
