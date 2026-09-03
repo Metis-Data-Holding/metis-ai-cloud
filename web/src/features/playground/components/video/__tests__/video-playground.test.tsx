@@ -124,7 +124,8 @@ describe('VideoPlayground', () => {
     expect(prompt).toBeVisible()
     expect(prompt.closest('[data-slot="input-group"]')).toHaveClass(
       'bg-card',
-      'has-disabled:opacity-100'
+      'has-disabled:opacity-100',
+      'items-stretch'
     )
     expect(prompt.closest('[data-slot="video-prompt-area"]')).toHaveClass(
       'min-h-28'
@@ -136,11 +137,7 @@ describe('VideoPlayground', () => {
       'data-slot',
       'video-reference-picker'
     )
-    expect(referenceInput.labels?.[0]).toHaveClass(
-      'h-full',
-      'min-h-28',
-      'w-28'
-    )
+    expect(referenceInput.labels?.[0]).toHaveClass('aspect-square', 'size-28')
     expect(
       referenceInput.closest('[data-slot="video-reference-input"]')
     ).toHaveClass('items-start')
@@ -189,10 +186,9 @@ describe('VideoPlayground', () => {
       selector: '[data-slot="dropdown-menu-label"]',
     })
     expect(menuLabel).toBeVisible()
-    expect(menuLabel.closest('[data-slot="dropdown-menu-content"]')).toHaveClass(
-      'w-64',
-      'rounded-2xl'
-    )
+    expect(
+      menuLabel.closest('[data-slot="dropdown-menu-content"]')
+    ).toHaveClass('w-64', 'rounded-2xl')
     expect(
       screen.getByRole('menuitemradio', { name: 'Reference generation' })
     ).toHaveClass('data-checked:bg-accent')
@@ -204,11 +200,29 @@ describe('VideoPlayground', () => {
     expect(
       screen.queryByLabelText('Last frame (optional)')
     ).not.toBeInTheDocument()
+    const firstFrameInput = screen.getByLabelText('First frame')
+    const lastFrameInput = screen.getByLabelText('Last frame')
+    expect(firstFrameInput).toBeInstanceOf(HTMLInputElement)
+    expect(lastFrameInput).toBeInstanceOf(HTMLInputElement)
+    if (
+      !(firstFrameInput instanceof HTMLInputElement) ||
+      !(lastFrameInput instanceof HTMLInputElement)
+    ) {
+      return
+    }
     expect(
-      screen.getByLabelText('First frame').closest(
-        '[data-slot="video-keyframe-inputs"]'
-      )
-    ).toHaveClass('items-center')
+      firstFrameInput.closest('[data-slot="video-keyframe-inputs"]')
+    ).toHaveClass('items-center', 'justify-start')
+    expect(firstFrameInput.labels?.[0]).toHaveClass('size-full')
+    expect(lastFrameInput.labels?.[0]).toHaveClass('size-full')
+    expect(firstFrameInput.labels?.[0]?.parentElement).toHaveClass(
+      'aspect-square',
+      'sm:size-28'
+    )
+    expect(lastFrameInput.labels?.[0]?.parentElement).toHaveClass(
+      'aspect-square',
+      'sm:size-28'
+    )
 
     const expand = screen.getByRole('button', { name: 'Expand prompt input' })
     expect(expand).toHaveAttribute('aria-expanded', 'false')

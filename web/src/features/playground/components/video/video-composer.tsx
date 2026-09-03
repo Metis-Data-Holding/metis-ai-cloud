@@ -112,7 +112,7 @@ export function VideoComposer(props: VideoComposerProps) {
       onSubmit={submit}
       className='relative w-full'
       groupClassName={cn(
-        'bg-card border-border/70 has-disabled:bg-card has-disabled:opacity-100 dark:bg-card dark:has-disabled:bg-card rounded-2xl overflow-hidden shadow-lg ring-1 ring-foreground/5 transition-[min-height] duration-200 focus-within:border-primary/45 focus-within:ring-primary/15',
+        'bg-card border-border/70 has-disabled:bg-card has-disabled:opacity-100 dark:bg-card dark:has-disabled:bg-card items-stretch rounded-2xl overflow-hidden shadow-lg ring-1 ring-foreground/5 transition-[min-height] duration-200 focus-within:border-primary/45 focus-within:ring-primary/15',
         expanded ? 'min-h-[54rem]' : 'min-h-72'
       )}
     >

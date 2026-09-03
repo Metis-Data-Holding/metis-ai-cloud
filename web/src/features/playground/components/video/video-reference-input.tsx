@@ -409,7 +409,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
     const item = props.content.find((content) => content.role === role)
     const inputId = `video-${role}`
     return (
-      <div className='relative h-full min-w-0 flex-1'>
+      <div className='relative aspect-square size-24 shrink-0 sm:size-28'>
         <input
           id={inputId}
           type='file'
@@ -421,7 +421,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
         <label
           htmlFor={inputId}
           className={cn(
-            'border-border bg-muted/30 hover:bg-muted/60 flex h-full min-h-28 cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border border-dashed transition-colors',
+            'border-border bg-muted/30 hover:bg-muted/60 flex size-full cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border border-dashed transition-colors',
             props.disabled && 'pointer-events-none opacity-50'
           )}
         >
@@ -462,7 +462,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
     >
       {props.mode === 'reference' ? (
         <>
-          <div className='flex h-full flex-wrap items-start justify-start gap-2'>
+          <div className='flex flex-wrap items-start justify-start gap-2'>
             {props.content
               .filter((item) => item.role === 'reference_image')
               .map((item, index) => {
@@ -511,7 +511,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
                 buttonVariants({ variant: 'outline' }),
                 'cursor-pointer border-dashed',
                 props.variant === 'composer' &&
-                  'h-full min-h-28 w-28 flex-col justify-center gap-1 rounded-xl px-2 text-xs',
+                  'aspect-square size-28 flex-col justify-center gap-1 rounded-xl px-2 text-xs',
                 interactionDisabled && 'pointer-events-none opacity-50'
               )}
               data-slot='video-reference-picker'
@@ -563,7 +563,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
       ) : (
         <div
           data-slot='video-keyframe-inputs'
-          className='flex h-full min-h-28 w-full min-w-0 items-center gap-3'
+          className='flex min-h-28 w-full min-w-0 items-center justify-start gap-2 sm:gap-3'
         >
           {frameSlot('first_frame', t('First frame'))}
           <Button
