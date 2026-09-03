@@ -354,7 +354,7 @@ describe('VideoPlayground', () => {
     expect(input.labels?.[0]).toHaveClass('cursor-pointer')
   })
 
-  test('removes 1080p when a Seedance 2.0 task includes image input', async () => {
+  test('disables 1080p with a tooltip when Seedance 2.0 includes image input', async () => {
     vi.mocked(getUserModels).mockResolvedValue([
       {
         label: 'dreamina-seedance-2-0-260128',
@@ -372,13 +372,24 @@ describe('VideoPlayground', () => {
       new File(['image'], 'reference.png', { type: 'image/png' })
     )
 
-    await waitFor(() =>
-      expect(
-        screen.getByRole('button', {
-          name: 'Video settings: 16:9, 720p, 5s, audio off, 1 video',
-        })
-      ).toBeVisible()
-    )
+    await openVideoSettings(user)
+    const disabledResolution = screen.getByRole('button', { name: '1080p' })
+    expect(disabledResolution).toBeDisabled()
+
+    const reason = '1080p is unavailable when reference images are included.'
+    const tooltipTrigger = screen.getByLabelText(reason)
+    expect(tooltipTrigger).toHaveAttribute('title', reason)
+
+    expect(
+      screen.getByRole('button', {
+        name: '720p',
+      })
+    ).toHaveAttribute('aria-pressed', 'true')
+    expect(
+      screen.getByRole('button', {
+        name: 'Video settings: 16:9, 720p, 5s, audio off, 1 video',
+      })
+    ).toBeVisible()
   })
 
   test('offers every duration from 5 through 15 seconds in a scrollable segmented control', async () => {
@@ -599,7 +610,7 @@ describe('VideoPlayground', () => {
     )
   })
 
-  test('keeps 1080p for reference-video-only generation and removes it after adding an image', async () => {
+  test('keeps 1080p enabled for video-only references and disables it after adding an image', async () => {
     const user = userEvent.setup()
     vi.mocked(getUserModels).mockResolvedValue([
       {
@@ -622,9 +633,7 @@ describe('VideoPlayground', () => {
       new File(['image'], 'subject.png', { type: 'image/png' })
     )
     await openVideoSettings(user)
-    expect(
-      screen.queryByRole('button', { name: '1080p' })
-    ).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '1080p' })).toBeDisabled()
   })
 
   test('uploads a local reference video and submits its signed URL', async () => {

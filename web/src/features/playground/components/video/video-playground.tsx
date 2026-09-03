@@ -44,6 +44,7 @@ import {
   buildVideoGenerationRequest,
   getVideoResolutionOptions,
   isSupportedVideoPlaygroundModel,
+  isVideoResolutionDisabled,
   normalizeVideoResolution,
 } from '../../lib/video/video-generation'
 import type {
@@ -98,6 +99,9 @@ export function VideoPlayground() {
   const resolutions = values.model
     ? getVideoResolutionOptions(values.model, hasImageInput)
     : []
+  const disabledResolutions = resolutions.filter((resolution) =>
+    isVideoResolutionDisabled(values.model, resolution, hasImageInput)
+  )
 
   useEffect(() => {
     if (groups.length === 0) return
@@ -194,6 +198,7 @@ export function VideoPlayground() {
       ratio={values.ratio}
       resolution={values.resolution}
       resolutions={resolutions}
+      disabledResolutions={disabledResolutions}
       seconds={values.seconds}
       onAudioChange={(value) => form.setValue('generateAudio', value)}
       onGroupChange={handleGroupChange}

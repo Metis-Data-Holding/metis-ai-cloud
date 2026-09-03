@@ -82,6 +82,7 @@ type VideoComposerProps = {
   ratio: VideoAspectRatio
   resolution: VideoResolution
   resolutions: VideoResolution[]
+  disabledResolutions: VideoResolution[]
   seconds: number
   onAudioChange: (value: boolean) => void
   onGroupChange: (value: string) => void
@@ -352,6 +353,7 @@ export function VideoComposer(props: VideoComposerProps) {
             ratio={props.ratio}
             resolution={props.resolution}
             resolutions={props.resolutions}
+            disabledResolutions={props.disabledResolutions}
             seconds={props.seconds}
             onAudioChange={props.onAudioChange}
             onQuantityChange={props.onQuantityChange}

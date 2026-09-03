@@ -227,10 +227,10 @@ describe('video model constraints', () => {
     ])
   })
 
-  test('excludes 1080p and normalizes it to 720p when an image is provided', () => {
+  test('keeps 1080p visible but normalizes it to 720p when an image is provided', () => {
     expect(
       getVideoResolutionOptions('dreamina-seedance-2-0-260128', true)
-    ).toEqual(['480p', '720p', '4k'])
+    ).toEqual(['480p', '720p', '1080p', '4k'])
     expect(
       normalizeVideoResolution('dreamina-seedance-2-0-260128', '1080p', true)
     ).toBe('720p')

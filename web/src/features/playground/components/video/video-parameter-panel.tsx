@@ -50,6 +50,7 @@ type VideoParameterPanelProps = {
   ratio: VideoAspectRatio
   resolution: VideoResolution
   resolutions: VideoResolution[]
+  disabledResolutions: VideoResolution[]
   seconds: number
   onAudioChange: (value: boolean) => void
   onQuantityChange: (value: number) => void
@@ -83,6 +84,9 @@ function VideoAspectRatioIcon(props: { ratio: VideoAspectRatio }) {
 
 function VideoParameterContent(props: VideoParameterPanelProps) {
   const { t } = useTranslation()
+  const referenceImageResolutionReason = t(
+    '1080p is unavailable when reference images are included.'
+  )
 
   return (
     <div className='flex min-w-0 flex-col gap-5 overflow-y-auto p-1'>
@@ -118,6 +122,10 @@ function VideoParameterContent(props: VideoParameterPanelProps) {
           options={props.resolutions.map((resolution) => ({
             value: resolution,
             label: resolution,
+            disabled: props.disabledResolutions.includes(resolution),
+            disabledReason: props.disabledResolutions.includes(resolution)
+              ? referenceImageResolutionReason
+              : undefined,
           }))}
           onValueChange={props.onResolutionChange}
           disabled={props.disabled}

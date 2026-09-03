@@ -4124,6 +4124,7 @@
     "Resetting...": "重置中...",
     "Resize column": "调整列宽",
     "Resolution": "分辨率",
+    "1080p is unavailable when reference images are included.": "包含参考图片时暂不支持 1080p。",
     "Resolve Conflicts": "解决冲突",
     "Resource Configuration": "资源配置",
     "Resources": "资源",

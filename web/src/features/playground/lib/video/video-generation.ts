@@ -36,14 +36,24 @@ export function isSupportedVideoPlaygroundModel(model: string): boolean {
 
 export function getVideoResolutionOptions(
   model: string,
-  hasImageInput = false
+  _hasImageInput = false
 ): VideoResolution[] {
   if (model.toLowerCase().includes('seedance-2-0-fast')) {
     return FAST_RESOLUTIONS
   }
-  return hasImageInput
-    ? FULL_RESOLUTIONS.filter((resolution) => resolution !== '1080p')
-    : FULL_RESOLUTIONS
+  return FULL_RESOLUTIONS
+}
+
+export function isVideoResolutionDisabled(
+  model: string,
+  resolution: VideoResolution,
+  hasImageInput = false
+): boolean {
+  return (
+    hasImageInput &&
+    resolution === '1080p' &&
+    model.toLowerCase().includes('dreamina-seedance-2-0-260128')
+  )
 }
 
 export function normalizeVideoResolution(
@@ -52,7 +62,8 @@ export function normalizeVideoResolution(
   hasImageInput = false
 ): VideoResolution {
   const options = getVideoResolutionOptions(model, hasImageInput)
-  return options.includes(resolution) ? resolution : '720p'
+  const isDisabled = isVideoResolutionDisabled(model, resolution, hasImageInput)
+  return options.includes(resolution) && !isDisabled ? resolution : '720p'
 }
 
 export function buildVideoGenerationRequest(

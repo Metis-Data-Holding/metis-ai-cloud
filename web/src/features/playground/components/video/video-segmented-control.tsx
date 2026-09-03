@@ -21,9 +21,17 @@ import { type ReactNode, useRef } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 interface VideoSegmentedOption<T extends string> {
+  disabled?: boolean
+  disabledReason?: string
   value: T
   label: ReactNode
 }
@@ -87,34 +95,59 @@ export function VideoSegmentedControl<T extends string>({
           scrollable ? 'touch-pan-x overflow-x-auto' : 'overflow-hidden'
         )}
       >
-        <ToggleGroup
-          aria-labelledby={labelledBy}
-          value={[value]}
-          onValueChange={(values) => {
-            const nextValue = values[0] as T | undefined
-            if (nextValue) {
-              onValueChange(nextValue)
-            }
-          }}
-          spacing={1}
-          className={cn('w-full', scrollable && 'min-w-max')}
-        >
-          {options.map((option) => (
-            <ToggleGroupItem
-              key={option.value}
-              value={option.value}
-              disabled={disabled}
-              className={cn(
-                'hover:bg-background/60 min-w-14 flex-1 border-0 bg-transparent px-3 shadow-none',
-                'aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm',
-                'data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm',
-                optionClassName
-              )}
-            >
-              {option.label}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+        <TooltipProvider delay={200}>
+          <ToggleGroup
+            aria-labelledby={labelledBy}
+            value={[value]}
+            onValueChange={(values) => {
+              const nextValue = values[0] as T | undefined
+              if (nextValue) {
+                onValueChange(nextValue)
+              }
+            }}
+            spacing={1}
+            className={cn('w-full', scrollable && 'min-w-max')}
+          >
+            {options.map((option) => {
+              const optionButton = (
+                <ToggleGroupItem
+                  key={option.value}
+                  value={option.value}
+                  disabled={disabled || option.disabled}
+                  className={cn(
+                    'hover:bg-background/60 min-w-14 w-full flex-1 border-0 bg-transparent px-3 shadow-none',
+                    'aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm',
+                    'data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm',
+                    optionClassName
+                  )}
+                >
+                  {option.label}
+                </ToggleGroupItem>
+              )
+
+              if (!option.disabledReason) {
+                return optionButton
+              }
+
+              return (
+                <Tooltip key={option.value}>
+                  <TooltipTrigger
+                    render={
+                      <span
+                        aria-label={option.disabledReason}
+                        title={option.disabledReason}
+                        className='flex min-w-14 flex-1'
+                      />
+                    }
+                  >
+                    {optionButton}
+                  </TooltipTrigger>
+                  <TooltipContent>{option.disabledReason}</TooltipContent>
+                </Tooltip>
+              )
+            })}
+          </ToggleGroup>
+        </TooltipProvider>
       </div>
 
       {scrollable ? (
