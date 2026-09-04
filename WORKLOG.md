@@ -160,3 +160,13 @@
 - 图片与视频不再按类型重排，界面编号、提示词 `@图片N / @视频N` 与提交给 BytePlus 的 `metadata.content` 使用同一顺序；提示词输入 `@` 后可直接选择当前素材引用。
 - 根据 BytePlus 官方限制保留分辨率条件：Seedance 2.0 仅参考视频时仍支持 1080p，加入参考图片后隐藏 1080p；Fast 模型继续限制为 480p / 720p。
 - 前端 65 个测试文件共 460 项测试、TypeScript、受影响文件 lint / format、7 语言 i18n 同步及生产构建通过；本地浏览器因未登录只到达登录页，真实部署页面视觉仍需在发布后核对。
+
+## 2026-09-04
+
+### 同步 upstream/main 至 3a9f41ee8
+
+- 合并 upstream/main 新增的 14 个提交，覆盖 Relay / RelayKit 转换完整性、任务插件与轮询、日志元数据权限隔离、会话鉴权缓存、ETag 和 Release 标签版本等变更。
+- 冲突处理保留本仓库协作规范与视频能力，合并 `.gitignore` 规则；Doubao 任务插件版本递增至 `1.1.1`，同时保留本地 BytePlus / Dreamina 适配与 upstream 的未知任务状态处理；用量日志保留本地任务计费字段并采用 upstream 的 `admin_info.reject_reason` 安全边界。
+- Go 全量测试、主模块与 `relaykit` 的 vet / build、前端 66 个测试文件共 464 项测试、TypeScript、受影响文件 lint / format、前端生产构建及 GitHub Actions 静态检查通过。
+- MySQL / PostgreSQL 真实数据库回归未执行：upstream 新增的系统任务状态修复虽包含 SQLite 测试，但注释引用的 configured-databases 测试函数实际不存在；本次按同步边界不额外夹带本地补丁。
+- 全仓前端 lint 与 format 仍存在同步前已有存量问题；本次变更文件没有新增 lint / format 违规。
