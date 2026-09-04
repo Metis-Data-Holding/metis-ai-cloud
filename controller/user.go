@@ -695,10 +695,29 @@ func GetUserModels(c *gin.Context) {
 		models = filterUserModelsByEndpointType(models, endpointType, supported)
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    models,
+		"success":             true,
+		"message":             "",
+		"data":                models,
+		"model_display_names": getUserModelDisplayNames(models),
 	})
+}
+
+func getUserModelDisplayNames(modelNames []string) map[string]string {
+	selected := make(map[string]struct{}, len(modelNames))
+	for _, modelName := range modelNames {
+		selected[modelName] = struct{}{}
+	}
+
+	displayNames := make(map[string]string)
+	for _, pricing := range model.GetPricing() {
+		if _, ok := selected[pricing.ModelName]; !ok {
+			continue
+		}
+		if displayName := strings.TrimSpace(pricing.DisplayName); displayName != "" {
+			displayNames[pricing.ModelName] = displayName
+		}
+	}
+	return displayNames
 }
 
 func filterUserModelsByEndpointType(models []string, endpointType string, supported map[string][]constant.EndpointType) []string {

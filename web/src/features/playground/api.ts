@@ -65,6 +65,20 @@ export async function uploadVideoReference(
 /**
  * Get user available models
  */
+export function toModelOptions(
+  models: string[],
+  displayNames?: Record<string, string>
+): ModelOption[] {
+  return models.map((model) => {
+    const displayName = displayNames?.[model]
+    const label = typeof displayName === 'string' ? displayName.trim() : ''
+    if (!label || label === model) {
+      return { label: model, value: model }
+    }
+    return { label, value: model }
+  })
+}
+
 export async function getUserModels(
   group: string,
   endpointType?: string
@@ -78,10 +92,11 @@ export async function getUserModels(
     return []
   }
 
-  return data.data.map((model: string) => ({
-    label: model,
-    value: model,
-  }))
+  const displayNames =
+    data.model_display_names && typeof data.model_display_names === 'object'
+      ? (data.model_display_names as Record<string, string>)
+      : undefined
+  return toModelOptions(data.data, displayNames)
 }
 
 export async function submitVideoGeneration(

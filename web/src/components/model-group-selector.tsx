@@ -776,16 +776,23 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
                 }
                 value={model.value}
               >
-                <span
-                  className={cn(
-                    'min-w-0 truncate',
-                    selectedModel === model.value
-                      ? modelGroupSelectorLayoutClasses.selectedModelText
-                      : modelGroupSelectorLayoutClasses.unselectedModelText
+                <div className='min-w-0 flex-1'>
+                  <span
+                    className={cn(
+                      'block truncate',
+                      selectedModel === model.value
+                        ? modelGroupSelectorLayoutClasses.selectedModelText
+                        : modelGroupSelectorLayoutClasses.unselectedModelText
+                    )}
+                  >
+                    {model.label}
+                  </span>
+                  {model.label !== model.value && (
+                    <span className='text-muted-foreground block truncate font-mono text-[10px] leading-4 font-normal'>
+                      {model.value}
+                    </span>
                   )}
-                >
-                  {model.label}
-                </span>
+                </div>
                 <Check
                   className={cn(
                     'size-3.5 shrink-0',

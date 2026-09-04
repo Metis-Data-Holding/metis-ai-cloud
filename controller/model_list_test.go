@@ -30,8 +30,9 @@ type listModelsResponse struct {
 }
 
 type userModelsResponse struct {
-	Success bool     `json:"success"`
-	Data    []string `json:"data"`
+	Success           bool              `json:"success"`
+	Data              []string          `json:"data"`
+	ModelDisplayNames map[string]string `json:"model_display_names"`
 }
 
 func setupModelListControllerTestDB(t *testing.T) *gorm.DB {
@@ -179,6 +180,45 @@ func decodeUserModelsResponse(t *testing.T, recorder *httptest.ResponseRecorder)
 	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
 	require.True(t, payload.Success)
 	return payload.Data
+}
+
+func TestGetUserModelsIncludesDisplayNamesWithoutChangingModelIds(t *testing.T) {
+	db := setupModelListControllerTestDB(t)
+	require.NoError(t, db.Create(&model.User{
+		Id:       1003,
+		Username: "playground-display-name-user",
+		Password: "password",
+		Group:    "default",
+		Status:   common.UserStatusEnabled,
+	}).Error)
+	require.NoError(t, db.Create(&[]model.Ability{
+		{Group: "default", Model: "dreamina-seedance-2-0-260128", ChannelId: 1, Enabled: true},
+		{Group: "default", Model: "model-without-display-name", ChannelId: 1, Enabled: true},
+	}).Error)
+	require.NoError(t, db.Create(&[]model.Model{
+		{ModelName: "dreamina-seedance-2-0-260128", DisplayName: "  Seedance 2.0  ", Status: 1},
+		{ModelName: "model-without-display-name", DisplayName: "   ", Status: 1},
+	}).Error)
+	model.InvalidatePricingCache()
+	t.Cleanup(model.InvalidatePricingCache)
+
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(http.MethodGet, "/api/user/models?group=default", nil)
+	context.Set("id", 1003)
+
+	GetUserModels(context)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var payload userModelsResponse
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	require.ElementsMatch(t, []string{
+		"dreamina-seedance-2-0-260128",
+		"model-without-display-name",
+	}, payload.Data)
+	assert.Equal(t, map[string]string{
+		"dreamina-seedance-2-0-260128": "Seedance 2.0",
+	}, payload.ModelDisplayNames)
 }
 
 func TestGetUserModelsFiltersByRequestedGroup(t *testing.T) {
