@@ -250,41 +250,48 @@ func OpenVideoReference(directory, fileID string) (*os.File, string, error) {
 	return file, contentType, nil
 }
 
-func CleanupVideoReferenceUploads(directory string, now time.Time) (VideoReferenceCleanupResult, error) {
+func CleanupVideoReferenceUploads(directory string, now time.Time, reportProgress func(processed, total int)) (VideoReferenceCleanupResult, error) {
 	result := VideoReferenceCleanupResult{}
 	entries, err := os.ReadDir(directory)
 	if errors.Is(err, os.ErrNotExist) {
+		if reportProgress != nil {
+			reportProgress(0, 0)
+		}
 		return result, nil
 	}
 	if err != nil {
 		return result, err
 	}
-	for _, entry := range entries {
+	if reportProgress != nil {
+		reportProgress(0, len(entries))
+	}
+	for index, entry := range entries {
 		result.Scanned++
 		name := entry.Name()
 		isFinal := videoReferenceFilePattern.MatchString(name)
 		isUploading := videoReferenceUploadingPattern.MatchString(name)
-		if !isFinal && !isUploading {
-			continue
+		if isFinal || isUploading {
+			info, infoErr := entry.Info()
+			if infoErr != nil || !info.Mode().IsRegular() {
+				result.Failed++
+			} else {
+				ttl := VideoReferenceTTL
+				if isUploading {
+					ttl = VideoReferenceUploadingTTL
+				}
+				if now.Sub(info.ModTime()) > ttl {
+					if removeErr := os.Remove(filepath.Join(directory, name)); removeErr != nil {
+						result.Failed++
+					} else {
+						result.Deleted++
+						result.FreedBytes += info.Size()
+					}
+				}
+			}
 		}
-		info, infoErr := entry.Info()
-		if infoErr != nil || !info.Mode().IsRegular() {
-			result.Failed++
-			continue
+		if reportProgress != nil {
+			reportProgress(index+1, len(entries))
 		}
-		ttl := VideoReferenceTTL
-		if isUploading {
-			ttl = VideoReferenceUploadingTTL
-		}
-		if now.Sub(info.ModTime()) <= ttl {
-			continue
-		}
-		if removeErr := os.Remove(filepath.Join(directory, name)); removeErr != nil {
-			result.Failed++
-			continue
-		}
-		result.Deleted++
-		result.FreedBytes += info.Size()
 	}
 	return result, nil
 }

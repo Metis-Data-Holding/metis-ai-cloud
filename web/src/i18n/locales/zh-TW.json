@@ -5624,6 +5624,9 @@
     "Zero retention": "零數據保留",
     "Zhipu": "智譜",
     "Zhipu V4": "智譜 V4",
-    "Zoom": "縮放"
+    "Zoom": "縮放",
+    "Optional user-facing name; the model ID used by APIs and routing remains unchanged.": "可選的使用者介面顯示名稱；API 與路由使用的模型 ID 保持不變。",
+    "Reference content cleanup": "參考內容清理",
+    "Scanned {{scanned}} reference video files; cleaned {{deleted}}, failed {{failed}}, freed {{size}}.": "已掃描 {{scanned}} 個參考影片檔案；清理 {{deleted}} 個，失敗 {{failed}} 個，釋放 {{size}}。"
   }
 }

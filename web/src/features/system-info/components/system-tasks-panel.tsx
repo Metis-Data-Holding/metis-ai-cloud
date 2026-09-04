@@ -42,6 +42,11 @@ import { toIntlLocale } from '@/i18n/languages'
 import { formatTimestampRelative, formatTimestampToDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
+import {
+  getSystemTaskDetail,
+  getSystemTaskTypeLabel,
+} from '../lib/system-task-display'
+
 const TASK_LIMIT = 20
 const ACTIVE_POLL_INTERVAL_MS = 8000
 
@@ -74,16 +79,6 @@ const PROGRESS_BAR_CLASS_NAME: Record<SystemTaskStatus, string> = {
   running: '[&_[data-slot=progress-indicator]]:bg-sky-500',
   succeeded: '[&_[data-slot=progress-indicator]]:bg-emerald-500',
   failed: '[&_[data-slot=progress-indicator]]:bg-destructive',
-}
-
-// Maps backend system task type constants to i18n source keys. Unknown/future
-// types fall back to their raw identifier so the panel never shows blank.
-const TYPE_LABEL: Record<string, string> = {
-  log_cleanup: 'Log cleanup',
-  channel_test: 'Batch channel test',
-  model_update: 'Batch upstream model update',
-  midjourney_poll: 'Drawing task polling',
-  async_task_poll: 'Async task polling',
 }
 
 const TYPE_DISPLAY_ID: Record<string, string> = {
@@ -135,12 +130,18 @@ function SystemTasksTable(props: SystemTasksTableProps) {
         <TableBody>
           {props.tasks.map((task) => {
             const progress = getProgress(task)
+            const detail = getSystemTaskDetail(task)
+            let detailText = '-'
+            if (detail) {
+              detailText =
+                'text' in detail ? detail.text : t(detail.key, detail.values)
+            }
             return (
               <TableRow key={task.task_id} className='hover:bg-muted/30'>
                 <TableCell className='px-4 py-3 align-middle'>
                   <div className='space-y-0.5'>
                     <div className='font-medium'>
-                      {t(TYPE_LABEL[task.type] ?? task.type)}
+                      {t(getSystemTaskTypeLabel(task.type))}
                     </div>
                     <div className='text-muted-foreground font-mono text-[11px]'>
                       {TYPE_DISPLAY_ID[task.type] ?? task.type}
@@ -190,10 +191,13 @@ function SystemTasksTable(props: SystemTasksTableProps) {
                   )}
                 </TableCell>
                 <TableCell
-                  className='text-destructive max-w-[220px] truncate py-3 pr-4 align-middle text-xs'
-                  title={task.error || undefined}
+                  className={cn(
+                    'text-muted-foreground max-w-[220px] truncate py-3 pr-4 align-middle text-xs',
+                    detail?.destructive && 'text-destructive'
+                  )}
+                  title={detailText === '-' ? undefined : detailText}
                 >
-                  {task.error || '-'}
+                  {detailText}
                 </TableCell>
               </TableRow>
             )

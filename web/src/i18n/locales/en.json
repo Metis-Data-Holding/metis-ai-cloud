@@ -5624,6 +5624,9 @@
     "Zero retention": "Zero retention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Optional user-facing name; the model ID used by APIs and routing remains unchanged.": "Optional user-facing name; the model ID used by APIs and routing remains unchanged.",
+    "Reference content cleanup": "Reference content cleanup",
+    "Scanned {{scanned}} reference video files; cleaned {{deleted}}, failed {{failed}}, freed {{size}}.": "Scanned {{scanned}} reference video files; cleaned {{deleted}}, failed {{failed}}, freed {{size}}."
   }
 }

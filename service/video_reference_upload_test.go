@@ -111,7 +111,7 @@ func TestCleanupVideoReferenceUploadsUsesSeparateTTLs(t *testing.T) {
 	write("freshuploadfreshupload12.mov.uploading", 30*time.Minute)
 	write("unrelated.txt", 100*time.Hour)
 
-	result, err := CleanupVideoReferenceUploads(dir, now)
+	result, err := CleanupVideoReferenceUploads(dir, now, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, 5, result.Scanned)
@@ -122,4 +122,42 @@ func TestCleanupVideoReferenceUploadsUsesSeparateTTLs(t *testing.T) {
 	require.NoError(t, err)
 	_, err = os.Stat(filepath.Join(dir, "unrelated.txt"))
 	require.NoError(t, err)
+}
+
+func TestCleanupVideoReferenceUploadsReportsScannedProgress(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Unix(1_700_000_000, 0)
+	for _, name := range []string{
+		"oldoldoldoldoldoldoldold.mp4",
+		"freshfreshfreshfreshfresh1.mov",
+		"unrelated.txt",
+	} {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("1234"), 0o600))
+	}
+	require.NoError(t, os.Chtimes(
+		filepath.Join(dir, "oldoldoldoldoldoldoldold.mp4"),
+		now.Add(-51*time.Hour),
+		now.Add(-51*time.Hour),
+	))
+
+	var progress [][2]int
+	result, err := CleanupVideoReferenceUploads(dir, now, func(processed, total int) {
+		progress = append(progress, [2]int{processed, total})
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, [][2]int{{0, 3}, {1, 3}, {2, 3}, {3, 3}}, progress)
+	assert.Equal(t, 3, result.Scanned)
+	assert.Equal(t, 1, result.Deleted)
+}
+
+func TestCleanupVideoReferenceUploadsReportsCompletionForMissingDirectory(t *testing.T) {
+	var progress [][2]int
+	result, err := CleanupVideoReferenceUploads(filepath.Join(t.TempDir(), "missing"), time.Now(), func(processed, total int) {
+		progress = append(progress, [2]int{processed, total})
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, [][2]int{{0, 0}}, progress)
+	assert.Zero(t, result.Scanned)
 }

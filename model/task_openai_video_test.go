@@ -4,9 +4,32 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestInitTaskSnapshotsConfiguredModelDisplayName(t *testing.T) {
+	resetPricingEndpointTestTables(t)
+	insertPricingEndpointChannel(t, 106, constant.ChannelTypeOpenAI, dto.ChannelOtherSettings{})
+	insertPricingEndpointAbility(t, 106, "dreamina-seedance-2-0-260128")
+	require.NoError(t, DB.Create(&Model{
+		ModelName:   "dreamina-seedance-2-0-260128",
+		DisplayName: "Seedance 2.0",
+		Status:      1,
+	}).Error)
+
+	task := InitTask(constant.TaskPlatform("doubao"), &relaycommon.RelayInfo{
+		OriginModelName: "dreamina-seedance-2-0-260128",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "ep-20260904",
+		},
+	})
+
+	assert.Equal(t, "Seedance 2.0", task.Properties.DisplayModelName)
+}
 
 func TestTaskToOpenAIVideoDoesNotExposeResultURL(t *testing.T) {
 	task := &Task{

@@ -180,6 +180,24 @@ func TestPricingModelMetadataEndpointsMergeWithAdvancedCustomInference(t *testin
 	}, byModel["gemini-2.5-flash"])
 }
 
+func TestPricingExposesConfiguredModelDisplayName(t *testing.T) {
+	resetPricingEndpointTestTables(t)
+
+	insertPricingEndpointChannel(t, 105, constant.ChannelTypeOpenAI, dto.ChannelOtherSettings{})
+	insertPricingEndpointAbility(t, 105, "dreamina-seedance-2-0-260128")
+	require.NoError(t, DB.Create(&Model{
+		ModelName:   "dreamina-seedance-2-0-260128",
+		DisplayName: "Seedance 2.0",
+		Status:      1,
+		NameRule:    NameRuleExact,
+	}).Error)
+
+	pricings := GetPricing()
+	require.Len(t, pricings, 1)
+	assert.Equal(t, "Seedance 2.0", pricings[0].DisplayName)
+	assert.Equal(t, "Seedance 2.0", GetModelDisplayName("dreamina-seedance-2-0-260128"))
+}
+
 func TestPricingModelMetadataEndpointsCanProvideEndpointWithoutChannelInference(t *testing.T) {
 	resetPricingEndpointTestTables(t)
 

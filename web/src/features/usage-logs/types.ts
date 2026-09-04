@@ -316,6 +316,7 @@ export interface TaskLog {
     input?: string
     upstream_model_name?: string
     origin_model_name?: string
+    display_model_name?: string
   }
   legacy_video_available?: boolean
   fail_reason?: string

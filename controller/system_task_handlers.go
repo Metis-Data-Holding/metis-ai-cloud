@@ -38,7 +38,11 @@ func (videoReferenceCleanupHandler) Interval() time.Duration { return time.Hour 
 func (videoReferenceCleanupHandler) NewPayload() any { return nil }
 
 func (videoReferenceCleanupHandler) Run(_ context.Context, task *model.SystemTask, runnerID string) {
-	result, err := service.CleanupVideoReferenceUploads(service.VideoReferenceUploadDirectory(), time.Now())
+	result, err := service.CleanupVideoReferenceUploads(
+		service.VideoReferenceUploadDirectory(),
+		time.Now(),
+		service.NewSystemTaskProgressReporter(task, runnerID),
+	)
 	if err != nil {
 		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, result, err)
 		return

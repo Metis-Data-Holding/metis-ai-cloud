@@ -94,6 +94,13 @@ export type LogCleanupTask = SystemTask<
   LogCleanupTaskResult
 >
 
+export type VideoReferenceCleanupTaskResult = {
+  scanned: number
+  deleted: number
+  freed_bytes: number
+  failed: number
+}
+
 export type SystemTaskResponse<TTask = SystemTask | null> = {
   success: boolean
   message: string

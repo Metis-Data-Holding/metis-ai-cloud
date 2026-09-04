@@ -141,6 +141,12 @@ export function TaskDetailsDialog(props: TaskDetailsDialogProps) {
             value={formatTaskTimestamp(props.log.finish_time)}
             mono
           />
+          {properties?.display_model_name ? (
+            <DetailRow
+              label={t('Display Name')}
+              value={properties.display_model_name}
+            />
+          ) : null}
           {properties?.origin_model_name ? (
             <DetailRow
               label={t('Original Model')}

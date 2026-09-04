@@ -84,6 +84,7 @@ type Properties struct {
 	Input             string `json:"input"`
 	UpstreamModelName string `json:"upstream_model_name,omitempty"`
 	OriginModelName   string `json:"origin_model_name,omitempty"`
+	DisplayModelName  string `json:"display_model_name,omitempty"`
 }
 
 func (m *Properties) Scan(val interface{}) error {
@@ -239,6 +240,7 @@ func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) 
 		}
 		if relayInfo.OriginModelName != "" {
 			properties.OriginModelName = relayInfo.OriginModelName
+			properties.DisplayModelName = GetModelDisplayName(relayInfo.OriginModelName)
 		}
 	}
 

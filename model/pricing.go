@@ -20,6 +20,7 @@ import (
 
 type Pricing struct {
 	ModelName              string                               `json:"model_name"`
+	DisplayName            string                               `json:"display_name,omitempty"`
 	Description            string                               `json:"description,omitempty"`
 	Icon                   string                               `json:"icon,omitempty"`
 	Tags                   string                               `json:"tags,omitempty"`
@@ -80,6 +81,19 @@ func GetPricing() []Pricing {
 		}
 	}
 	return pricingMap
+}
+
+func GetModelDisplayName(modelName string) string {
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" || DB == nil {
+		return ""
+	}
+	for _, pricing := range GetPricing() {
+		if pricing.ModelName == modelName {
+			return strings.TrimSpace(pricing.DisplayName)
+		}
+	}
+	return ""
 }
 
 func InvalidatePricingCache() {
@@ -394,6 +408,7 @@ func updatePricing() {
 			if meta.Status != 1 {
 				continue
 			}
+			pricing.DisplayName = meta.DisplayName
 			pricing.Description = meta.Description
 			pricing.Icon = meta.Icon
 			pricing.Tags = meta.Tags
