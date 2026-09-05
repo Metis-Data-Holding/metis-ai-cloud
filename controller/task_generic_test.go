@@ -405,6 +405,78 @@ func TestProxyTaskMediaForwardsRangeAndFiltersResponseHeaders(t *testing.T) {
 	assert.Empty(t, recorder.Header().Get("X-Provider-Secret"))
 }
 
+func TestProxyTaskMediaDoesNotTrustPrivateOriginFromTaskSnapshotAlone(t *testing.T) {
+	task := setupGenericTaskTest(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "video/mp4")
+		_, _ = w.Write([]byte("video"))
+	}))
+	defer upstream.Close()
+
+	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", task.ChannelId).Update("base_url", upstream.URL).Error)
+	task.PrivateData.Execution = &model.TaskExecutionSnapshot{
+		TaskPlugin: &model.TaskPluginSnapshot{Key: "test-plugin"},
+	}
+	originalFetchSetting := *system_setting.GetFetchSetting()
+	system_setting.GetFetchSetting().EnableSSRFProtection = true
+	system_setting.GetFetchSetting().AllowPrivateIp = false
+	system_setting.GetFetchSetting().AllowedPorts = []string{"80", "443"}
+	service.InitHttpClient()
+	t.Cleanup(func() {
+		*system_setting.GetFetchSetting() = originalFetchSetting
+		service.InitHttpClient()
+	})
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/content", nil)
+
+	err := proxyTaskMedia(c, task, &relaychannel.TaskContentRequest{
+		URL: upstream.URL, Method: http.MethodGet, Credentialless: true,
+	})
+	var proxyErr *taskMediaProxyError
+	require.ErrorAs(t, err, &proxyErr)
+	assert.Equal(t, "artifact_request_rejected", proxyErr.code)
+}
+
+func TestProxyTaskMediaAllowsTrustedTaskPluginArtifactAtConfiguredPrivateOrigin(t *testing.T) {
+	task := setupGenericTaskTest(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "video/mp4")
+		_, _ = w.Write([]byte("video"))
+	}))
+	defer upstream.Close()
+
+	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", task.ChannelId).Updates(map[string]any{
+		"base_url": upstream.URL,
+		"type":     constant.ChannelTypeTaskPlugin,
+	}).Error)
+	task.PrivateData.Execution = &model.TaskExecutionSnapshot{
+		TaskPlugin: &model.TaskPluginSnapshot{Key: "test-plugin"},
+	}
+	originalFetchSetting := *system_setting.GetFetchSetting()
+	system_setting.GetFetchSetting().EnableSSRFProtection = true
+	system_setting.GetFetchSetting().AllowPrivateIp = false
+	system_setting.GetFetchSetting().AllowedPorts = []string{"80", "443"}
+	service.InitHttpClient()
+	t.Cleanup(func() {
+		*system_setting.GetFetchSetting() = originalFetchSetting
+		service.InitHttpClient()
+	})
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/content", nil)
+
+	err := proxyTaskMedia(c, task, &relaychannel.TaskContentRequest{
+		URL: upstream.URL, Method: http.MethodGet, Credentialless: true, TrustedProviderOrigin: true,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, "video", recorder.Body.String())
+}
+
 func TestProxyTaskMediaPassesThroughUnsatisfiedRange(t *testing.T) {
 	task := setupGenericTaskTest(t)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	relaychannel "github.com/QuantumNous/new-api/relay/channel"
@@ -97,6 +98,9 @@ func VideoProxy(c *gin.Context) {
 							Method:  c.Request.Method,
 							Headers: taskArtifactClientHeaders(c.Request.Header),
 						})
+						if adaptorErr == nil && descriptor != nil {
+							descriptor.TrustedProviderOrigin = true
+						}
 					}
 				}
 				if adaptorErr != nil {
@@ -215,14 +219,27 @@ func proxyTaskMedia(c *gin.Context, task *model.Task, descriptor *relaychannel.T
 		}
 	}
 	proxy := strings.TrimSpace(channel.GetSetting().Proxy)
-	if err := validateTaskMediaURL(rawURL, proxy); err != nil {
-		return &taskMediaProxyError{
-			status: http.StatusBadGateway, code: "artifact_request_rejected",
-			message: "Artifact request was rejected", err: err,
+	var trustedProviderOrigin *url.URL
+	providerBaseURL, parseErr := url.Parse(strings.TrimSpace(channel.GetBaseURL()))
+	if descriptor.TrustedProviderOrigin &&
+		taskHasPluginExecution(task) &&
+		channel.Type == constant.ChannelTypeTaskPlugin &&
+		parseErr == nil && sameTaskMediaOrigin(providerBaseURL, parsedURL) {
+		trustedProviderOrigin = providerBaseURL
+	}
+	if trustedProviderOrigin == nil {
+		if err := validateTaskMediaURL(rawURL, proxy); err != nil {
+			return &taskMediaProxyError{
+				status: http.StatusBadGateway, code: "artifact_request_rejected",
+				message: "Artifact request was rejected", err: err,
+			}
 		}
 	}
 
 	client := service.GetSSRFProtectedHTTPClient()
+	if trustedProviderOrigin != nil {
+		client = service.GetHttpClient()
+	}
 	if proxy != "" {
 		client, err = service.GetHttpClientWithProxy(proxy)
 		if err != nil {
@@ -254,7 +271,7 @@ func proxyTaskMedia(c *gin.Context, task *model.Task, descriptor *relaychannel.T
 		req.Header.Set(name, value)
 	}
 
-	client = taskMediaRedirectClient(client, proxy, c, clientHeaders, descriptor.Credentialless)
+	client = taskMediaRedirectClient(client, proxy, c, clientHeaders, descriptor.Credentialless, trustedProviderOrigin)
 	clientWithoutBodyTimeout := *client
 	clientWithoutBodyTimeout.Timeout = 0
 	resp, err := doTaskMediaRequest(&clientWithoutBodyTimeout, req, taskMediaResponseHeaderTimeout)
@@ -406,7 +423,7 @@ func applyTaskMediaRequestHeaders(destination http.Header, headers map[string]st
 	return nil
 }
 
-func taskMediaRedirectClient(base *http.Client, proxy string, c *gin.Context, clientHeaders map[string]string, credentialless bool) *http.Client {
+func taskMediaRedirectClient(base *http.Client, proxy string, c *gin.Context, clientHeaders map[string]string, credentialless bool, trustedProviderOrigin *url.URL) *http.Client {
 	cloned := *base
 	cloned.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
@@ -416,8 +433,10 @@ func taskMediaRedirectClient(base *http.Client, proxy string, c *gin.Context, cl
 			req.URL.Host == "" || req.URL.User != nil || req.URL.Fragment != "" {
 			return fmt.Errorf("%w: invalid redirect URL", errTaskMediaRequestRejected)
 		}
-		if err := validateTaskMediaURL(req.URL.String(), proxy); err != nil {
-			return fmt.Errorf("%w: %v", errTaskMediaRequestRejected, err)
+		if !sameTaskMediaOrigin(trustedProviderOrigin, req.URL) {
+			if err := validateTaskMediaURL(req.URL.String(), proxy); err != nil {
+				return fmt.Errorf("%w: %v", errTaskMediaRequestRejected, err)
+			}
 		}
 		if isSelfTaskMediaURL(c, req.URL) {
 			return fmt.Errorf("%w: proxy loop", errTaskMediaRequestRejected)
