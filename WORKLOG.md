@@ -170,3 +170,13 @@
 - Go 全量测试、主模块与 `relaykit` 的 vet / build、前端 66 个测试文件共 464 项测试、TypeScript、受影响文件 lint / format、前端生产构建及 GitHub Actions 静态检查通过。
 - MySQL / PostgreSQL 真实数据库回归未执行：upstream 新增的系统任务状态修复虽包含 SQLite 测试，但注释引用的 configured-databases 测试函数实际不存在；本次按同步边界不额外夹带本地补丁。
 - 全仓前端 lint 与 format 仍存在同步前已有存量问题；本次变更文件没有新增 lint / format 违规。
+
+## 2026-09-05
+
+### MiniMax H3 文生视频代码接入
+
+- 新增 `minimax-h3` Task Plugin，将 OpenAI Video 请求转换为新加坡 5090 上已验证的最小 ComfyUI H3 Base 工作流；支持提交、轮询、失败状态、视频制品代理及用量事实提取。
+- 首阶段仅开放 `minimax-h3-fl2va` 纯文生视频，不接受参考素材；支持 768p、16:9 / 9:16 / 1:1 / 4:3 / 3:4、5～15 秒及原生同步音频开关。
+- Playground 可识别 H3 视频模型，切换到 H3 时隐藏并清理参考素材与生成模式，提示词区使用纯文生视频文案，分辨率只显示 768p；Seedance 现有行为保持不变。
+- 前端 TypeScript、72 个测试文件共 481 项测试、受影响文件 lint、格式检查及生产构建通过；全仓 lint 仍被本任务外的既有错误阻断。
+- 当前只完成任务分支代码和本地自动化验证，尚未执行 5090 真实生成、管理员定价配置、部署或公网验收；渠道启用前还需确认 Tailscale / Windows Firewall 边界及模型许可证条件。
