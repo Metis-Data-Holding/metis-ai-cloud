@@ -344,6 +344,99 @@ describe('VideoPlayground', () => {
     expect(screen.queryByRole('button', { name: '4k' })).not.toBeInTheDocument()
   })
 
+  test('uses a text-only 768p composer for MiniMax H3', async () => {
+    vi.mocked(getUserModels).mockResolvedValue([
+      { label: 'MiniMax H3', value: 'minimax-h3-fl2va' },
+    ])
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    const prompt = await screen.findByRole('textbox', { name: 'Prompt' })
+    await waitFor(() =>
+      expect(prompt).toHaveAttribute(
+        'placeholder',
+        'Describe the video you want to create'
+      )
+    )
+    expect(
+      screen.queryByLabelText('Add reference content')
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /^Generation mode:/ })
+    ).not.toBeInTheDocument()
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Video settings: 16:9, 768p, 5s, audio off, 1 video',
+      })
+    )
+    expect(screen.getByRole('button', { name: '768p' })).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: '720p' })
+    ).not.toBeInTheDocument()
+    await user.keyboard('{Escape}')
+
+    await user.type(prompt, 'City traffic in cinematic rain')
+    await user.click(screen.getByRole('button', { name: 'Generate video' }))
+
+    await waitFor(() =>
+      expect(submitVideoGeneration).toHaveBeenCalledWith('default', {
+        model: 'minimax-h3-fl2va',
+        prompt: 'City traffic in cinematic rain',
+        seconds: 5,
+        metadata: {
+          resolution: '768p',
+          ratio: '16:9',
+          generate_audio: false,
+        },
+      })
+    )
+  })
+
+  test('clears reference content when switching to MiniMax H3', async () => {
+    vi.mocked(getUserModels).mockResolvedValue([
+      {
+        label: 'dreamina-seedance-2-0-fast-260128',
+        value: 'dreamina-seedance-2-0-fast-260128',
+      },
+      { label: 'MiniMax H3', value: 'minimax-h3-fl2va' },
+    ])
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await user.upload(
+      await screen.findByLabelText('Add reference content'),
+      new File(['image'], 'subject.png', { type: 'image/png' })
+    )
+    expect(await screen.findByText('Image 1')).toBeVisible()
+
+    await user.click(screen.getByRole('combobox'))
+    await user.click(await screen.findByText('MiniMax H3'))
+
+    const prompt = screen.getByRole('textbox', { name: 'Prompt' })
+    await waitFor(() =>
+      expect(prompt).toHaveAttribute(
+        'placeholder',
+        'Describe the video you want to create'
+      )
+    )
+    await user.type(prompt, 'A quiet city at night')
+    await user.click(screen.getByRole('button', { name: 'Generate video' }))
+
+    await waitFor(() =>
+      expect(submitVideoGeneration).toHaveBeenCalledWith('default', {
+        model: 'minimax-h3-fl2va',
+        prompt: 'A quiet city at night',
+        seconds: 5,
+        metadata: {
+          resolution: '768p',
+          ratio: '16:9',
+          generate_audio: false,
+        },
+      })
+    )
+  })
+
   test('shows a pointer cursor for the reference content picker', async () => {
     render(<VideoPlayground />, { wrapper: createWrapper() })
 

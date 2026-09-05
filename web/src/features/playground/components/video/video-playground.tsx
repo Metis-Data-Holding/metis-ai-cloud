@@ -44,6 +44,7 @@ import {
   buildVideoGenerationRequest,
   getVideoResolutionOptions,
   isSupportedVideoPlaygroundModel,
+  isTextOnlyVideoPlaygroundModel,
   isVideoResolutionDisabled,
   normalizeVideoResolution,
 } from '../../lib/video/video-generation'
@@ -82,6 +83,7 @@ export function VideoPlayground() {
   })
   const values = form.watch()
   const hasImageInput = inputContent.some((item) => item.type === 'image_url')
+  const textOnly = isTextOnlyVideoPlaygroundModel(values.model)
 
   const groupsQuery = useQuery({
     queryKey: ['playground', 'video-groups'],
@@ -132,6 +134,13 @@ export function VideoPlayground() {
       form.setValue('resolution', nextResolution)
     }
   }, [form, hasImageInput, values.model, values.resolution])
+
+  useEffect(() => {
+    if (!textOnly) return
+    form.setValue('mode', 'reference')
+    setInputContent([])
+    setInputContentValid(true)
+  }, [form, textOnly])
 
   const handleGroupChange = (value: string) => {
     setSelectedGroup(value)
@@ -200,6 +209,7 @@ export function VideoPlayground() {
       resolutions={resolutions}
       disabledResolutions={disabledResolutions}
       seconds={values.seconds}
+      textOnly={textOnly}
       onAudioChange={(value) => form.setValue('generateAudio', value)}
       onGroupChange={handleGroupChange}
       onInputContentChange={setInputContent}

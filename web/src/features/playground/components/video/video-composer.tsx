@@ -84,6 +84,7 @@ type VideoComposerProps = {
   resolutions: VideoResolution[]
   disabledResolutions: VideoResolution[]
   seconds: number
+  textOnly: boolean
   onAudioChange: (value: boolean) => void
   onGroupChange: (value: string) => void
   onInputContentChange: (value: VideoInputContent[]) => void
@@ -175,40 +176,42 @@ export function VideoComposer(props: VideoComposerProps) {
           expanded ? 'flex-1' : 'flex-none'
         )}
       >
-        <div
-          data-slot='video-reference-area'
-          className={cn(
-            'min-w-0 shrink-0 self-stretch transition-[width] duration-200',
-            props.mode === 'keyframes'
-              ? 'w-full sm:w-[22rem] sm:max-w-[46%]'
-              : cn(
-                  'w-full sm:max-w-[46%]',
-                  referenceTrayExpanded
-                    ? 'sm:w-[min(46%,var(--expanded-reference-width))] sm:overflow-hidden'
-                    : 'sm:w-28 sm:overflow-visible'
-                )
-          )}
-          style={
-            props.mode === 'reference'
-              ? ({
-                  '--expanded-reference-width': `${Math.min(
-                    56,
-                    (referenceAssets.length + 1) * 7.5
-                  )}rem`,
-                } as CSSProperties)
-              : undefined
-          }
-        >
-          <VideoReferenceInput
-            mode={props.mode}
-            content={props.inputContent}
-            onContentChange={props.onInputContentChange}
-            onExpandedChange={setReferenceTrayExpanded}
-            onValidityChange={props.onInputValidityChange}
-            disabled={props.disabled}
-            variant='composer'
-          />
-        </div>
+        {!props.textOnly ? (
+          <div
+            data-slot='video-reference-area'
+            className={cn(
+              'min-w-0 shrink-0 self-stretch transition-[width] duration-200',
+              props.mode === 'keyframes'
+                ? 'w-full sm:w-[22rem] sm:max-w-[46%]'
+                : cn(
+                    'w-full sm:max-w-[46%]',
+                    referenceTrayExpanded
+                      ? 'sm:w-[min(46%,var(--expanded-reference-width))] sm:overflow-hidden'
+                      : 'sm:w-28 sm:overflow-visible'
+                  )
+            )}
+            style={
+              props.mode === 'reference'
+                ? ({
+                    '--expanded-reference-width': `${Math.min(
+                      56,
+                      (referenceAssets.length + 1) * 7.5
+                    )}rem`,
+                  } as CSSProperties)
+                : undefined
+            }
+          >
+            <VideoReferenceInput
+              mode={props.mode}
+              content={props.inputContent}
+              onContentChange={props.onInputContentChange}
+              onExpandedChange={setReferenceTrayExpanded}
+              onValidityChange={props.onInputValidityChange}
+              disabled={props.disabled}
+              variant='composer'
+            />
+          </div>
+        ) : null}
         <div
           data-slot='video-prompt-area'
           className='relative min-h-28 min-w-0 flex-1 self-stretch'
@@ -229,7 +232,9 @@ export function VideoComposer(props: VideoComposerProps) {
               )
             }
             placeholder={t(
-              'Use @ to quickly reference uploaded files, for example: use the motion from @Video 1 to generate a video in which the characters from @Image 2 and @Image 3 fight.'
+              props.textOnly
+                ? 'Describe the video you want to create'
+                : 'Use @ to quickly reference uploaded files, for example: use the motion from @Video 1 to generate a video in which the characters from @Image 2 and @Image 3 fight.'
             )}
             className='h-full max-h-none min-h-28 resize-none pr-12 text-base leading-7'
           />
@@ -297,54 +302,56 @@ export function VideoComposer(props: VideoComposerProps) {
         className='bg-card flex-wrap px-3 py-2.5'
       >
         <div className='flex min-w-0 flex-1 flex-wrap items-center gap-1'>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <PromptInputButton
-                  aria-label={t('Generation mode: {{mode}}', {
-                    mode: modeLabel,
-                  })}
-                  disabled={props.disabled}
-                />
-              }
-            >
-              <HugeiconsIcon icon={AiVideoIcon} data-icon='inline-start' />
-              <span>{modeLabel}</span>
-              <ChevronDownIcon data-icon='inline-end' />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              side='top'
-              sideOffset={8}
-              className='w-64 rounded-2xl p-2'
-            >
-              <DropdownMenuGroup>
-                <DropdownMenuLabel className='px-3 py-2 text-sm'>
-                  {t('Generation mode')}
-                </DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={props.mode}
-                  onValueChange={(value) =>
-                    props.onModeChange(value as VideoGenerationMode)
-                  }
-                >
-                  <DropdownMenuRadioItem
-                    value='reference'
-                    className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
+          {!props.textOnly ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <PromptInputButton
+                    aria-label={t('Generation mode: {{mode}}', {
+                      mode: modeLabel,
+                    })}
+                    disabled={props.disabled}
+                  />
+                }
+              >
+                <HugeiconsIcon icon={AiVideoIcon} data-icon='inline-start' />
+                <span>{modeLabel}</span>
+                <ChevronDownIcon data-icon='inline-end' />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                side='top'
+                sideOffset={8}
+                className='w-64 rounded-2xl p-2'
+              >
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className='px-3 py-2 text-sm'>
+                    {t('Generation mode')}
+                  </DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={props.mode}
+                    onValueChange={(value) =>
+                      props.onModeChange(value as VideoGenerationMode)
+                    }
                   >
-                    <HugeiconsIcon icon={AiVideoIcon} aria-hidden='true' />
-                    <span>{t('Reference generation')}</span>
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem
-                    value='keyframes'
-                    className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
-                  >
-                    <HugeiconsIcon icon={Film01Icon} aria-hidden='true' />
-                    <span>{t('First and last frames')}</span>
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                    <DropdownMenuRadioItem
+                      value='reference'
+                      className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
+                    >
+                      <HugeiconsIcon icon={AiVideoIcon} aria-hidden='true' />
+                      <span>{t('Reference generation')}</span>
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem
+                      value='keyframes'
+                      className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
+                    >
+                      <HugeiconsIcon icon={Film01Icon} aria-hidden='true' />
+                      <span>{t('First and last frames')}</span>
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
 
           <VideoParameterPanel
             audio={props.audio}

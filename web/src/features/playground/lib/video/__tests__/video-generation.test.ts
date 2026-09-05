@@ -246,13 +246,11 @@ describe('video model constraints', () => {
 
   test('limits MiniMax H3 to its 768p text-to-video capability', () => {
     expect(getVideoResolutionOptions('minimax-h3-fl2va')).toEqual(['768p'])
-    expect(
-      normalizeVideoResolution('minimax-h3-fl2va', '720p')
-    ).toBe('768p')
+    expect(normalizeVideoResolution('minimax-h3-fl2va', '720p')).toBe('768p')
     expect(isTextOnlyVideoPlaygroundModel('minimax-h3-fl2va')).toBe(true)
-    expect(
-      isTextOnlyVideoPlaygroundModel('dreamina-seedance-2-0-260128')
-    ).toBe(false)
+    expect(isTextOnlyVideoPlaygroundModel('dreamina-seedance-2-0-260128')).toBe(
+      false
+    )
   })
 
   test('accepts 768p in the shared video form schema', () => {
