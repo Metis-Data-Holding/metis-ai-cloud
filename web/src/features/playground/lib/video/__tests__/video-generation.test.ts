@@ -24,6 +24,7 @@ import {
   getVideoResolutionOptions,
   isSupportedVideoPlaygroundModel,
   isTerminalVideoStatus,
+  isTextOnlyVideoPlaygroundModel,
   normalizeVideoResolution,
 } from '../video-generation'
 
@@ -199,13 +200,14 @@ describe('video generation request', () => {
 })
 
 describe('video model constraints', () => {
-  test('only enables the two Dreamina Seedance 2.0 model ids supported by the MVP', () => {
+  test('enables the supported Dreamina Seedance and MiniMax H3 model ids', () => {
     expect(
       isSupportedVideoPlaygroundModel('dreamina-seedance-2-0-260128')
     ).toBe(true)
     expect(
       isSupportedVideoPlaygroundModel('dreamina-seedance-2-0-fast-260128')
     ).toBe(true)
+    expect(isSupportedVideoPlaygroundModel('minimax-h3-fl2va')).toBe(true)
     expect(isSupportedVideoPlaygroundModel('sora-2')).toBe(false)
     expect(isSupportedVideoPlaygroundModel('doubao-seedance-2-5-260628')).toBe(
       false
@@ -240,6 +242,32 @@ describe('video model constraints', () => {
     expect(
       normalizeVideoResolution('dreamina-seedance-2-0-fast-260128', '1080p')
     ).toBe('720p')
+  })
+
+  test('limits MiniMax H3 to its 768p text-to-video capability', () => {
+    expect(getVideoResolutionOptions('minimax-h3-fl2va')).toEqual(['768p'])
+    expect(
+      normalizeVideoResolution('minimax-h3-fl2va', '720p')
+    ).toBe('768p')
+    expect(isTextOnlyVideoPlaygroundModel('minimax-h3-fl2va')).toBe(true)
+    expect(
+      isTextOnlyVideoPlaygroundModel('dreamina-seedance-2-0-260128')
+    ).toBe(false)
+  })
+
+  test('accepts 768p in the shared video form schema', () => {
+    expect(
+      videoFormSchema.safeParse({
+        group: 'default',
+        model: 'minimax-h3-fl2va',
+        prompt: 'City at night',
+        seconds: 5,
+        resolution: '768p',
+        ratio: '16:9',
+        generateAudio: false,
+        mode: 'reference',
+      }).success
+    ).toBe(true)
   })
 })
 

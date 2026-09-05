@@ -25,12 +25,19 @@ import type {
 
 const FULL_RESOLUTIONS: VideoResolution[] = ['480p', '720p', '1080p', '4k']
 const FAST_RESOLUTIONS: VideoResolution[] = ['480p', '720p']
+const H3_RESOLUTIONS: VideoResolution[] = ['768p']
+const H3_MODEL = 'minimax-h3-fl2va'
+
+export function isTextOnlyVideoPlaygroundModel(model: string): boolean {
+  return model.toLowerCase() === H3_MODEL
+}
 
 export function isSupportedVideoPlaygroundModel(model: string): boolean {
   const normalized = model.toLowerCase()
   return (
     normalized.includes('dreamina-seedance-2-0-260128') ||
-    normalized.includes('dreamina-seedance-2-0-fast-260128')
+    normalized.includes('dreamina-seedance-2-0-fast-260128') ||
+    normalized === H3_MODEL
   )
 }
 
@@ -38,6 +45,9 @@ export function getVideoResolutionOptions(
   model: string,
   _hasImageInput = false
 ): VideoResolution[] {
+  if (isTextOnlyVideoPlaygroundModel(model)) {
+    return H3_RESOLUTIONS
+  }
   if (model.toLowerCase().includes('seedance-2-0-fast')) {
     return FAST_RESOLUTIONS
   }
@@ -63,7 +73,8 @@ export function normalizeVideoResolution(
 ): VideoResolution {
   const options = getVideoResolutionOptions(model, hasImageInput)
   const isDisabled = isVideoResolutionDisabled(model, resolution, hasImageInput)
-  return options.includes(resolution) && !isDisabled ? resolution : '720p'
+  if (options.includes(resolution) && !isDisabled) return resolution
+  return isTextOnlyVideoPlaygroundModel(model) ? '768p' : '720p'
 }
 
 export function buildVideoGenerationRequest(

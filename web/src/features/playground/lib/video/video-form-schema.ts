@@ -23,7 +23,7 @@ export const videoFormSchema = z.object({
   model: z.string().min(1, 'Select a video model'),
   prompt: z.string().trim(),
   seconds: z.number().int().min(5).max(15),
-  resolution: z.enum(['480p', '720p', '1080p', '4k']),
+  resolution: z.enum(['480p', '720p', '768p', '1080p', '4k']),
   ratio: z.enum(['16:9', '9:16', '1:1', '4:3', '3:4']),
   generateAudio: z.boolean(),
   quantity: z.number().int().min(1).max(4).default(1),
