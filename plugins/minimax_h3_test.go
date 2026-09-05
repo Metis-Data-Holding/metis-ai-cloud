@@ -4,8 +4,11 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	builtinplugins "github.com/QuantumNous/new-api/plugins"
+	taskjsplugin "github.com/QuantumNous/new-api/relay/channel/task/jsplugin"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -91,6 +94,27 @@ func TestMinimaxH3OpenAIVideoDecode(t *testing.T) {
 			require.ErrorContains(t, callErr, test.err)
 		})
 	}
+}
+
+func TestMinimaxH3OpenAIVideoRender(t *testing.T) {
+	adaptor := taskjsplugin.New(loadMinimaxH3Plugin(t))
+	rendered, err := adaptor.ConvertToOpenAIVideo(&model.Task{
+		TaskID:    "task_public",
+		Status:    model.TaskStatusInProgress,
+		Progress:  "37%",
+		CreatedAt: 10,
+		Properties: model.Properties{
+			OriginModelName: "minimax-h3-fl2va",
+		},
+	})
+	require.NoError(t, err)
+
+	var video dto.OpenAIVideo
+	require.NoError(t, common.Unmarshal(rendered, &video))
+	assert.Equal(t, "task_public", video.ID)
+	assert.Equal(t, "minimax-h3-fl2va", video.Model)
+	assert.Equal(t, dto.VideoStatusInProgress, video.Status)
+	assert.Equal(t, 37, video.Progress)
 }
 
 func TestMinimaxH3BuildsMinimalComfyWorkflow(t *testing.T) {

@@ -224,8 +224,8 @@ export const protocols = {
       const request = normalizedRequest(ctx.body.value);
       return { kind: "submit", model: ctx.model, action: "text_to_video", requestBody: request };
     },
-    render: function (_ctx, task) {
-      return task;
+    render: function () {
+      return {};
     },
   },
 };
