@@ -42,6 +42,7 @@ export const API_ENDPOINTS = {
 } as const
 
 export const VIDEO_ENDPOINT_TYPE = 'openai-video' as const
+export const CHAT_ENDPOINT_TYPE = 'openai' as const
 
 export const VIDEO_DURATION_OPTIONS = [
   5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,

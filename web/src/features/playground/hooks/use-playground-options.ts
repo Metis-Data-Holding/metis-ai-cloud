@@ -40,6 +40,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { getUserGroups, getUserModels } from '../api'
+import { CHAT_ENDPOINT_TYPE } from '../constants'
 import {
   getGroupFallback,
   getModelFallback,
@@ -74,8 +75,8 @@ export function usePlaygroundOptions({
     isError: isModelsError,
     isLoading: isLoadingModels,
   } = useQuery({
-    queryKey: ['playground-models', currentGroup],
-    queryFn: () => getUserModels(currentGroup),
+    queryKey: ['playground-models', currentGroup, CHAT_ENDPOINT_TYPE],
+    queryFn: () => getUserModels(currentGroup, CHAT_ENDPOINT_TYPE),
     enabled: currentGroup !== '',
   })
 
