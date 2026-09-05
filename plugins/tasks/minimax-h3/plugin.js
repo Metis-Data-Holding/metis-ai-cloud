@@ -118,24 +118,102 @@ export function buildSubmitRequest(ctx) {
   };
 }
 
-export function parseSubmitResponse() {
-  throw new Error("MiniMax H3 response handling is not implemented");
+export function parseSubmitResponse(_ctx, response) {
+  const body = (response && response.body) || {};
+  if (body.node_errors && typeof body.node_errors === "object" && Object.keys(body.node_errors).length > 0) {
+    throw new Error("ComfyUI rejected the workflow");
+  }
+  const taskId = trimmed(body.prompt_id);
+  if (!taskId) throw new Error("ComfyUI did not return prompt_id");
+  return { taskId, taskData: body };
 }
 
-export function buildQueryRequest() {
-  throw new Error("MiniMax H3 response handling is not implemented");
+export function buildQueryRequest(ctx) {
+  return {
+    url: String(ctx.baseUrl || "").replace(/\/$/, "") + "/history/" + encodeURIComponent(ctx.taskId),
+    method: "GET",
+    headers: { Accept: "application/json" },
+  };
 }
 
-export function parseTaskResult() {
-  throw new Error("MiniMax H3 response handling is not implemented");
+function validVideoOutput(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const filename = trimmed(value.filename);
+  const subfolder = String(value.subfolder || "");
+  const type = String(value.type || "output");
+  if (!filename || !/\.mp4$/i.test(filename) || /[\\/\0]/.test(filename)) return null;
+  if (/\\|\0/.test(subfolder) || subfolder.split("/").includes("..")) return null;
+  if (!["input", "output", "temp"].includes(type)) return null;
+  return { filename, subfolder, type };
 }
 
-export function listArtifacts() {
-  return [];
+function historyEntry(data, taskId, allowOnlyEntry) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  if (data[taskId] && typeof data[taskId] === "object") return data[taskId];
+  const keys = Object.keys(data);
+  return allowOnlyEntry && keys.length === 1 && data[keys[0]] && typeof data[keys[0]] === "object" ? data[keys[0]] : null;
 }
 
-export function buildContentRequest() {
-  throw new Error("MiniMax H3 response handling is not implemented");
+function videoOutput(data, taskId, allowOnlyEntry) {
+  const entry = historyEntry(data, taskId, allowOnlyEntry);
+  const outputs = entry && entry.outputs;
+  if (!outputs || typeof outputs !== "object" || Array.isArray(outputs)) return null;
+  for (const node of Object.values(outputs)) {
+    if (!node || typeof node !== "object" || Array.isArray(node)) continue;
+    for (const key of ["animated", "videos", "images"]) {
+      const items = node[key];
+      if (!Array.isArray(items)) continue;
+      for (const item of items) {
+        const output = validVideoOutput(item);
+        if (output) return output;
+      }
+    }
+  }
+  return null;
+}
+
+export function parseTaskResult(ctx, body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return { status: "UNKNOWN", reason: "unrecognized ComfyUI history" };
+  if (Object.keys(body).length === 0) return { status: "IN_PROGRESS" };
+  const entry = historyEntry(body, ctx.taskId, false);
+  if (!entry) return { status: "UNKNOWN", reason: "unrecognized ComfyUI history" };
+  const status = entry.status && typeof entry.status === "object" ? entry.status : {};
+  const value = String(status.status_str || "").toLowerCase();
+  if (["error", "failed", "interrupted"].includes(value)) return { status: "FAILURE", reason: "ComfyUI task failed" };
+  if (status.completed === true || value === "success") {
+    if (!videoOutput(body, ctx.taskId, false)) return { status: "FAILURE", progress: "100%", reason: "video output is missing" };
+    return { status: "SUCCESS", progress: "100%" };
+  }
+  if (["running", "pending", "queued"].includes(value) || status.completed === false) return { status: "IN_PROGRESS" };
+  return { status: "UNKNOWN", reason: "unrecognized ComfyUI history" };
+}
+
+export function extractUsage(ctx) {
+  const request = normalizedRequest(ctx.requestBody);
+  return { seconds: request.duration, resolution: request.resolution, generate_audio: request.generate_audio };
+}
+
+export function listArtifacts(task) {
+  if (String(task.status || "").toUpperCase() !== "SUCCESS" || !videoOutput(task.data, "", true)) return [];
+  return [{ key: "video", type: "video", mimeType: "video/mp4" }];
+}
+
+export function buildContentRequest(ctx) {
+  if (ctx.artifactKey !== "video") throw new Error("artifact_not_found");
+  const output = videoOutput(ctx.data, ctx.upstreamTaskId, true);
+  if (!output) throw new Error("artifact_not_found");
+  const query =
+    "filename=" +
+    encodeURIComponent(output.filename) +
+    "&subfolder=" +
+    encodeURIComponent(output.subfolder) +
+    "&type=" +
+    encodeURIComponent(output.type);
+  return {
+    url: String(ctx.baseUrl || "").replace(/\/$/, "") + "/view?" + query,
+    method: ctx.clientRequest && ctx.clientRequest.method === "HEAD" ? "HEAD" : "GET",
+    credentialless: true,
+  };
 }
 
 export const protocols = {
