@@ -63,7 +63,7 @@ func TestBuiltInVendorPluginsDeclareNativeRoutesAndLegacyChannelTypes(t *testing
 }
 
 func TestBuiltInTaskPluginResponsesAndUsageContracts(t *testing.T) {
-	expectedKeys := []string{"alibaba", "doubao", "google", "hailuo", "jimeng", "kling", "sora", "sunoapi", "vertex-ai", "vidu"}
+	expectedKeys := []string{"alibaba", "doubao", "google", "hailuo", "jimeng", "kling", "minimax-h3", "sora", "sunoapi", "vertex-ai", "vidu"}
 	generation := jsplugin.DefaultRegistry.Generation()
 	require.NotNil(t, generation)
 
@@ -87,6 +87,13 @@ func TestBuiltInTaskPluginResponsesAndUsageContracts(t *testing.T) {
 			registry := jsplugin.NewRegistry()
 			plugin, registerErr := registry.RegisterFactory(source, jsplugin.Options{Key: key})
 			require.NoError(t, registerErr)
+			if key == "minimax-h3" {
+				require.Equal(t, "none", plugin.Meta.Auth.Type)
+				require.Equal(t, []string{"minimax-h3-fl2va"}, plugin.Meta.Models)
+				require.Len(t, plugin.Meta.Protocols, 1)
+				assert.Equal(t, "openai_video", plugin.Meta.Protocols[0].Name)
+				return
+			}
 
 			var responsesClaim jsplugin.ProtocolClaim
 			foundResponses := false
