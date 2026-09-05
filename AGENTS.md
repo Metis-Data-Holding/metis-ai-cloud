@@ -58,6 +58,7 @@
 
 ### Billing 安全
 
+- 新增内置模型价格必须写入 `setting/billing_setting/builtin_billing.go` 的自包含 billing expression，使用真实 USD/百万 tokens 价格；不得向旧 `model/completion/cache ratio` 表增加新的内置价格。保留管理员显式定价覆盖，旧价格仅在明确要求时迁移，并核验公开价格来源、适用的 context length threshold 和 cache category。
 - 用户或上游控制的计费乘数必须在校验边界限制；复用 `dto.MaxImageN`、`relaycommon.MaxTaskDurationSeconds`、`maxTokensLimit` 等既有上限。
 - 检查 passthrough、metadata、multipart、媒体元数据等绕过标准 DTO 的路径；无符号字段同样必须有上限。
 - quota/token 转换使用 `common/quota_math.go` 的 `QuotaFromFloat`、`QuotaRound`、`QuotaFromDecimal` 及 `*Checked` 版本，不做无界裸 `int` 转换。
@@ -90,6 +91,7 @@
 - 最终交接或 PR 记录数据库版本、命令和结果；缺少任一必需验证时必须明确阻塞项，不得宣称数据库兼容或任务完成。
 
 后端测试应保护真实行为、API 契约、计费不变量、数据兼容或回归路径。使用确定输入和精确期望；新写或大改的 Go 测试用 `testify/require` 做前置/致命断言，用 `testify/assert` 做非致命断言，避免随机、sleep、日志或纯覆盖率测试。
+- 小功能或修复优先扩展合适的已有测试文件；确需新文件时最多增加一个。不要仅因调用链跨越 `controller/`、`service/`、`setting/` 等层，就在各层重复建立测试、fixture 和断言。
 
 ## Git 与分支
 

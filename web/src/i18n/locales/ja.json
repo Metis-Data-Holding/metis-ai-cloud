@@ -109,6 +109,7 @@
     "1. Create an application in your Gotify server": "1. Gotifyサーバーでアプリケーションを作成します",
     "10 / page": "10 / ページ",
     "100 / page": "100 / ページ",
+    "1080p is unavailable when reference images are included.": "参照画像を含む場合、1080p は利用できません。",
     "14 Days": "14日",
     "192.168.1.1&#10;10.0.0.0/8": "192.168.1.1&#10;10.0.0.0/8",
     "1M": "1M",
@@ -2922,6 +2923,7 @@
     "Models exposed by this channel": "このチャンネルで公開するモデル",
     "Models fetched successfully": "モデルが正常に取得されました",
     "Models filled to form": "フォームにモデルが記入されました",
+    "Models listed here skip automatic -thinking / -nothinking suffix handling. Matched names are also exempt from @-modifier parsing and 400 validation. Prefix an entry with re: to match the full model name as a Go regular expression, for example re:.*@sha256:.*": "ここに記載されたモデルは、-thinking / -nothinking サフィックスの自動付与・削除を行いません。一致した名前は @ 修飾子の解析および 400 バリデーションからも除外されます。re: で始まる項目は完全なモデル名に対する Go 正規表現として扱われます（例: re:.*@sha256:.*）。",
     "Models listed here will not automatically append or remove -thinking / -nothinking suffixes.": "ここに記載されたモデルは、-thinking / -nothinking サフィックスの自動付与・削除を行いません。",
     "Models losing positions": "順位を下げているモデル",
     "Models losing the most positions": "順位を最も落としているモデル",
@@ -3389,6 +3391,7 @@
     "Optional settings for advanced container configuration.": "高度なコンテナ設定のためのオプション設定。",
     "Optional supplementary information (max 100 characters)": "オプションの補足情報 (最大100文字)",
     "Optional tag for grouping channels": "チャネルをグループ化するためのオプションのタグ",
+    "Optional user-facing name; the model ID used by APIs and routing remains unchanged.": "任意の表示名です。API とルーティングで使用するモデル ID は変更されません。",
     "Opus Model": "Opus モデル",
     "Or continue with": "または、以下で続行",
     "Or enter this key manually:": "または、このキーを手動で入力してください:",
@@ -3936,6 +3939,7 @@
     "Redirecting to sign in in {{seconds}} seconds.": "{{seconds}} 秒後にログインページへ移動します。",
     "Reduces repeated wording": "同じ表現の繰り返しを抑えます",
     "Reference content": "参照コンテンツ",
+    "Reference content cleanup": "参照コンテンツのクリーンアップ",
     "Reference generation": "参照生成",
     "Reference image {{number}}": "参照画像 {{number}}",
     "Reference Video": "参照動画",
@@ -4124,7 +4128,6 @@
     "Resetting...": "リセット中...",
     "Resize column": "列幅を変更",
     "Resolution": "解像度",
-    "1080p is unavailable when reference images are included.": "参照画像を含む場合、1080p は利用できません。",
     "Resolve Conflicts": "競合を解決",
     "Resource Configuration": "リソース設定",
     "Resources": "リソース",
@@ -4268,6 +4271,7 @@
     "Scan QR Code": "QRコードをスキャン",
     "Scan the QR code to follow the official account and reply with “验证码” to receive your verification code.": "公式アカウントのQRコードを読み取り、「验证码」と返信して認証コードを受け取ってください。",
     "Scan this QR code with your authenticator app (Google Authenticator, Microsoft Authenticator, etc.)": "このQRコードを認証アプリ（Google Authenticator、Microsoft Authenticatorなど）でスキャンしてください。",
+    "Scanned {{scanned}} reference video files; cleaned {{deleted}}, failed {{failed}}, freed {{size}}.": "参照動画ファイルを {{scanned}} 件スキャンし、{{deleted}} 件を削除、{{failed}} 件が失敗、{{size}} を解放しました。",
     "Scenario Templates": "シナリオテンプレート",
     "Scheduled channel tests": "スケジュールされたチャネルテスト",
     "Scheduled full test": "定期フルテスト",
@@ -5624,9 +5628,6 @@
     "Zero retention": "データ保持なし",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V 4",
-    "Zoom": "ズーム",
-    "Optional user-facing name; the model ID used by APIs and routing remains unchanged.": "任意の表示名です。API とルーティングで使用するモデル ID は変更されません。",
-    "Reference content cleanup": "参照コンテンツのクリーンアップ",
-    "Scanned {{scanned}} reference video files; cleaned {{deleted}}, failed {{failed}}, freed {{size}}.": "参照動画ファイルを {{scanned}} 件スキャンし、{{deleted}} 件を削除、{{failed}} 件が失敗、{{size}} を解放しました。"
+    "Zoom": "ズーム"
   }
 }

@@ -109,6 +109,7 @@
     "1. Create an application in your Gotify server": "1. Tạo một ứng dụng trong máy chủ Gotify của bạn",
     "10 / page": "10 / trang",
     "100 / page": "100 / trang",
+    "1080p is unavailable when reference images are included.": "Không hỗ trợ 1080p khi có hình ảnh tham chiếu.",
     "14 Days": "14 ngày",
     "192.168.1.1&#10;10.0.0.0/8": "192.168.1.1&#10;10.0.0.0/8",
     "1M": "1M",
@@ -2922,6 +2923,7 @@
     "Models exposed by this channel": "Model được kênh này công bố",
     "Models fetched successfully": "Các mô hình đã được tải thành công",
     "Models filled to form": "Mô hình đã được điền vào biểu mẫu",
+    "Models listed here skip automatic -thinking / -nothinking suffix handling. Matched names are also exempt from @-modifier parsing and 400 validation. Prefix an entry with re: to match the full model name as a Go regular expression, for example re:.*@sha256:.*": "Các mô hình được liệt kê ở đây sẽ không tự động thêm hoặc xóa hậu tố -thinking / -nothinking. Tên khớp cũng được miễn phân tích và kiểm tra (400) cho bộ sửa đổi @. Mục bắt đầu bằng re: được coi là biểu thức chính quy Go khớp toàn bộ tên mô hình, ví dụ re:.*@sha256:.*",
     "Models listed here will not automatically append or remove -thinking / -nothinking suffixes.": "Các mô hình được liệt kê ở đây sẽ không tự động thêm hoặc xóa hậu tố -thinking / -nothinking.",
     "Models losing positions": "Các mô hình đang mất vị trí",
     "Models losing the most positions": "Mô hình tụt hạng nhiều nhất",
@@ -3389,6 +3391,7 @@
     "Optional settings for advanced container configuration.": "Cài đặt tùy chọn cho cấu hình container nâng cao.",
     "Optional supplementary information (max 100 characters)": "Thông tin bổ sung tùy chọn (tối đa 100 ký tự)",
     "Optional tag for grouping channels": "Thẻ tùy chọn để nhóm kênh",
+    "Optional user-facing name; the model ID used by APIs and routing remains unchanged.": "Tên hiển thị tùy chọn; ID mô hình dùng cho API và định tuyến không thay đổi.",
     "Opus Model": "Mô hình Opus",
     "Or continue with": "Hoặc tiếp tục với",
     "Or enter this key manually:": "Hoặc nhập khóa này thủ công:",
@@ -3936,6 +3939,7 @@
     "Redirecting to sign in in {{seconds}} seconds.": "Đang chuyển đến trang đăng nhập sau {{seconds}} giây.",
     "Reduces repeated wording": "Giảm cách diễn đạt lặp lại",
     "Reference content": "Nội dung tham chiếu",
+    "Reference content cleanup": "Dọn dẹp nội dung tham chiếu",
     "Reference generation": "Tạo theo tham chiếu",
     "Reference image {{number}}": "Ảnh tham chiếu {{number}}",
     "Reference Video": "Video tham chiếu",
@@ -4124,7 +4128,6 @@
     "Resetting...": "Đang đặt lại...",
     "Resize column": "Thay đổi kích thước cột",
     "Resolution": "Độ phân giải",
-    "1080p is unavailable when reference images are included.": "Không hỗ trợ 1080p khi có hình ảnh tham chiếu.",
     "Resolve Conflicts": "Giải quyết Xung đột",
     "Resource Configuration": "Cấu hình tài nguyên",
     "Resources": "Tài nguyên",
@@ -4268,6 +4271,7 @@
     "Scan QR Code": "Quét mã QR",
     "Scan the QR code to follow the official account and reply with “验证码” to receive your verification code.": "Quét mã QR để theo dõi tài khoản chính thức, trả lời « 验证码 » để nhận mã xác minh.",
     "Scan this QR code with your authenticator app (Google Authenticator, Microsoft Authenticator, etc.)": "Quét mã QR này bằng ứng dụng xác thực của bạn (Google Authenticator, Microsoft Authenticator, v.v.)",
+    "Scanned {{scanned}} reference video files; cleaned {{deleted}}, failed {{failed}}, freed {{size}}.": "Đã quét {{scanned}} tệp video tham chiếu; dọn {{deleted}}, lỗi {{failed}}, giải phóng {{size}}.",
     "Scenario Templates": "Mẫu kịch bản",
     "Scheduled channel tests": "Kiểm tra kênh theo lịch trình",
     "Scheduled full test": "Kiểm tra toàn bộ theo lịch",
@@ -5624,9 +5628,6 @@
     "Zero retention": "Không lưu dữ liệu",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom",
-    "Optional user-facing name; the model ID used by APIs and routing remains unchanged.": "Tên hiển thị tùy chọn; ID mô hình dùng cho API và định tuyến không thay đổi.",
-    "Reference content cleanup": "Dọn dẹp nội dung tham chiếu",
-    "Scanned {{scanned}} reference video files; cleaned {{deleted}}, failed {{failed}}, freed {{size}}.": "Đã quét {{scanned}} tệp video tham chiếu; dọn {{deleted}}, lỗi {{failed}}, giải phóng {{size}}."
+    "Zoom": "Zoom"
   }
 }

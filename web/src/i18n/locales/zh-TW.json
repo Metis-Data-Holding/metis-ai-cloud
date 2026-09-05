@@ -109,6 +109,7 @@
     "1. Create an application in your Gotify server": "1. 在您的 Gotify 伺服器中建立一個套用程式",
     "10 / page": "10 條/頁",
     "100 / page": "100 條/頁",
+    "1080p is unavailable when reference images are included.": "包含參考圖片時暫不支援 1080p。",
     "14 Days": "14 日",
     "192.168.1.1&#10;10.0.0.0/8": "192.168.1.1&#10;10.0.0.0/8",
     "1M": "1 個月",
@@ -2922,6 +2923,7 @@
     "Models exposed by this channel": "此渠道暴露的模型",
     "Models fetched successfully": "模型獲取成功",
     "Models filled to form": "模型已填充到表單",
+    "Models listed here skip automatic -thinking / -nothinking suffix handling. Matched names are also exempt from @-modifier parsing and 400 validation. Prefix an entry with re: to match the full model name as a Go regular expression, for example re:.*@sha256:.*": "此處列出的模型不會自動新增或移除 -thinking / -nothinking 後綴。命中的模型同時豁免 @ 修飾符解析與 400 校驗。以 re: 開頭的條目會以 Go 正規表示式匹配完整模型名稱，例如 re:.*@sha256:.*。",
     "Models listed here will not automatically append or remove -thinking / -nothinking suffixes.": "此處列出的模型不會自動新增或移除 -thinking / -nothinking 後綴。",
     "Models losing positions": "排名下滑的模型",
     "Models losing the most positions": "名次下滑最多的模型",
@@ -3389,6 +3391,7 @@
     "Optional settings for advanced container configuration.": "進階容器設定的可選設定。",
     "Optional supplementary information (max 100 characters)": "可選補充資訊 (最多 100 個字元)",
     "Optional tag for grouping channels": "用於分組渠道的可選標籤",
+    "Optional user-facing name; the model ID used by APIs and routing remains unchanged.": "可選的使用者介面顯示名稱；API 與路由使用的模型 ID 保持不變。",
     "Opus Model": "Opus 模型",
     "Or continue with": "或繼續使用",
     "Or enter this key manually:": "或手動輸入此金鑰：",
@@ -3936,6 +3939,7 @@
     "Redirecting to sign in in {{seconds}} seconds.": "將在 {{seconds}} 秒後跳轉到登入頁。",
     "Reduces repeated wording": "減少重複措辭",
     "Reference content": "參考內容",
+    "Reference content cleanup": "參考內容清理",
     "Reference generation": "參考生成",
     "Reference image {{number}}": "參考圖片 {{number}}",
     "Reference Video": "參照生影片",
@@ -4124,7 +4128,6 @@
     "Resetting...": "重置中...",
     "Resize column": "調整欄寬",
     "Resolution": "解析度",
-    "1080p is unavailable when reference images are included.": "包含參考圖片時暫不支援 1080p。",
     "Resolve Conflicts": "解決衝突",
     "Resource Configuration": "資源設定",
     "Resources": "資源",
@@ -4268,6 +4271,7 @@
     "Scan QR Code": "掃描二維碼",
     "Scan the QR code to follow the official account and reply with “验证码” to receive your verification code.": "掃描二維碼關注官方賬號，回覆「驗證碼」以接收您的驗證碼。",
     "Scan this QR code with your authenticator app (Google Authenticator, Microsoft Authenticator, etc.)": "使用您的身份驗證器套用（Google Authenticator、Microsoft Authenticator 等）掃描此二維碼",
+    "Scanned {{scanned}} reference video files; cleaned {{deleted}}, failed {{failed}}, freed {{size}}.": "已掃描 {{scanned}} 個參考影片檔案；清理 {{deleted}} 個，失敗 {{failed}} 個，釋放 {{size}}。",
     "Scenario Templates": "場景模板",
     "Scheduled channel tests": "定期渠道測試",
     "Scheduled full test": "定時全量測試",
@@ -5624,9 +5628,6 @@
     "Zero retention": "零數據保留",
     "Zhipu": "智譜",
     "Zhipu V4": "智譜 V4",
-    "Zoom": "縮放",
-    "Optional user-facing name; the model ID used by APIs and routing remains unchanged.": "可選的使用者介面顯示名稱；API 與路由使用的模型 ID 保持不變。",
-    "Reference content cleanup": "參考內容清理",
-    "Scanned {{scanned}} reference video files; cleaned {{deleted}}, failed {{failed}}, freed {{size}}.": "已掃描 {{scanned}} 個參考影片檔案；清理 {{deleted}} 個，失敗 {{failed}} 個，釋放 {{size}}。"
+    "Zoom": "縮放"
   }
 }
