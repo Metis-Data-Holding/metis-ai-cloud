@@ -124,7 +124,7 @@ Admin 查看调用信息
 - 模型网络：ECS 通过 Tailscale 固定私网地址访问新加坡 LM Studio；Tailscale 只承担模型私网传输，不作为 ECS 系统 DNS。
 - 发布：GitHub-hosted Runner 完成验证与镜像构建，ECS Self-hosted Runner 通过受限 root 入口执行发布和回滚。
 
-当前基础设施的可执行细节、目录、Secret 边界和验证方式见 [`../deploy/byteplus/README.md`](../deploy/byteplus/README.md)。GPU 型号、实际性能、容量和成本数据仍需后续 Benchmark 确认。
+当前基础设施的可执行细节、目录、Secret 边界和验证方式见 [`../deploy/byteplus/README.md`](../deploy/byteplus/README.md)。GPU 型号与基础容量已有实测基线；具体结果和仍未覆盖的长上下文、多模型并载及 Production SLA 边界见当前状态与专项测试报告。
 
 ## 6. 总体系统关系
 
@@ -149,7 +149,7 @@ Auth      Routing     Usage/Billing
             GPU
 ```
 
-Cloudflare、BytePlus ECS 与 Tailscale 私网模型链路已经形成当前 Demo 的基础设施 baseline。首条 Singapore Gemma Provider 的产品配置、标准 API、Streaming、Usage 与 Billing 已完成运行态验收；Benchmark 与自动路由仍需独立验证，不能由单模型功能闭环替代。
+Cloudflare、BytePlus ECS 与 Tailscale 私网模型链路已经形成当前 Demo 的基础设施 baseline。首条 Singapore Gemma Provider 的产品配置、标准 API、Streaming、Usage、Billing 与基础 Serving Benchmark 已完成运行态验收；自动路由及更广泛容量边界仍需独立验证，不能由单模型功能闭环替代。
 
 ## 7. Provider / Model 理念
 
@@ -177,7 +177,7 @@ Logical Model
 
 ### Serving Benchmark / Capacity Test
 
-PoC 除功能闭环外，还计划验证模型服务与 Gateway 的容量和性能。关注方向包括：
+PoC 除功能闭环外，持续验证模型服务与 Gateway 的容量和性能。关注方向包括：
 
 - 稳定并发能力与 Request Throughput；
 - Output Tokens/s；
@@ -188,7 +188,7 @@ PoC 除功能闭环外，还计划验证模型服务与 Gateway 的容量和性�
 - GPU Utilization 与 VRAM Usage；
 - 模型、GPU、网络和 Gateway 的潜在瓶颈。
 
-这些是计划采集的指标，不代表已经存在实测数据。具体测试结果应记录在当前状态或工作记录中，而不是写入本长期背景文件。
+这些是持续评估指标；项目已经形成首轮实测基线，但不等同于 Production SLA。具体结果应记录在当前状态、工作记录或专项测试报告中，而不是写入本长期背景文件。
 
 ### Cost-aware Routing / Model Cascading
 

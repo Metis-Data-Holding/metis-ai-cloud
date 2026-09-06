@@ -2,11 +2,11 @@
 
 本目录用于把当前 fork 的固定 Commit 镜像部署到 BytePlus ECS。目标是 Demo / PoC 运行基线，不替代 Production 高可用设计。
 
-> 运行态最后验收：2026-08-23
+> 运行态最后验收：2026-09-06
 >
 > 当前公网入口：`https://many-models.metisdata.ai`
 >
-> 当前 release：`b740f5f52f8c14290b62d5b4351cf64ce0ab97db`
+> 当前 release：`634659a5d320228849c460801662d7ce142084f0`
 
 ## 当前拓扑
 
@@ -158,9 +158,10 @@ ECS Self-hosted Runner
 
 - 首次发布：Deploy Run `32558545994`；
 - 历史 release 回滚：Rollback Run `32559285305`；
-- 再次部署恢复：Deploy Run `32559331290`。
+- 再次部署恢复：Deploy Run `32559331290`；
+- 最新运行态发布：Deploy Run `34038331884`，从 `develop` 部署 commit `634659a5d320228849c460801662d7ce142084f0`。
 
-三次运行均已成功；再次部署后 PostgreSQL 与 Redis 容器未重建，持久化挂载保持不变。
+上述运行均已成功。2026-09-06 现场复核时，`current` 指向最新 release，app、PostgreSQL、Redis 均为 healthy，Cloudflare、Tailscale 与本仓库 Self-hosted Runner 均为 active，公网 `/api/status` 返回成功。
 
 ## 日常只读检查
 
@@ -244,4 +245,4 @@ systemctl --type=service --state=running | grep actions.runner
 
 ## 线路完成标准
 
-截至 2026-08-23，本部署线路已完成：固定 Commit 镜像、隔离运行目录、root-only Secret、PostgreSQL / Redis 持久化、Cloudflare HTTPS、登录会话、容器重建恢复、受限 Self-hosted Runner、自动发布、真实回滚和再次部署恢复。Singapore Gemma Provider、标准 API、Usage / Billing 与停服恢复也已完成跨线路验收；后续 Branding、Benchmark、Routing 和其他模型验收不属于本基础设施线路的未完成项。
+截至 2026-09-06，本部署线路已完成：固定 Commit 镜像、隔离运行目录、root-only Secret、PostgreSQL / Redis 持久化、Cloudflare HTTPS、登录会话、容器重建恢复、受限 Self-hosted Runner、自动发布、真实回滚和再次部署恢复。Singapore Gemma Provider、标准 API、Usage / Billing、停服恢复与基础容量测试也已完成跨线路验收；后续 Branding、Routing 和其他模型验收不属于本基础设施线路的未完成项。

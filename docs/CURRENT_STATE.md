@@ -1,8 +1,8 @@
 # Metis AI Cloud 当前状态
 
 > 最后更新：2026-09-06
-> 当前 Milestone：Singapore MiniMax H3 文生视频接入
-> 当前目标：开发并验收 H3 首尾帧图生视频，补齐视频能力剩余验收
+> 当前 Milestone：Singapore MiniMax H3 视频能力产品化
+> 当前目标：梳理 H3 参考内容生成工作流，补齐视频能力剩余验收
 
 本文档是项目当前状态的单一快照，采用覆盖式维护。长期背景见 [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)，执行历史与重要决策分别见 [`../WORKLOG.md`](../WORKLOG.md) 和 [`DECISIONS.md`](DECISIONS.md)。
 
@@ -11,12 +11,12 @@
 - 项目：`metis-ai-cloud`，来源于 New API fork。
 - Step 0：已完成 AI 开发协作与上下文基础设施。
 - 当前阶段：BytePlus ECS 公网部署、Cloudflare HTTPS、持久化、自动发布 / 回滚、Singapore Local Model Provider 和 Usage / Billing 闭环均已完成真实验收。
-- Git 基线：部署资产已合入并推送 `main` 与 `develop`；当前 ECS release 为 `b740f5f52f8c14290b62d5b4351cf64ce0ab97db`。
+- Git 基线：H3 文生、首帧与首尾帧能力已在 `develop` 完成验收，本次收口后 `main` 与 `develop` 同步；当前 ECS release 为 `634659a5d320228849c460801662d7ce142084f0`。
 - Local Model Provider、普通用户 API、Streaming、Usage / Billing 与 Serving Benchmark 均已形成真实验证证据。
 - 当前容量结论：老板现场建议并发 1～2；并发 4 已通过 30 分钟稳定性验证。将 LM Studio 预测槽位放宽至 6 只获得约 9.9% 吞吐增益，同时 TTFT P50 增加约 72.9%。
 - 加权路由 baseline：同一 `google/gemma-4-31b` 入口已验证按权重选择本地 Gemma 或映射到 DeepSeek；20 个短请求实际分布 13 / 7，30 个混合 Streaming 请求零错误。
 - Seedance 视频能力：Dreamina Seedance 2.0 / 2.0 Fast 的动态任务计费、Playground 文生视频、异步轮询、预览与下载已合入并完成公网生成验收；参考图片与首帧生成已完成公网验收，本地参考视频及统一参考内容入口已合入，尚待部署和真实 Provider 验收。
-- MiniMax H3 视频能力：`minimax-h3` Task Plugin 与 `minimax-h3-fl2va` Playground 文生视频已部署并通过 5 秒 768p 无声任务公网验收，首帧图生视频也已由用户完成公网生成验收。用户已在 ComfyUI 直接验证首尾帧工作流并提供 API Format JSON；平台代码已支持顺序预上传 JPEG / PNG / WebP 首尾帧并提交同一 H3 工作流，尚待部署后的平台端到端验收。有声生成、实际扣费及失败退款仍待验证。
+- MiniMax H3 视频能力：`minimax-h3` Task Plugin 与 `minimax-h3-fl2va` Playground 已支持文生、首帧和首尾帧视频。最新 `develop` release 已部署；用户已通过公网真实验证首尾帧任务提交、轮询完成、视频生成、播放与下载。5 秒 768p 无声文生和首帧生成此前也已完成公网验收；有声生成、实际扣费对账及失败退款仍待验证。
 - 网关容量 baseline：固定延迟 Mock 短时闭环中，非流式 100 VU、Streaming 25 VU 通过，下一档分别在 200 / 50 VU 触发延迟停止线。
 - 网关稳定性：Streaming 20 VU 运行 30 分钟，完成 42779 请求，其中 6 次 HTTP 503，错误率 0.014%；容器无重启、OOM 或内存持续增长。
 - 下一主 Milestone：完善老板 Demo 交付，归因网关稳定性轮次中的 6 次 HTTP 503，并设计开放到达率与真实服务器复测。
@@ -72,11 +72,11 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 
 | 项目 | 当前状态 | 说明 |
 |---|---|---|
-| 本地仓库 | ✅ | 部署资产已合入并推送 `main` 与 `develop`；本轮首次自动部署使用 `main` |
+| 本地仓库 | ✅ | H3 验收版本已在 `develop` 部署，本次收口后 `main` 与 `develop` 同步 |
 | BytePlus ECS | ✅ | app、PostgreSQL、Redis 均为 healthy；应用仅监听 `127.0.0.1:3000` |
 | Cloudflare DNS | ✅ | `many-models.metisdata.ai` 已通过 Tunnel Published application route 生效 |
 | HTTPS | ✅ | Universal SSL Active；公网首页与 `/api/status` 均返回 HTTP 200，TLS 校验通过 |
-| GitHub Actions 发布 | ✅ | Deploy Run `32558545994`、真实 Rollback Run `32559285305` 与再次部署恢复 Run `32559331290` 均成功 |
+| GitHub Actions 发布 | ✅ | 最新 Deploy Run `34038331884` 成功部署 `634659a5d…`；固定镜像发布与历史 release 回滚能力均已验证 |
 | Singapore Local Model | ✅ Gemma 闭环已验证 | LM Studio 提供 OpenAI-compatible API；平台非流式、Streaming、Usage、Billing、权限边界和停服恢复均已验证 |
 | ECS → Singapore 网络 | ✅ | Tailscale 固定私网链路已验证；不使用 exit node 或 subnet route，Tailscale 不接管 ECS DNS |
 | 公网 Demo | ✅ 核心闭环已建立 | 管理员已初始化为对外营业模式；Playground 与限模型 API Token 均已完成真实模型调用 |
@@ -102,12 +102,12 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 - ECS 主机：通过 SSH alias `ECS-RI4m` 管理；本文不记录凭据
 - Domain：`many-models.metisdata.ai`
 - DNS / HTTPS：Cloudflare Tunnel `byteplus-hk-RI4m`；route 指向 `http://127.0.0.1:3000`
-- Deployment：应用 commit `b740f5f52f8c14290b62d5b4351cf64ce0ab97db`，使用 GHCR 固定 digest 的 `linux/amd64` 镜像；release 目录为 `/data/metis-ai-cloud/releases/<full-sha>`，`current` 已指向该 release
+- Deployment：应用 commit `634659a5d320228849c460801662d7ce142084f0`，使用 GHCR 固定 digest 的 `linux/amd64` 镜像；release 目录为 `/data/metis-ai-cloud/releases/<full-sha>`，`current` 已指向该 release
 - Runtime：app、PostgreSQL、Redis 均通过健康检查；PostgreSQL / Redis 未发布宿主端口
 - Persistence：容器重启与 app、PostgreSQL、Redis 分别重建后，管理员数据及非敏感 Redis 探针均通过恢复验证；探针已删除
 - 初始化：管理员初始化完成，运行模式为对外营业模式
 - Authentication：用户已通过公网 HTTPS 完成管理员登录、刷新保持会话与退出验证
-- Release Automation：`byteplus-demo` Environment、独立 ECS Self-hosted Runner、受限 root wrapper 与默认分支 Workflow 已启用；首次 Deploy Run `32558545994`、真实 Rollback Run `32559285305` 与再次部署恢复 Run `32559331290` 均成功
+- Release Automation：`byteplus-demo` Environment、独立 ECS Self-hosted Runner、受限 root wrapper 与默认分支 Workflow 已启用；最新 Deploy Run `34038331884` 成功，历史 release 回滚与再次部署恢复能力已验证
 - 共存回归：`xy-stock` systemd 服务、loopback HTTP 与既有公网入口保持可用；Cloudflare Tunnel 进程 active，验收时重启计数为 0
 - 回滚边界：本次由用户明确接受不创建 BytePlus 系统盘或数据盘快照；应用可通过历史完整 release 回滚，但 shared 数据无云盘级部署前快照保护
 
@@ -121,8 +121,8 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 6. 本次部署未创建 BytePlus 云盘快照，shared 数据发生破坏时无法依赖部署前云盘快照恢复。
 7. Self-hosted Runner 依赖 ECS 出站网络与 DNS；该依赖需要持续监控，但不应扩大 Runner 的系统权限。
 8. 网关 Mock 测试只是固定 VU 闭环容量，不代表实际用户数、开放到达率、Production SLA 或真实模型容量；30 分钟轮次的 6 次 HTTP 503 尚待日志级归因。
-9. MiniMax H3 文生视频核心公网链路已通过 5 秒无声任务验收，但尚不能据此确认有声音频、实际计费和失败退款链路；Windows Firewall 边界及模型许可证和商业使用条件仍需单独核对。
-10. H3 首帧图生视频已完成平台生成验收，但任务日志制品链和实际计费未在本轮单独复核；首尾帧已完成 ComfyUI 直接验证和平台代码开发，尚未完成部署后的平台生成验收。
+9. MiniMax H3 文生、首帧和首尾帧的公网生成链路已完成验收，但尚不能据此确认有声音频、实际计费对账和失败退款链路；Windows Firewall 边界及模型许可证和商业使用条件仍需单独核对。
+10. H3 参考内容生成尚未确认 ComfyUI 节点、素材类型与数量、上传映射及 API Format 工作流，不能假设现有首尾帧链路可直接复用。
 
 ## 8. 当前 Scope
 
@@ -153,13 +153,14 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 
 ## 9. 下一步行动
 
-1. 部署 H3 首尾帧代码后，在 Playground 验证首图、尾图、交换、任务提交、轮询、制品播放与下载，并核对实际计费；随后补验 5 秒 768p 有声任务、管理员显式计费表达式及失败退款。继续保持 ComfyUI `8888` 仅通过受控 Tailscale 私网访问。
-2. 部署 Playground 本地参考视频功能后，使用 MP4 / MOV 文件完成上传、任务提交、BytePlus 拉取、生成结果及临时文件清理验收，并核对任务日志与实际扣费；同时补验尾帧输入和首尾帧交换。
-3. 完善老板汇报稿、架构图、HTML/PDF/PPT 交付与现场 Demo 脚本。
-4. 对网关 Streaming 30 分钟轮次中的 6 次 HTTP 503 做 many-models、Cloudflare 和 Mock 日志交叉归因。
-5. 使用开放到达率模型和多轮重复运行，形成可用于容量规划的区间，不把固定 VU 换算为用户数。
-6. 在真实服务器与候选工业显卡上复测模型容量，并补充长上下文、多轮、多模型并载、质量/成本与故障恢复。
-7. 开展轻量 Branding；修改前先确认 License / Attribution 边界。
+1. 在 ComfyUI 中确认 H3 参考内容生成节点、素材输入契约与成功输出，导出对应 API Format workflow JSON，再决定平台映射与最小复用方案。
+2. 补验 H3 5 秒 768p 有声任务、管理员显式计费表达式、实际扣费对账及失败退款；继续保持 ComfyUI `8888` 仅通过受控 Tailscale 私网访问。
+3. 部署并验收 Seedance 本地参考视频功能，覆盖 MP4 / MOV 上传、Provider 拉取、生成结果、任务日志、实际扣费及临时文件清理。
+4. 完善老板汇报稿、架构图、HTML/PDF/PPT 交付与现场 Demo 脚本。
+5. 对网关 Streaming 30 分钟轮次中的 6 次 HTTP 503 做 many-models、Cloudflare 和 Mock 日志交叉归因。
+6. 使用开放到达率模型和多轮重复运行，形成可用于容量规划的区间，不把固定 VU 换算为用户数。
+7. 在真实服务器与候选工业显卡上复测模型容量，并补充长上下文、多轮、多模型并载、质量/成本与故障恢复。
+8. 开展轻量 Branding；修改前先确认 License / Attribution 边界。
 
 完成上述事项后，覆盖更新本节与对应状态，不在文件末尾追加旧任务。
 
