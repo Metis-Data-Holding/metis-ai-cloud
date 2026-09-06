@@ -28,6 +28,15 @@ func TestTaskModel2DtoNormalizesLegacyAction(t *testing.T) {
 	assert.Equal(t, "firstTailGenerate", task.Action)
 }
 
+func TestPrepareRequestInputErrorClassification(t *testing.T) {
+	for _, status := range []int{http.StatusBadRequest, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusUnprocessableEntity} {
+		assert.True(t, isPrepareRequestInputError(status))
+	}
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusTooManyRequests, http.StatusBadGateway} {
+		assert.False(t, isPrepareRequestInputError(status))
+	}
+}
+
 const mappingOrderSubmitPlugin = `
 export const meta = {apiVersion:1,key:"maporder",name:"Map Order",version:"1.0.0",author:{name:"Test"},models:["declared-model"],fetchMode:"per_task"};
 export function buildSubmitRequest(ctx) {

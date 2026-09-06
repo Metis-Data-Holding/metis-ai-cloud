@@ -123,7 +123,12 @@ export async function submitVideoGeneration(
     if (!match) {
       throw new Error(i18next.t('Choose a supported image file.'))
     }
-    const binary = atob(match[2])
+    let binary: string
+    try {
+      binary = atob(match[2])
+    } catch {
+      throw new Error(i18next.t('Choose a supported image file.'))
+    }
     const bytes = new Uint8Array(binary.length)
     for (let index = 0; index < binary.length; index += 1) {
       bytes[index] = binary.charCodeAt(index)

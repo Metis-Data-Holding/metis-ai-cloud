@@ -125,6 +125,19 @@ describe('video submission transport', () => {
       )
     ).rejects.toThrow('Choose a supported image file.')
 
+    await expect(
+      submitVideoGeneration(
+        'default',
+        h3Request([
+          {
+            type: 'image_url',
+            image_url: { url: 'data:image/png;base64,a===' },
+            role: 'first_frame',
+          },
+        ])
+      )
+    ).rejects.toThrow('Choose a supported image file.')
+
     expect(post).not.toHaveBeenCalled()
   })
 })

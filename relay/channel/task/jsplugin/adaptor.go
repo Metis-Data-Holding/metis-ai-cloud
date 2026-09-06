@@ -292,7 +292,15 @@ func buildDescriptorBody(c *gin.Context, descriptor *requestDescriptor) (io.Read
 		if err = writer.Close(); err != nil {
 			return nil, err
 		}
-		c.Request.Header.Set("Content-Type", writer.FormDataContentType())
+		if descriptor.Headers == nil {
+			descriptor.Headers = make(map[string]string)
+		}
+		for name := range descriptor.Headers {
+			if strings.EqualFold(name, "Content-Type") {
+				delete(descriptor.Headers, name)
+			}
+		}
+		descriptor.Headers["Content-Type"] = writer.FormDataContentType()
 		return bytes.NewReader(body.Bytes()), nil
 	}
 	if descriptor.Body == nil {
@@ -432,6 +440,7 @@ func encodeFilePlaceholder(placeholder map[string]any, form *multipart.Form, lim
 }
 
 func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io.Reader) (*http.Response, error) {
+	common.SetContextKey(c, constant.ContextKeyTaskPrepareResponse, false)
 	if a.submit != nil && a.submit.PrepareRequest != nil {
 		prepareBody, err := buildDescriptorBody(c, a.submit.PrepareRequest)
 		if err != nil {
@@ -442,6 +451,7 @@ func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, bod
 			return nil, fmt.Errorf("prepare request failed: %w", err)
 		}
 		if prepareResponse != nil {
+			common.SetContextKey(c, constant.ContextKeyTaskPrepareResponse, true)
 			return prepareResponse, nil
 		}
 	}
@@ -465,9 +475,6 @@ func (a *TaskAdaptor) doPrepareRequest(c *gin.Context, info *relaycommon.RelayIn
 	}
 	for name, value := range descriptor.Headers {
 		request.Header.Set(name, value)
-	}
-	if descriptor.BodyType == "multipart" {
-		request.Header.Set("Content-Type", c.GetHeader("Content-Type"))
 	}
 	response, err := channel.DoRequest(c, request, info)
 	if err != nil {

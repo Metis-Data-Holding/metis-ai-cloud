@@ -349,6 +349,9 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		responseBody, _ := io.ReadAll(resp.Body)
+		if common.GetContextKeyBool(c, constant.ContextKeyTaskPrepareResponse) && isPrepareRequestInputError(resp.StatusCode) {
+			return nil, service.TaskErrorWrapperLocal(fmt.Errorf("%s", string(responseBody)), "fail_to_fetch_task", resp.StatusCode)
+		}
 		return nil, service.TaskErrorWrapper(fmt.Errorf("%s", string(responseBody)), "fail_to_fetch_task", resp.StatusCode)
 	}
 
@@ -384,6 +387,15 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		Immediate:      parsed.Immediate,
 		PluginState:    parsed.PluginState,
 	}, nil
+}
+
+func isPrepareRequestInputError(statusCode int) bool {
+	switch statusCode {
+	case http.StatusBadRequest, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusUnprocessableEntity:
+		return true
+	default:
+		return false
+	}
 }
 
 // recalcQuotaFromRatios 根据 adjustedRatios 重新计算 quota。

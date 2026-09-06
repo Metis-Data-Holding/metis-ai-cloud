@@ -104,7 +104,7 @@ export function parseSubmitResponse(ctx,r){return {taskId:"1"}} export function 
 	require.NoError(t, err)
 	requestBytes, err := io.ReadAll(body)
 	require.NoError(t, err)
-	reader := multipart.NewReader(bytes.NewReader(requestBytes), strings.TrimPrefix(c.GetHeader("Content-Type"), "multipart/form-data; boundary="))
+	reader := multipart.NewReader(bytes.NewReader(requestBytes), strings.TrimPrefix(adaptor.submit.Headers["Content-Type"], "multipart/form-data; boundary="))
 	form, err := reader.ReadForm(1024)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"m"}, form.Value["model"])
@@ -138,6 +138,8 @@ func TestTaskAdaptorRunsPrepareRequestBeforeSubmit(t *testing.T) {
 		case "/submit":
 			calls = append(calls, "submit")
 			assert.Equal(t, "yes", r.Header.Get("X-Submit"))
+			require.NoError(t, r.ParseMultipartForm(1024))
+			assert.Equal(t, "p", r.FormValue("prompt"))
 			_, _ = w.Write([]byte(`{"id":"upstream-prepare"}`))
 		default:
 			http.NotFound(w, r)
@@ -148,8 +150,8 @@ func TestTaskAdaptorRunsPrepareRequestBeforeSubmit(t *testing.T) {
 	source := `
 export const meta = {apiVersion:1,key:"prepare",name:"Prepare",version:"1.0.0",author:{name:"Test"},models:["m"],fetchMode:"per_task"};
 export function buildSubmitRequest(ctx) { return {
-  url:ctx.baseUrl+"/submit", method:"POST", headers:{"X-Submit":"yes"}, body:{prompt:"p"},
-  prepareRequest:{url:ctx.baseUrl+"/upload/image",method:"POST",headers:{"X-Prepare":"yes"},bodyType:"multipart",parts:[
+  url:ctx.baseUrl+"/submit", method:"POST", headers:{"X-Submit":"yes","content-type":"invalid"}, bodyType:"multipart", parts:[{name:"prompt",value:"p"}],
+  prepareRequest:{url:ctx.baseUrl+"/upload/image",method:"POST",headers:{"X-Prepare":"yes","content-type":"invalid"},bodyType:"multipart",parts:[
     {name:"type",value:"temp"},{name:"image",fileRef:ctx.files[0].ref,filename:"uploaded.png"}
   ]}
 }; }
