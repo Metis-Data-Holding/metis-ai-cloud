@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import i18next from 'i18next'
+
 import { api } from '@/lib/api'
 
 import { API_ENDPOINTS } from './constants'
@@ -110,12 +112,16 @@ export async function submitVideoGeneration(
       item.type === 'image_url' && item.role === 'first_frame'
   )
   let body: VideoGenerationRequest | FormData = payload
-  if (payload.model.toLowerCase() === 'minimax-h3-fl2va' && firstFrame) {
+  const isH3 = payload.model.toLowerCase() === 'minimax-h3-fl2va'
+  if (isH3 && content.length > 0 && (!firstFrame || content.length !== 1)) {
+    throw new Error(i18next.t('Choose a supported image file.'))
+  }
+  if (isH3 && firstFrame) {
     const match = firstFrame.image_url.url.match(
       /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/
     )
-    if (!match || content.length !== 1) {
-      throw new Error('MiniMax H3 requires one JPEG, PNG, or WebP first frame')
+    if (!match) {
+      throw new Error(i18next.t('Choose a supported image file.'))
     }
     const binary = atob(match[2])
     const bytes = new Uint8Array(binary.length)

@@ -110,4 +110,21 @@ describe('video submission transport', () => {
     expect(post.mock.calls[0]?.[1]).toBe(textRequest)
     expect(post.mock.calls[1]?.[1]).toBe(seedanceRequest)
   })
+
+  test('rejects invalid MiniMax H3 content before sending a request', async () => {
+    await expect(
+      submitVideoGeneration(
+        'default',
+        h3Request([
+          {
+            type: 'image_url',
+            image_url: { url: 'data:image/gif;base64,aW1hZ2U=' },
+            role: 'first_frame',
+          },
+        ])
+      )
+    ).rejects.toThrow('Choose a supported image file.')
+
+    expect(post).not.toHaveBeenCalled()
+  })
 })
