@@ -4,10 +4,10 @@ export const meta = {
   name: "MiniMax H3",
   icon: "Minimax.Color",
   description: {
-    en: "Self-hosted MiniMax H3 text and first-frame image to video through ComfyUI",
-    zh: "通过 ComfyUI 接入自托管 MiniMax H3 文生及首帧图生视频",
+    en: "Self-hosted MiniMax H3 text, first-frame, and first-and-last-frame video through ComfyUI",
+    zh: "通过 ComfyUI 接入自托管 MiniMax H3 文生、首帧及首尾帧图生视频",
   },
-  version: "1.1.0",
+  version: "1.2.0",
   author: { name: "Metis Data" },
   models: ["minimax-h3-fl2va"],
   fetchMode: "per_task",
@@ -47,12 +47,21 @@ const imageExtensions = {
   "image/png": "png",
   "image/webp": "webp",
 };
-const maxFirstFrameBytes = 30 * 1024 * 1024;
+const maxFrameBytes = 30 * 1024 * 1024;
+const maxCombinedFrameBytes = 45 * 1024 * 1024;
 
-function inputReferenceMarker(value) {
+function frameMarker(value, field) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  if (Object.keys(value).length !== 1 || value.__fileRef !== "request_file:input_reference") return null;
+  if (Object.keys(value).length !== 1 || value.__fileRef !== "request_file:" + field) return null;
   return value;
+}
+
+function frameSize(frameFiles, field) {
+  const fileSize = Number(frameFiles[0].size);
+  if (!Number.isFinite(fileSize) || fileSize <= 0 || fileSize >= maxFrameBytes) {
+    throw new Error(field + " must be smaller than 30 MiB");
+  }
+  return fileSize;
 }
 
 function normalizedRequest(request) {
@@ -64,8 +73,14 @@ function normalizedRequest(request) {
   if (req.images !== undefined) throw new Error("reference content is not supported");
   let inputReference;
   if (req.input_reference !== undefined) {
-    inputReference = inputReferenceMarker(req.input_reference);
+    inputReference = frameMarker(req.input_reference, "input_reference");
     if (!inputReference) throw new Error("reference content is not supported");
+  }
+  let inputLastFrame;
+  if (req.input_last_frame !== undefined) {
+    inputLastFrame = frameMarker(req.input_last_frame, "input_last_frame");
+    if (!inputLastFrame) throw new Error("reference content is not supported");
+    if (!inputReference) throw new Error("input_last_frame requires input_reference");
   }
 
   const rawDuration = req.duration === undefined ? req.seconds : req.duration;
@@ -77,7 +92,7 @@ function normalizedRequest(request) {
   const ratio = String(req.ratio || metadata.ratio || "16:9");
   if (!sizes[ratio]) throw new Error("ratio must be one of 16:9, 9:16, 1:1, 4:3, 3:4");
   const generateAudio = req.generate_audio === undefined ? metadata.generate_audio === true : req.generate_audio === true;
-  return { prompt, duration, resolution, ratio, generate_audio: generateAudio, input_reference: inputReference };
+  return { prompt, duration, resolution, ratio, generate_audio: generateAudio, input_reference: inputReference, input_last_frame: inputLastFrame };
 }
 
 function frameCount(seconds) {
@@ -95,7 +110,7 @@ function taskSeed(taskId) {
   return hash >>> 0 || 1;
 }
 
-function workflowFor(request, publicTaskId, firstFrame) {
+function workflowFor(request, publicTaskId, firstFrame, lastFrame) {
   const size = sizes[request.ratio];
   const workflow = {
     1: { class_type: "UNETLoader", inputs: { unet_name: "minimax_h3_fl2va_pruned_int8_convrot.safetensors", weight_dtype: "default" } },
@@ -121,6 +136,10 @@ function workflowFor(request, publicTaskId, firstFrame) {
     workflow[15] = { class_type: "LoadImage", inputs: { image: firstFrame.filename + " [temp]" } };
     workflow[4].inputs.first_frame = ["15", 0];
   }
+  if (lastFrame) {
+    workflow[16] = { class_type: "LoadImage", inputs: { image: lastFrame.filename + " [temp]" } };
+    workflow[4].inputs.last_frame = ["16", 0];
+  }
   if (request.generate_audio) {
     workflow[13] = { class_type: "VAELoader", inputs: { vae_name: "minimax_h3_audio_vae_fp32.safetensors" } };
     workflow[14] = { class_type: "VAEDecodeAudio", inputs: { samples: ["9", 1], vae: ["13", 0] } };
@@ -132,18 +151,32 @@ function workflowFor(request, publicTaskId, firstFrame) {
 export function buildSubmitRequest(ctx) {
   const request = normalizedRequest(ctx.requestBody);
   const files = (ctx.files || []).filter(function (file) {
-    return file && file.field === "input_reference";
+    return file && typeof file === "object";
   });
+  const firstFiles = files.filter(function (file) {
+    return file.field === "input_reference";
+  });
+  const lastFiles = files.filter(function (file) {
+    return file.field === "input_last_frame";
+  });
+  const unexpectedFile = files.find(function (file) {
+    return file.field !== "input_reference" && file.field !== "input_last_frame";
+  });
+  if (unexpectedFile) throw new Error("unexpected file field: " + unexpectedFile.field);
   let firstFrame = null;
-  if (request.input_reference) {
-    if (files.length !== 1 || files[0].ref !== request.input_reference.__fileRef) throw new Error("input_reference file is missing");
-    const mimeType = String(files[0].mimeType || "")
+  let lastFrame = null;
+  const frame = function (marker, frameFiles, field, suffix) {
+    if (!marker) {
+      if (frameFiles.length > 0) throw new Error("unexpected " + field + " file");
+      return null;
+    }
+    if (frameFiles.length !== 1 || frameFiles[0].ref !== marker.__fileRef) throw new Error(field + " file is missing");
+    const mimeType = String(frameFiles[0].mimeType || "")
       .split(";", 1)[0]
       .trim()
       .toLowerCase();
-    if (!Object.prototype.hasOwnProperty.call(imageExtensions, mimeType)) throw new Error("input_reference must be image/jpeg, image/png, or image/webp");
-    const fileSize = Number(files[0].size);
-    if (!Number.isFinite(fileSize) || fileSize <= 0 || fileSize >= maxFirstFrameBytes) throw new Error("input_reference must be smaller than 30 MiB");
+    if (!Object.prototype.hasOwnProperty.call(imageExtensions, mimeType)) throw new Error(field + " must be image/jpeg, image/png, or image/webp");
+    const fileSize = frameSize(frameFiles, field);
     const extension = imageExtensions[mimeType];
     const taskID =
       trimmed(ctx.publicTaskId)
@@ -151,29 +184,37 @@ export function buildSubmitRequest(ctx) {
         .replace(/-+/g, "-")
         .replace(/^-|-$/g, "")
         .slice(0, 80) || "task";
-    firstFrame = { ref: files[0].ref, filename: "minimax-h3-" + taskID + "." + extension };
-  } else if (files.length > 0) {
-    throw new Error("unexpected input_reference file");
+    return { ref: frameFiles[0].ref, filename: "minimax-h3-" + taskID + suffix + "." + extension, size: fileSize };
+  };
+  firstFrame = frame(request.input_reference, firstFiles, "input_reference", "");
+  lastFrame = frame(request.input_last_frame, lastFiles, "input_last_frame", "-last-frame");
+  if (firstFrame && lastFrame && firstFrame.size + lastFrame.size > maxCombinedFrameBytes) {
+    throw new Error("input frames must not exceed 45 MiB in total");
   }
   const descriptor = {
     url: String(ctx.baseUrl || "").replace(/\/$/, "") + "/prompt",
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: { prompt: workflowFor(request, ctx.publicTaskId, firstFrame) },
+    body: { prompt: workflowFor(request, ctx.publicTaskId, firstFrame, lastFrame) },
     action: firstFrame ? "image_to_video" : "text_to_video",
   };
-  if (firstFrame) {
-    descriptor.prepareRequest = {
+  const prepareRequest = function (frameInfo) {
+    return {
       url: String(ctx.baseUrl || "").replace(/\/$/, "") + "/upload/image",
       method: "POST",
       headers: { Accept: "application/json" },
       bodyType: "multipart",
       parts: [
-        { name: "image", fileRef: firstFrame.ref, filename: firstFrame.filename },
+        { name: "image", fileRef: frameInfo.ref, filename: frameInfo.filename },
         { name: "type", value: "temp" },
         { name: "overwrite", value: true },
       ],
     };
+  };
+  if (firstFrame && lastFrame) {
+    descriptor.prepareRequests = [prepareRequest(firstFrame), prepareRequest(lastFrame)];
+  } else if (firstFrame) {
+    descriptor.prepareRequest = prepareRequest(firstFrame);
   }
   return descriptor;
 }
@@ -277,6 +318,7 @@ export const protocols = {
       if (!ctx.body || (ctx.body.kind !== "json" && ctx.body.kind !== "multipart")) throw new Error("JSON or multipart body required");
       let req;
       let hasInputReferenceFile = false;
+      let hasInputLastFrameFile = false;
       if (ctx.body.kind === "json") {
         if (!ctx.body.value || typeof ctx.body.value !== "object" || Array.isArray(ctx.body.value)) throw new Error("JSON object required");
         req = Object.assign({}, ctx.body.value);
@@ -290,9 +332,15 @@ export const protocols = {
         const fields = ctx.body.fields || {};
         for (const name of Object.keys(fields)) req[name] = first(name);
         for (const file of ctx.body.files || []) {
-          if (file.field !== "input_reference") throw new Error("unexpected file field: " + file.field);
-          if (hasInputReferenceFile) throw new Error("input_reference must be provided once");
-          hasInputReferenceFile = true;
+          if (file.field === "input_reference") {
+            if (hasInputReferenceFile) throw new Error("input_reference must be provided once");
+            hasInputReferenceFile = true;
+          } else if (file.field === "input_last_frame") {
+            if (hasInputLastFrameFile) throw new Error("input_last_frame must be provided once");
+            hasInputLastFrameFile = true;
+          } else {
+            throw new Error("unexpected file field: " + file.field);
+          }
         }
         if (hasInputReferenceFile && Object.prototype.hasOwnProperty.call(req, "input_reference"))
           throw new Error("input_reference must be provided as a file");
@@ -309,6 +357,7 @@ export const protocols = {
         if (req.seconds !== undefined) req.seconds = Number(req.seconds);
         else if (req.duration !== undefined) req.duration = Number(req.duration);
         if (hasInputReferenceFile) req.input_reference = { __fileRef: "request_file:input_reference" };
+        if (hasInputLastFrameFile) req.input_last_frame = { __fileRef: "request_file:input_last_frame" };
       }
       const request = normalizedRequest(req);
       return { kind: "submit", model: ctx.model, action: request.input_reference ? "image_to_video" : "text_to_video", requestBody: request };

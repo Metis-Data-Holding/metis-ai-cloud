@@ -84,7 +84,7 @@ type VideoComposerProps = {
   resolutions: VideoResolution[]
   disabledResolutions: VideoResolution[]
   seconds: number
-  firstFrameOnly: boolean
+  isH3: boolean
   onAudioChange: (value: boolean) => void
   onGroupChange: (value: string) => void
   onInputContentChange: (value: VideoInputContent[]) => void
@@ -110,22 +110,17 @@ export function VideoComposer(props: VideoComposerProps) {
   } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const referenceAssets = getVideoReferenceAssets(props.inputContent)
-  const modeLabel = props.firstFrameOnly
-    ? t(props.mode === 'reference' ? 'Text to Video' : 'First frame')
-    : t(
-        props.mode === 'reference'
-          ? 'Reference generation'
-          : 'First and last frames'
-      )
-  const showReferenceInput = !props.firstFrameOnly || props.mode === 'keyframes'
+  let modeLabel = t('First and last frames')
+  if (props.mode === 'reference') {
+    modeLabel = t(props.isH3 ? 'Text to Video' : 'Reference generation')
+  }
+  const showReferenceInput = !props.isH3 || props.mode === 'keyframes'
   const expandLabel = expanded
     ? t('Collapse prompt input')
     : t('Expand prompt input')
   let referenceAreaLayout = 'w-full sm:w-28 sm:overflow-visible'
   if (props.mode === 'keyframes') {
-    referenceAreaLayout = props.firstFrameOnly
-      ? 'w-full sm:w-28'
-      : 'w-full sm:w-[22rem] sm:max-w-[46%]'
+    referenceAreaLayout = 'w-full sm:w-[22rem] sm:max-w-[46%]'
   } else if (referenceTrayExpanded) {
     referenceAreaLayout =
       'w-full sm:w-[min(46%,var(--expanded-reference-width))] sm:max-w-[46%] sm:overflow-hidden'
@@ -216,7 +211,7 @@ export function VideoComposer(props: VideoComposerProps) {
               onExpandedChange={setReferenceTrayExpanded}
               onValidityChange={props.onInputValidityChange}
               disabled={props.disabled}
-              firstFrameOnly={props.firstFrameOnly}
+              strictKeyframeFormats={props.isH3}
               variant='composer'
             />
           </div>
@@ -241,7 +236,7 @@ export function VideoComposer(props: VideoComposerProps) {
               )
             }
             placeholder={t(
-              props.firstFrameOnly
+              props.isH3
                 ? 'Describe the video you want to create'
                 : 'Use @ to quickly reference uploaded files, for example: use the motion from @Video 1 to generate a video in which the characters from @Image 2 and @Image 3 fight.'
             )}
@@ -343,29 +338,21 @@ export function VideoComposer(props: VideoComposerProps) {
                 >
                   <DropdownMenuRadioItem
                     value='reference'
+                    closeOnClick
                     className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
                   >
                     <HugeiconsIcon icon={AiVideoIcon} aria-hidden='true' />
                     <span>
-                      {t(
-                        props.firstFrameOnly
-                          ? 'Text to Video'
-                          : 'Reference generation'
-                      )}
+                      {t(props.isH3 ? 'Text to Video' : 'Reference generation')}
                     </span>
                   </DropdownMenuRadioItem>
                   <DropdownMenuRadioItem
                     value='keyframes'
+                    closeOnClick
                     className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
                   >
                     <HugeiconsIcon icon={Film01Icon} aria-hidden='true' />
-                    <span>
-                      {t(
-                        props.firstFrameOnly
-                          ? 'First frame'
-                          : 'First and last frames'
-                      )}
-                    </span>
+                    <span>{t('First and last frames')}</span>
                   </DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
               </DropdownMenuGroup>

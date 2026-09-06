@@ -43,7 +43,7 @@ import {
 import {
   buildVideoGenerationRequest,
   getVideoResolutionOptions,
-  isFirstFrameOnlyVideoPlaygroundModel,
+  isMinimaxH3VideoPlaygroundModel,
   isSupportedVideoPlaygroundModel,
   isVideoResolutionDisabled,
   normalizeVideoResolution,
@@ -59,6 +59,8 @@ import { VideoTaskResult } from './video-generation-result'
 
 const EMPTY_GROUPS: GroupOption[] = []
 const EMPTY_MODELS: ModelOption[] = []
+const H3_FRAME_DATA_URL_PATTERN =
+  /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/
 
 const DEFAULT_VALUES: VideoFormValues = {
   group: DEFAULT_GROUP,
@@ -83,7 +85,7 @@ export function VideoPlayground() {
   })
   const values = form.watch()
   const hasImageInput = inputContent.some((item) => item.type === 'image_url')
-  const firstFrameOnly = isFirstFrameOnlyVideoPlaygroundModel(values.model)
+  const isH3 = isMinimaxH3VideoPlaygroundModel(values.model)
 
   const groupsQuery = useQuery({
     queryKey: ['playground', 'video-groups'],
@@ -136,14 +138,19 @@ export function VideoPlayground() {
   }, [form, hasImageInput, values.model, values.resolution])
 
   useEffect(() => {
-    if (!firstFrameOnly) return
+    if (!isH3) return
     setInputContent((current) =>
       values.mode === 'keyframes'
-        ? current.filter((item) => item.role === 'first_frame')
+        ? current.filter(
+            (item) =>
+              item.type === 'image_url' &&
+              (item.role === 'first_frame' || item.role === 'last_frame') &&
+              H3_FRAME_DATA_URL_PATTERN.test(item.image_url.url)
+          )
         : []
     )
     setInputContentValid(true)
-  }, [firstFrameOnly, values.mode])
+  }, [isH3, values.mode])
 
   const handleGroupChange = (value: string) => {
     setSelectedGroup(value)
@@ -185,7 +192,7 @@ export function VideoPlayground() {
     (values.mode === 'reference' &&
       inputContent.length === 0 &&
       values.prompt.trim() === '')
-  const promptMissing = firstFrameOnly && values.prompt.trim() === ''
+  const promptMissing = isH3 && values.prompt.trim() === ''
   const submitDisabled =
     systemDisabled ||
     values.model === '' ||
@@ -214,7 +221,7 @@ export function VideoPlayground() {
       resolutions={resolutions}
       disabledResolutions={disabledResolutions}
       seconds={values.seconds}
-      firstFrameOnly={firstFrameOnly}
+      isH3={isH3}
       onAudioChange={(value) => form.setValue('generateAudio', value)}
       onGroupChange={handleGroupChange}
       onInputContentChange={setInputContent}

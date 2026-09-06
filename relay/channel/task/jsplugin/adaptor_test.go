@@ -175,6 +175,165 @@ export function parseTaskResult(){return {status:"SUCCESS"}}
 	assert.Equal(t, []string{"prepare", "submit"}, calls)
 }
 
+func TestTaskAdaptorRunsMultiplePrepareRequestsInOrderBeforeSubmit(t *testing.T) {
+	service.InitHttpClient()
+	var calls []string
+	expectedUploads := map[string]struct {
+		content  string
+		filename string
+	}{
+		"/upload/first": {content: "first-image", filename: "first-upload.png"},
+		"/upload/last":  {content: "last-image", filename: "last-upload.webp"},
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/upload/first", "/upload/last":
+			calls = append(calls, strings.TrimPrefix(r.URL.Path, "/upload/"))
+			require.NoError(t, r.ParseMultipartForm(1<<20))
+			uploads := r.MultipartForm.File["image"]
+			require.Len(t, uploads, 1)
+			file, err := uploads[0].Open()
+			require.NoError(t, err)
+			defer file.Close()
+			content, err := io.ReadAll(file)
+			require.NoError(t, err)
+			expected := expectedUploads[r.URL.Path]
+			assert.Equal(t, expected.content, string(content))
+			assert.Equal(t, expected.filename, uploads[0].Filename)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/submit":
+			calls = append(calls, "submit")
+			_, _ = w.Write([]byte(`{"id":"upstream-multiple-prepare"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	source := `
+export const meta = {apiVersion:1,key:"multiple-prepare",name:"Multiple Prepare",version:"1.0.0",author:{name:"Test"},models:["m"],fetchMode:"per_task"};
+export function buildSubmitRequest(ctx) {
+ const first=ctx.files.find(file=>file.field==="input_reference");
+ const last=ctx.files.find(file=>file.field==="input_last_frame");
+ return {
+  url:ctx.baseUrl+"/submit",method:"POST",body:{prompt:"p"},prepareRequests:[
+    {url:ctx.baseUrl+"/upload/first",method:"POST",bodyType:"multipart",parts:[{name:"image",fileRef:first.ref,filename:"first-upload.png"}]},
+    {url:ctx.baseUrl+"/upload/last",method:"POST",bodyType:"multipart",parts:[{name:"image",fileRef:last.ref,filename:"last-upload.webp"}]}
+  ]
+}; }
+export function parseSubmitResponse(){return {taskId:"upstream-multiple-prepare"}}
+export function buildQueryRequest(ctx){return {url:ctx.baseUrl+"/query"}}
+export function parseTaskResult(){return {status:"SUCCESS"}}
+`
+	plugin, err := pluginruntime.NewRegistry().Register(source, pluginruntime.Options{})
+	require.NoError(t, err)
+	adaptor := New(plugin)
+	info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelBaseUrl: server.URL}, TaskRelayInfo: &relaycommon.TaskRelayInfo{PublicTaskID: "task_multiple_prepare"}}
+	adaptor.Init(info)
+	c := newMultipartFilesContext(t, []multipartTestFile{
+		{field: "input_reference", filename: "first.png", contentType: "image/png", content: []byte("first-image")},
+		{field: "input_last_frame", filename: "last.webp", contentType: "image/webp", content: []byte("last-image")},
+	})
+	c.Set("task_request", map[string]any{"prompt": "p"})
+	require.Nil(t, adaptor.ValidateRequestAndSetAction(c, info))
+	body, err := adaptor.BuildRequestBody(c, info)
+	require.NoError(t, err)
+	resp, err := adaptor.DoRequest(c, info, body)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, []string{"first", "last", "submit"}, calls)
+}
+
+func TestTaskAdaptorStopsAfterMultiplePrepareRequestFailure(t *testing.T) {
+	service.InitHttpClient()
+	var calls []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.URL.Path)
+		if r.URL.Path == "/upload/last" {
+			w.WriteHeader(http.StatusUnsupportedMediaType)
+			_, _ = w.Write([]byte("last frame upload failed"))
+			return
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	source := `
+export const meta = {apiVersion:1,key:"multiple-prepare-failure",name:"Multiple Prepare Failure",version:"1.0.0",author:{name:"Test"},models:["m"],fetchMode:"per_task"};
+export function buildSubmitRequest(ctx) { return {
+  url:ctx.baseUrl+"/submit",method:"POST",body:{prompt:"p"},prepareRequests:[
+    {url:ctx.baseUrl+"/upload/first",method:"POST",bodyType:"multipart",parts:[{name:"image",fileRef:ctx.files[0].ref}]},
+    {url:ctx.baseUrl+"/upload/last",method:"POST",bodyType:"multipart",parts:[{name:"image",fileRef:ctx.files[0].ref}]}
+  ]
+}; }
+export function parseSubmitResponse(){return {taskId:"unexpected"}}
+export function buildQueryRequest(ctx){return {url:ctx.baseUrl+"/query"}}
+export function parseTaskResult(){return {status:"SUCCESS"}}
+`
+	plugin, err := pluginruntime.NewRegistry().Register(source, pluginruntime.Options{})
+	require.NoError(t, err)
+	adaptor := New(plugin)
+	info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelBaseUrl: server.URL}, TaskRelayInfo: &relaycommon.TaskRelayInfo{}}
+	adaptor.Init(info)
+	c := newMultipartFileContext(t, "input_reference", "ref.png", "image/png", []byte("image-bytes"))
+	c.Set("task_request", map[string]any{"prompt": "p"})
+	require.Nil(t, adaptor.ValidateRequestAndSetAction(c, info))
+	body, err := adaptor.BuildRequestBody(c, info)
+	require.NoError(t, err)
+	response, err := adaptor.DoRequest(c, info, body)
+	require.NoError(t, err)
+	require.NotNil(t, response)
+	defer response.Body.Close()
+
+	assert.Equal(t, http.StatusUnsupportedMediaType, response.StatusCode)
+	assert.Equal(t, []string{"/upload/first", "/upload/last"}, calls)
+}
+
+func TestTaskAdaptorRejectsNestedPrepareRequests(t *testing.T) {
+	source := `
+export const meta = {apiVersion:1,key:"nested-prepare",name:"Nested Prepare",version:"1.0.0",author:{name:"Test"},models:["m"],fetchMode:"per_task"};
+export function buildSubmitRequest(ctx) { return {url:ctx.baseUrl+"/submit",prepareRequests:[{url:ctx.baseUrl+"/upload",prepareRequests:[{url:ctx.baseUrl+"/nested"}]}]}; }
+export function parseSubmitResponse(){return {taskId:"1"}}
+export function buildQueryRequest(){return {url:"https://example.com"}}
+export function parseTaskResult(){return {status:"SUCCESS"}}
+`
+	plugin, err := pluginruntime.NewRegistry().Register(source, pluginruntime.Options{})
+	require.NoError(t, err)
+	adaptor := New(plugin)
+	info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelBaseUrl: "https://provider.example"}, TaskRelayInfo: &relaycommon.TaskRelayInfo{}}
+	adaptor.Init(info)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", nil)
+	c.Set("task_request", map[string]any{"prompt": "p"})
+
+	taskErr := adaptor.ValidateRequestAndSetAction(c, info)
+	require.NotNil(t, taskErr)
+	assert.Equal(t, "plugin_request_invalid", taskErr.Code)
+	assert.Contains(t, taskErr.Message, "another prepare request")
+}
+
+func TestValidatePrepareRequestsRejectsMixedDescriptors(t *testing.T) {
+	descriptor := &requestDescriptor{
+		PrepareRequest:  &requestDescriptor{},
+		PrepareRequests: []requestDescriptor{{}},
+	}
+
+	_, err := validatePrepareRequests(descriptor, "https://provider.example", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "both prepareRequest and prepareRequests")
+}
+
+func TestValidatePrepareRequestsRejectsMoreThanTwoRequests(t *testing.T) {
+	descriptor := &requestDescriptor{
+		PrepareRequests: []requestDescriptor{{}, {}, {}},
+	}
+
+	_, err := validatePrepareRequests(descriptor, "https://provider.example", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "too many prepare requests")
+}
+
 func TestTaskAdaptorPrepareRequestRejectsDisallowedURL(t *testing.T) {
 	source := `
 export const meta = {apiVersion:1,key:"prepare-url",name:"Prepare URL",version:"1.0.0",author:{name:"Test"},models:["m"],fetchMode:"per_task"};
@@ -321,16 +480,31 @@ export function parseSubmitResponse(){return {taskId:"1"}} export function build
 }
 
 func newMultipartFileContext(t *testing.T, field, filename, contentType string, content []byte) *gin.Context {
+	return newMultipartFilesContext(t, []multipartTestFile{{
+		field: field, filename: filename, contentType: contentType, content: content,
+	}})
+}
+
+type multipartTestFile struct {
+	field       string
+	filename    string
+	contentType string
+	content     []byte
+}
+
+func newMultipartFilesContext(t *testing.T, files []multipartTestFile) *gin.Context {
 	t.Helper()
 	var input bytes.Buffer
 	writer := multipart.NewWriter(&input)
-	part, err := writer.CreatePart(textproto.MIMEHeader{
-		"Content-Disposition": {`form-data; name="` + field + `"; filename="` + filename + `"`},
-		"Content-Type":        {contentType},
-	})
-	require.NoError(t, err)
-	_, err = part.Write(content)
-	require.NoError(t, err)
+	for _, file := range files {
+		part, err := writer.CreatePart(textproto.MIMEHeader{
+			"Content-Disposition": {`form-data; name="` + file.field + `"; filename="` + file.filename + `"`},
+			"Content-Type":        {file.contentType},
+		})
+		require.NoError(t, err)
+		_, err = part.Write(file.content)
+		require.NoError(t, err)
+	}
 	require.NoError(t, writer.Close())
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", bytes.NewReader(input.Bytes()))

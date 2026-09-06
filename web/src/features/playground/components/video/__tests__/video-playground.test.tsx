@@ -216,6 +216,7 @@ describe('VideoPlayground', () => {
     await user.click(
       screen.getByRole('menuitemradio', { name: 'First and last frames' })
     )
+    await waitFor(() => expect(menuLabel).not.toBeInTheDocument())
     expect(
       screen.getByLabelText('First frame', { selector: 'input' })
     ).toBeVisible()
@@ -260,6 +261,29 @@ describe('VideoPlayground', () => {
     expect(
       collapse.querySelector('[data-slot="video-expand-icon"]')
     ).toHaveAttribute('data-icon', 'collapse')
+  })
+
+  test('closes the generation mode menu after keyboard selection', async () => {
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Generation mode: Reference generation',
+      })
+    )
+    const keyframes = screen.getByRole('menuitemradio', {
+      name: 'First and last frames',
+    })
+    keyframes.focus()
+    await user.keyboard('{Enter}')
+
+    await waitFor(() => expect(keyframes).not.toBeInTheDocument())
+    expect(
+      screen.getByRole('button', {
+        name: 'Generation mode: First and last frames',
+      })
+    ).toBeVisible()
   })
 
   test('keeps the collapsed content row at the reference control height', async () => {
@@ -352,7 +376,7 @@ describe('VideoPlayground', () => {
     expect(screen.queryByRole('button', { name: '4k' })).not.toBeInTheDocument()
   })
 
-  test('uses the existing keyframe UI as a single first-frame input for MiniMax H3', async () => {
+  test('uses the existing first-and-last-frame UI for MiniMax H3', async () => {
     vi.mocked(getUserModels).mockResolvedValue([
       { label: 'MiniMax H3', value: 'minimax-h3-fl2va' },
     ])
@@ -384,21 +408,22 @@ describe('VideoPlayground', () => {
     ).not.toBeInTheDocument()
     await user.keyboard('{Escape}')
 
-    await selectGenerationMode(user, 'First frame')
+    await selectGenerationMode(user, 'First and last frames')
     const firstFrameInput = screen.getByLabelText('First frame', {
       selector: 'input',
     })
     expect(firstFrameInput).toBeVisible()
+    expect(screen.getByLabelText('Last frame')).toBeVisible()
     expect(
-      firstFrameInput.closest('[data-slot="video-reference-area"]')
-    ).toHaveClass('sm:w-28')
-    expect(screen.queryByLabelText('Last frame')).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: 'Swap first and last frames' })
-    ).not.toBeInTheDocument()
+      screen.getByRole('button', { name: 'Swap first and last frames' })
+    ).toBeDisabled()
     await user.upload(
       screen.getByLabelText('First frame', { selector: 'input' }),
       new File(['image'], 'first.png', { type: 'image/png' })
+    )
+    await user.upload(
+      screen.getByLabelText('Last frame', { selector: 'input' }),
+      new File(['last'], 'last.webp', { type: 'image/webp' })
     )
     expect(
       screen.getByRole('button', { name: 'Generate video' })
@@ -420,6 +445,11 @@ describe('VideoPlayground', () => {
               type: 'image_url',
               image_url: { url: 'data:image/png;base64,aW1hZ2U=' },
               role: 'first_frame',
+            },
+            {
+              type: 'image_url',
+              image_url: { url: 'data:image/webp;base64,bGFzdA==' },
+              role: 'last_frame',
             },
           ],
         },
@@ -469,6 +499,35 @@ describe('VideoPlayground', () => {
         },
       })
     )
+  })
+
+  test('clears unsupported keyframes when switching to MiniMax H3', async () => {
+    vi.mocked(getUserModels).mockResolvedValue([
+      {
+        label: 'dreamina-seedance-2-0-fast-260128',
+        value: 'dreamina-seedance-2-0-fast-260128',
+      },
+      { label: 'MiniMax H3', value: 'minimax-h3-fl2va' },
+    ])
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await selectGenerationMode(user, 'First and last frames')
+    await user.upload(
+      screen.getByLabelText('First frame', { selector: 'input' }),
+      new File(['gif'], 'first.gif', { type: 'image/gif' })
+    )
+    expect(await screen.findByAltText('First frame')).toBeVisible()
+
+    await user.click(screen.getByRole('combobox'))
+    await user.click(await screen.findByText('MiniMax H3'))
+
+    await waitFor(() =>
+      expect(screen.queryByAltText('First frame')).not.toBeInTheDocument()
+    )
+    expect(
+      screen.getByRole('button', { name: 'Generate video' })
+    ).toBeDisabled()
   })
 
   test('shows a pointer cursor for the reference content picker', async () => {

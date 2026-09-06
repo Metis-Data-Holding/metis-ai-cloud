@@ -87,6 +87,37 @@ describe('video submission transport', () => {
     expect(await image.text()).toBe('image')
   })
 
+  test('submits MiniMax H3 first and last frames as multipart', async () => {
+    await submitVideoGeneration(
+      'default',
+      h3Request([
+        {
+          type: 'image_url',
+          image_url: { url: 'data:image/png;base64,Zmlyc3Q=' },
+          role: 'first_frame',
+        },
+        {
+          type: 'image_url',
+          image_url: { url: 'data:image/webp;base64,bGFzdA==' },
+          role: 'last_frame',
+        },
+      ])
+    )
+
+    const body = post.mock.calls[0]?.[1]
+    expect(body).toBeInstanceOf(FormData)
+    if (!(body instanceof FormData)) return
+    const firstFrame = body.get('input_reference')
+    const lastFrame = body.get('input_last_frame')
+    expect(firstFrame).toBeInstanceOf(File)
+    expect(lastFrame).toBeInstanceOf(File)
+    if (!(firstFrame instanceof File) || !(lastFrame instanceof File)) return
+    expect(firstFrame.type).toBe('image/png')
+    expect(await firstFrame.text()).toBe('first')
+    expect(lastFrame.type).toBe('image/webp')
+    expect(await lastFrame.text()).toBe('last')
+  })
+
   test('keeps MiniMax H3 text-to-video and Seedance requests as JSON', async () => {
     const textRequest = h3Request()
     await submitVideoGeneration('default', textRequest)
@@ -133,6 +164,19 @@ describe('video submission transport', () => {
             type: 'image_url',
             image_url: { url: 'data:image/png;base64,a===' },
             role: 'first_frame',
+          },
+        ])
+      )
+    ).rejects.toThrow('Choose a supported image file.')
+
+    await expect(
+      submitVideoGeneration(
+        'default',
+        h3Request([
+          {
+            type: 'image_url',
+            image_url: { url: 'data:image/png;base64,bGFzdA==' },
+            role: 'last_frame',
           },
         ])
       )

@@ -111,29 +111,21 @@ export async function submitVideoGeneration(
     (item): item is VideoImageContent =>
       item.type === 'image_url' && item.role === 'first_frame'
   )
+  const lastFrame = content.find(
+    (item): item is VideoImageContent =>
+      item.type === 'image_url' && item.role === 'last_frame'
+  )
   let body: VideoGenerationRequest | FormData = payload
   const isH3 = payload.model.toLowerCase() === 'minimax-h3-fl2va'
-  if (isH3 && content.length > 0 && (!firstFrame || content.length !== 1)) {
+  const h3FrameCount = Number(Boolean(firstFrame)) + Number(Boolean(lastFrame))
+  if (
+    isH3 &&
+    content.length > 0 &&
+    (!firstFrame || content.length !== h3FrameCount)
+  ) {
     throw new Error(i18next.t('Choose a supported image file.'))
   }
   if (isH3 && firstFrame) {
-    const match = firstFrame.image_url.url.match(
-      /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/
-    )
-    if (!match) {
-      throw new Error(i18next.t('Choose a supported image file.'))
-    }
-    let binary: string
-    try {
-      binary = atob(match[2])
-    } catch {
-      throw new Error(i18next.t('Choose a supported image file.'))
-    }
-    const bytes = new Uint8Array(binary.length)
-    for (let index = 0; index < binary.length; index += 1) {
-      bytes[index] = binary.charCodeAt(index)
-    }
-    const extension = match[1] === 'image/jpeg' ? 'jpg' : match[1].slice(6)
     const formData = new FormData()
     formData.append('model', payload.model)
     formData.append('prompt', payload.prompt)
@@ -146,10 +138,10 @@ export async function submitVideoGeneration(
         generate_audio: payload.metadata.generate_audio,
       })
     )
-    formData.append(
-      'input_reference',
-      new File([bytes], `first-frame.${extension}`, { type: match[1] })
-    )
+    formData.append('input_reference', imageContentFile(firstFrame, 'first'))
+    if (lastFrame) {
+      formData.append('input_last_frame', imageContentFile(lastFrame, 'last'))
+    }
     body = formData
   }
   const res = await api.post(API_ENDPOINTS.VIDEOS, body, {
@@ -157,6 +149,30 @@ export async function submitVideoGeneration(
     skipErrorHandler: true,
   })
   return res.data
+}
+
+function imageContentFile(
+  content: VideoImageContent,
+  frame: 'first' | 'last'
+): File {
+  const match = content.image_url.url.match(
+    /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/
+  )
+  if (!match) {
+    throw new Error(i18next.t('Choose a supported image file.'))
+  }
+  let binary: string
+  try {
+    binary = atob(match[2])
+  } catch {
+    throw new Error(i18next.t('Choose a supported image file.'))
+  }
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+  const extension = match[1] === 'image/jpeg' ? 'jpg' : match[1].slice(6)
+  return new File([bytes], `${frame}-frame.${extension}`, { type: match[1] })
 }
 
 export async function getVideoGeneration(taskId: string): Promise<VideoTask> {

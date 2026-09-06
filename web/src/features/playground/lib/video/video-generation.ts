@@ -28,7 +28,7 @@ const FAST_RESOLUTIONS: VideoResolution[] = ['480p', '720p']
 const H3_RESOLUTIONS: VideoResolution[] = ['768p']
 const H3_MODEL = 'minimax-h3-fl2va'
 
-export function isFirstFrameOnlyVideoPlaygroundModel(model: string): boolean {
+export function isMinimaxH3VideoPlaygroundModel(model: string): boolean {
   return model.toLowerCase() === H3_MODEL
 }
 
@@ -45,7 +45,7 @@ export function getVideoResolutionOptions(
   model: string,
   _hasImageInput = false
 ): VideoResolution[] {
-  if (isFirstFrameOnlyVideoPlaygroundModel(model)) {
+  if (isMinimaxH3VideoPlaygroundModel(model)) {
     return H3_RESOLUTIONS
   }
   if (model.toLowerCase().includes('seedance-2-0-fast')) {
@@ -74,7 +74,7 @@ export function normalizeVideoResolution(
   const options = getVideoResolutionOptions(model, hasImageInput)
   const isDisabled = isVideoResolutionDisabled(model, resolution, hasImageInput)
   if (options.includes(resolution) && !isDisabled) return resolution
-  return isFirstFrameOnlyVideoPlaygroundModel(model) ? '768p' : '720p'
+  return isMinimaxH3VideoPlaygroundModel(model) ? '768p' : '720p'
 }
 
 export function buildVideoGenerationRequest(

@@ -1,5 +1,7 @@
 # MiniMax H3 首帧图生视频设计
 
+> 后续演进：用户在 ComfyUI 验证首尾帧工作流后，平台在保留本设计单首帧兼容性的基础上扩展为可选尾帧；提交描述符支持最多两个顺序预请求，当前状态以 `docs/CURRENT_STATE.md` 为准。
+
 ## 目标
 
 在不改变既有 MiniMax H3 文生视频行为的前提下，让 Playground 可以为 `minimax-h3-fl2va` 提交一张首帧图片，并通过现有 Task Plugin 链路调用 ComfyUI 生成视频。

@@ -75,7 +75,7 @@ interface VideoReferenceInputProps {
   onExpandedChange?: (expanded: boolean) => void
   onValidityChange: (valid: boolean) => void
   disabled?: boolean
-  firstFrameOnly?: boolean
+  strictKeyframeFormats?: boolean
   variant?: 'default' | 'composer'
 }
 
@@ -353,7 +353,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
       return
     }
     if (
-      props.firstFrameOnly &&
+      props.strictKeyframeFormats &&
       !['image/jpeg', 'image/png', 'image/webp'].includes(
         file.type.toLowerCase()
       )
@@ -504,7 +504,9 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
         <input
           id={inputId}
           type='file'
-          accept={props.firstFrameOnly ? FIRST_FRAME_ONLY_ACCEPT : IMAGE_ACCEPT}
+          accept={
+            props.strictKeyframeFormats ? FIRST_FRAME_ONLY_ACCEPT : IMAGE_ACCEPT
+          }
           className='sr-only'
           disabled={props.disabled}
           onChange={(event) => void handleFrame(event, role)}
@@ -654,26 +656,22 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
           className='flex min-h-28 w-full min-w-0 items-center justify-start gap-2 sm:gap-3'
         >
           {frameSlot('first_frame', t('First frame'))}
-          {!props.firstFrameOnly ? (
-            <>
-              <Button
-                type='button'
-                size='icon-sm'
-                variant='outline'
-                className='shrink-0 rounded-full'
-                aria-label={t('Swap first and last frames')}
-                disabled={
-                  props.disabled ||
-                  !props.content.some((item) => item.role === 'first_frame') ||
-                  !props.content.some((item) => item.role === 'last_frame')
-                }
-                onClick={swapFrames}
-              >
-                <HugeiconsIcon icon={ArrowLeftRightIcon} aria-hidden='true' />
-              </Button>
-              {frameSlot('last_frame', t('Last frame'))}
-            </>
-          ) : null}
+          <Button
+            type='button'
+            size='icon-sm'
+            variant='outline'
+            className='shrink-0 rounded-full'
+            aria-label={t('Swap first and last frames')}
+            disabled={
+              props.disabled ||
+              !props.content.some((item) => item.role === 'first_frame') ||
+              !props.content.some((item) => item.role === 'last_frame')
+            }
+            onClick={swapFrames}
+          >
+            <HugeiconsIcon icon={ArrowLeftRightIcon} aria-hidden='true' />
+          </Button>
+          {frameSlot('last_frame', t('Last frame'))}
         </div>
       )}
       {imageError ? (

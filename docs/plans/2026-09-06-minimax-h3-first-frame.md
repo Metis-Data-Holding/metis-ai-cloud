@@ -1,5 +1,7 @@
 # MiniMax H3 首帧图生视频实施计划
 
+> 后续演进：用户在 ComfyUI 验证首尾帧工作流后，平台在保留本计划单首帧兼容性的基础上扩展为可选尾帧；提交描述符支持最多两个顺序预请求，当前状态以 `docs/CURRENT_STATE.md` 为准。
+
 > **Required skill:** Use `superpowers:executing-plans` to execute this plan task-by-task.
 
 **Goal:** 复用现有 Playground 视频 UI，为 MiniMax H3 增加单首帧图生视频，并以一次受控预上传衔接 ComfyUI `/upload/image` 与 `/prompt`。

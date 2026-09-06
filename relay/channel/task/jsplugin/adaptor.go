@@ -33,17 +33,18 @@ import (
 )
 
 type requestDescriptor struct {
-	URL            string             `json:"url"`
-	Method         string             `json:"method"`
-	Headers        map[string]string  `json:"headers"`
-	Body           any                `json:"body"`
-	PrepareRequest *requestDescriptor `json:"prepareRequest"`
-	Credentialless bool               `json:"credentialless"`
-	Action         string             `json:"action"`
-	Model          string             `json:"model"`
-	RewriteModel   string             `json:"rewriteModel"`
-	BodyType       string             `json:"bodyType"`
-	Parts          []requestPart      `json:"parts"`
+	URL             string              `json:"url"`
+	Method          string              `json:"method"`
+	Headers         map[string]string   `json:"headers"`
+	Body            any                 `json:"body"`
+	PrepareRequest  *requestDescriptor  `json:"prepareRequest"`
+	PrepareRequests []requestDescriptor `json:"prepareRequests"`
+	Credentialless  bool                `json:"credentialless"`
+	Action          string              `json:"action"`
+	Model           string              `json:"model"`
+	RewriteModel    string              `json:"rewriteModel"`
+	BodyType        string              `json:"bodyType"`
+	Parts           []requestPart       `json:"parts"`
 }
 
 type requestPart struct {
@@ -75,6 +76,8 @@ type taskResult struct {
 var taskArtifactKeyPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$`)
 
 const maxTaskArtifacts = 64
+
+const maxPrepareRequests = 2
 
 // maxTaskPluginPersistedJSONBytes is the shared ceiling for taskData and plugin state.
 const maxTaskPluginPersistedJSONBytes = 1 << 20
@@ -239,6 +242,19 @@ func buildDescriptorBody(c *gin.Context, descriptor *requestDescriptor) (io.Read
 			return nil, parseErr
 		}
 		defer form.RemoveAll()
+		return buildDescriptorBodyWithForm(c, descriptor, form)
+	}
+	return buildDescriptorBodyWithForm(c, descriptor, nil)
+}
+
+func buildDescriptorBodyWithForm(c *gin.Context, descriptor *requestDescriptor, form *multipart.Form) (io.Reader, error) {
+	if descriptor == nil {
+		return nil, fmt.Errorf("request descriptor is missing")
+	}
+	if descriptor.BodyType == "multipart" {
+		if form == nil {
+			return nil, fmt.Errorf("multipart form is missing")
+		}
 		var body bytes.Buffer
 		writer := multipart.NewWriter(&body)
 		var err error
@@ -309,7 +325,14 @@ func buildDescriptorBody(c *gin.Context, descriptor *requestDescriptor) (io.Read
 	if text, ok := descriptor.Body.(string); ok {
 		return strings.NewReader(text), nil
 	}
-	inlined, err := inlineJSONFilePlaceholders(c, descriptor.Body)
+	if !containsJSONFilePlaceholder(descriptor.Body) {
+		encoded, err := common.Marshal(descriptor.Body)
+		if err != nil {
+			return nil, err
+		}
+		return bytes.NewReader(encoded), nil
+	}
+	inlined, err := inlineJSONFilePlaceholdersWithForm(c, descriptor.Body, form)
 	if err != nil {
 		return nil, err
 	}
@@ -318,6 +341,27 @@ func buildDescriptorBody(c *gin.Context, descriptor *requestDescriptor) (io.Read
 		return nil, err
 	}
 	return bytes.NewReader(body), nil
+}
+
+func containsJSONFilePlaceholder(value any) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		if _, exists := typed["__fileRef"]; exists {
+			return true
+		}
+		for _, item := range typed {
+			if containsJSONFilePlaceholder(item) {
+				return true
+			}
+		}
+	case []any:
+		for _, item := range typed {
+			if containsJSONFilePlaceholder(item) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func maxInlineFileBytes() int64 {
@@ -329,9 +373,12 @@ func maxInlineFileBytes() int64 {
 }
 
 func inlineJSONFilePlaceholders(c *gin.Context, body any) (any, error) {
+	return inlineJSONFilePlaceholdersWithForm(c, body, nil)
+}
+
+func inlineJSONFilePlaceholdersWithForm(c *gin.Context, body any, form *multipart.Form) (any, error) {
 	cloned := jsonValue(body)
-	var form *multipart.Form
-	if c != nil && c.Request != nil && strings.Contains(c.GetHeader("Content-Type"), "multipart/form-data") {
+	if form == nil && c != nil && c.Request != nil && strings.Contains(c.GetHeader("Content-Type"), "multipart/form-data") {
 		parsed, parseErr := common.ParseMultipartFormReusable(c)
 		if parseErr != nil {
 			return nil, parseErr
@@ -441,12 +488,29 @@ func encodeFilePlaceholder(placeholder map[string]any, form *multipart.Form, lim
 
 func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io.Reader) (*http.Response, error) {
 	common.SetContextKey(c, constant.ContextKeyTaskPrepareResponse, false)
-	if a.submit != nil && a.submit.PrepareRequest != nil {
-		prepareBody, err := buildDescriptorBody(c, a.submit.PrepareRequest)
+	prepareRequests, err := a.prepareRequests(info)
+	if err != nil {
+		return nil, err
+	}
+	var prepareForm *multipart.Form
+	if len(prepareRequests) > 1 && strings.Contains(c.GetHeader("Content-Type"), "multipart/form-data") {
+		prepareForm, err = common.ParseMultipartFormReusable(c)
+		if err != nil {
+			return nil, fmt.Errorf("parse prepare request form failed: %w", err)
+		}
+		defer prepareForm.RemoveAll()
+	}
+	for _, prepareRequest := range prepareRequests {
+		var prepareBody io.Reader
+		if prepareForm != nil {
+			prepareBody, err = buildDescriptorBodyWithForm(c, prepareRequest, prepareForm)
+		} else {
+			prepareBody, err = buildDescriptorBody(c, prepareRequest)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("build prepare request failed: %w", err)
 		}
-		prepareResponse, err := a.doPrepareRequest(c, info, prepareBody)
+		prepareResponse, err := a.doPrepareRequest(c, info, prepareRequest, prepareBody)
 		if err != nil {
 			return nil, fmt.Errorf("prepare request failed: %w", err)
 		}
@@ -463,8 +527,7 @@ func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, bod
 	return channel.DoTaskApiRequest(a, c, info, body)
 }
 
-func (a *TaskAdaptor) doPrepareRequest(c *gin.Context, info *relaycommon.RelayInfo, body io.Reader) (*http.Response, error) {
-	descriptor := a.submit.PrepareRequest
+func (a *TaskAdaptor) doPrepareRequest(c *gin.Context, info *relaycommon.RelayInfo, descriptor *requestDescriptor, body io.Reader) (*http.Response, error) {
 	method := strings.ToUpper(strings.TrimSpace(descriptor.Method))
 	if method == "" {
 		method = http.MethodPost
@@ -1207,11 +1270,9 @@ func (a *TaskAdaptor) buildSubmit(c *gin.Context, info *relaycommon.RelayInfo) (
 		logger.LogDebug(c, "task_plugin subsystem=adaptor event=build_submit_failed plugin=%q stage=validate_url reason=url_not_allowed", a.plugin.Meta.Key)
 		return nil, err
 	}
-	if descriptor.PrepareRequest != nil {
-		if err = validatePrepareRequest(descriptor.PrepareRequest, info.ChannelBaseUrl, a.plugin.Meta.AllowedHosts); err != nil {
-			logger.LogDebug(c, "task_plugin subsystem=adaptor event=build_submit_failed plugin=%q stage=validate_prepare_request reason=invalid_descriptor", a.plugin.Meta.Key)
-			return nil, err
-		}
+	if _, err = validatePrepareRequests(&descriptor, info.ChannelBaseUrl, a.plugin.Meta.AllowedHosts); err != nil {
+		logger.LogDebug(c, "task_plugin subsystem=adaptor event=build_submit_failed plugin=%q stage=validate_prepare_request reason=invalid_descriptor", a.plugin.Meta.Key)
+		return nil, err
 	}
 	if descriptor.Action != "" {
 		info.Action = descriptor.Action
@@ -1253,11 +1314,48 @@ func (a *TaskAdaptor) buildSubmit(c *gin.Context, info *relaycommon.RelayInfo) (
 	return a.submit, nil
 }
 
+func (a *TaskAdaptor) prepareRequests(info *relaycommon.RelayInfo) ([]*requestDescriptor, error) {
+	if a.submit == nil {
+		return nil, nil
+	}
+	if info == nil {
+		return nil, fmt.Errorf("relay info is missing")
+	}
+	return validatePrepareRequests(a.submit, info.ChannelBaseUrl, a.plugin.Meta.AllowedHosts)
+}
+
+func validatePrepareRequests(descriptor *requestDescriptor, baseURL string, allowedHosts []string) ([]*requestDescriptor, error) {
+	if descriptor == nil {
+		return nil, nil
+	}
+	if descriptor.PrepareRequest != nil && len(descriptor.PrepareRequests) > 0 {
+		return nil, fmt.Errorf("plugin submit request cannot contain both prepareRequest and prepareRequests")
+	}
+	if descriptor.PrepareRequest != nil {
+		if err := validatePrepareRequest(descriptor.PrepareRequest, baseURL, allowedHosts); err != nil {
+			return nil, err
+		}
+		return []*requestDescriptor{descriptor.PrepareRequest}, nil
+	}
+	if len(descriptor.PrepareRequests) > maxPrepareRequests {
+		return nil, fmt.Errorf("plugin submit request returned too many prepare requests")
+	}
+	requests := make([]*requestDescriptor, len(descriptor.PrepareRequests))
+	for index := range descriptor.PrepareRequests {
+		prepareRequest := &descriptor.PrepareRequests[index]
+		if err := validatePrepareRequest(prepareRequest, baseURL, allowedHosts); err != nil {
+			return nil, fmt.Errorf("prepare request %d: %w", index+1, err)
+		}
+		requests[index] = prepareRequest
+	}
+	return requests, nil
+}
+
 func validatePrepareRequest(descriptor *requestDescriptor, baseURL string, allowedHosts []string) error {
 	if descriptor == nil {
 		return fmt.Errorf("plugin prepare request is missing")
 	}
-	if descriptor.PrepareRequest != nil {
+	if descriptor.PrepareRequest != nil || len(descriptor.PrepareRequests) > 0 {
 		return fmt.Errorf("plugin prepare request cannot contain another prepare request")
 	}
 	if descriptor.Credentialless {

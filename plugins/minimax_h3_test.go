@@ -165,6 +165,43 @@ func TestMinimaxH3OpenAIVideoDecodeMultipartFirstFrame(t *testing.T) {
 	}
 }
 
+func TestMinimaxH3OpenAIVideoDecodeMultipartKeyframes(t *testing.T) {
+	plugin := loadMinimaxH3Plugin(t)
+	decode := func(body map[string]any) (map[string]any, error) {
+		value, err := plugin.Engine.CallPath(t.Context(), "protocols", []string{"openai_video", "decodeRequest"}, map[string]any{
+			"model": "minimax-h3-fl2va",
+			"body":  body,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return minimaxH3Map(t, value), nil
+	}
+
+	intent, err := decode(map[string]any{
+		"kind": "multipart",
+		"fields": map[string][]string{
+			"prompt": {"cat by the window"},
+		},
+		"files": []map[string]any{
+			{"ref": "request_file:input_reference", "field": "input_reference", "filename": "first.png", "mimeType": "image/png", "size": 3},
+			{"ref": "request_file:input_last_frame", "field": "input_last_frame", "filename": "last.webp", "mimeType": "image/webp", "size": 4},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "image_to_video", intent["action"])
+	request := intent["requestBody"].(map[string]any)
+	assert.Equal(t, "request_file:input_reference", request["input_reference"].(map[string]any)["__fileRef"])
+	assert.Equal(t, "request_file:input_last_frame", request["input_last_frame"].(map[string]any)["__fileRef"])
+
+	_, err = decode(map[string]any{
+		"kind":   "multipart",
+		"fields": map[string][]string{"prompt": {"p"}},
+		"files":  []map[string]any{{"ref": "request_file:input_last_frame", "field": "input_last_frame", "filename": "last.png", "mimeType": "image/png", "size": 3}},
+	})
+	require.ErrorContains(t, err, "input_last_frame requires input_reference")
+}
+
 func TestMinimaxH3OpenAIVideoRender(t *testing.T) {
 	adaptor := taskjsplugin.New(loadMinimaxH3Plugin(t))
 	rendered, err := adaptor.ConvertToOpenAIVideo(&model.Task{
@@ -262,6 +299,37 @@ func TestMinimaxH3BuildsMinimalComfyWorkflow(t *testing.T) {
 		assert.Equal(t, []any{"15", float64(0)}, videoInputs["first_frame"])
 	})
 
+	t.Run("first and last frames use ordered prepared Comfy uploads", func(t *testing.T) {
+		requestBody := map[string]any{
+			"prompt": "cat by the window", "duration": 5, "resolution": "768p", "ratio": "16:9", "generate_audio": false,
+			"input_reference":  map[string]any{"__fileRef": "request_file:input_reference"},
+			"input_last_frame": map[string]any{"__fileRef": "request_file:input_last_frame"},
+		}
+		context := minimaxH3SubmitContext(requestBody, "task/keyframes")
+		context["files"] = []map[string]any{
+			{"ref": "request_file:input_reference", "field": "input_reference", "filename": "first.png", "mimeType": "image/png", "size": 3},
+			{"ref": "request_file:input_last_frame", "field": "input_last_frame", "filename": "last.png", "mimeType": "image/png", "size": 3},
+		}
+		descriptor := callMinimaxH3Hook(t, plugin, "buildSubmitRequest", context)
+		prepare := descriptor["prepareRequests"].([]any)
+		require.Len(t, prepare, 2)
+		firstPrepare := prepare[0].(map[string]any)
+		lastPrepare := prepare[1].(map[string]any)
+		assert.Equal(t, "http://100.64.0.10:8888/upload/image", firstPrepare["url"])
+		assert.Equal(t, "http://100.64.0.10:8888/upload/image", lastPrepare["url"])
+		assert.NotEqual(t, firstPrepare["parts"].([]any)[0].(map[string]any)["filename"], lastPrepare["parts"].([]any)[0].(map[string]any)["filename"])
+		assert.Equal(t, "request_file:input_reference", firstPrepare["parts"].([]any)[0].(map[string]any)["fileRef"])
+		assert.Equal(t, "request_file:input_last_frame", lastPrepare["parts"].([]any)[0].(map[string]any)["fileRef"])
+
+		workflow := descriptor["body"].(map[string]any)["prompt"].(map[string]any)
+		firstLoadImage := workflow["15"].(map[string]any)
+		lastLoadImage := workflow["16"].(map[string]any)
+		assert.Equal(t, "LoadImage", firstLoadImage["class_type"])
+		assert.Equal(t, "LoadImage", lastLoadImage["class_type"])
+		assert.Equal(t, []any{"15", float64(0)}, workflow["4"].(map[string]any)["inputs"].(map[string]any)["first_frame"])
+		assert.Equal(t, []any{"16", float64(0)}, workflow["4"].(map[string]any)["inputs"].(map[string]any)["last_frame"])
+	})
+
 	t.Run("first frame enforces the server-side size limit", func(t *testing.T) {
 		requestBody := map[string]any{
 			"prompt": "cat by the window", "duration": 5, "resolution": "768p", "ratio": "16:9", "generate_audio": false,
@@ -273,6 +341,29 @@ func TestMinimaxH3BuildsMinimalComfyWorkflow(t *testing.T) {
 			_, err := plugin.Engine.Call(t.Context(), "buildSubmitRequest", context)
 			require.ErrorContains(t, err, "input_reference must be smaller than 30 MiB")
 		}
+	})
+
+	t.Run("first and last frames enforce the combined size limit", func(t *testing.T) {
+		requestBody := map[string]any{
+			"prompt": "cat by the window", "duration": 5, "resolution": "768p", "ratio": "16:9", "generate_audio": false,
+			"input_reference":  map[string]any{"__fileRef": "request_file:input_reference"},
+			"input_last_frame": map[string]any{"__fileRef": "request_file:input_last_frame"},
+		}
+		validContext := minimaxH3SubmitContext(requestBody, "task-combined-limit")
+		validContext["files"] = []map[string]any{
+			{"ref": "request_file:input_reference", "field": "input_reference", "filename": "first.png", "mimeType": "image/png", "size": 29 * 1024 * 1024},
+			{"ref": "request_file:input_last_frame", "field": "input_last_frame", "filename": "last.png", "mimeType": "image/png", "size": 16 * 1024 * 1024},
+		}
+		_, err := plugin.Engine.Call(t.Context(), "buildSubmitRequest", validContext)
+		require.NoError(t, err)
+
+		overLimitContext := minimaxH3SubmitContext(requestBody, "task-combined-limit")
+		overLimitContext["files"] = []map[string]any{
+			{"ref": "request_file:input_reference", "field": "input_reference", "filename": "first.png", "mimeType": "image/png", "size": 29 * 1024 * 1024},
+			{"ref": "request_file:input_last_frame", "field": "input_last_frame", "filename": "last.png", "mimeType": "image/png", "size": 16*1024*1024 + 1},
+		}
+		_, err = plugin.Engine.Call(t.Context(), "buildSubmitRequest", overLimitContext)
+		require.ErrorContains(t, err, "input frames must not exceed 45 MiB in total")
 	})
 
 	t.Run("seed is stable per public task", func(t *testing.T) {
