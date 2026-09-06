@@ -54,6 +54,7 @@ const MAX_REFERENCE_VIDEOS = 3
 const REFERENCE_CARD_ROTATIONS = [-5, 4, -3, 5] as const
 const IMAGE_ACCEPT =
   'image/jpeg,image/png,image/webp,image/bmp,image/tiff,image/gif,image/heic,image/heif,.heic,.heif'
+const FIRST_FRAME_ONLY_ACCEPT = 'image/jpeg,image/png,image/webp'
 const VIDEO_ACCEPT = 'video/mp4,video/quicktime,.mp4,.mov'
 const REFERENCE_CONTENT_ACCEPT = `${IMAGE_ACCEPT},${VIDEO_ACCEPT}`
 const SUPPORTED_IMAGE_MIME_TYPES = new Set([
@@ -74,6 +75,7 @@ interface VideoReferenceInputProps {
   onExpandedChange?: (expanded: boolean) => void
   onValidityChange: (valid: boolean) => void
   disabled?: boolean
+  firstFrameOnly?: boolean
   variant?: 'default' | 'composer'
 }
 
@@ -350,6 +352,15 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
     if (!file) {
       return
     }
+    if (
+      props.firstFrameOnly &&
+      !['image/jpeg', 'image/png', 'image/webp'].includes(
+        file.type.toLowerCase()
+      )
+    ) {
+      setImageError(t('Choose a supported image file.'))
+      return
+    }
     if (!isSupportedImage(file)) {
       setImageError(t('Choose a supported image file.'))
       return
@@ -493,7 +504,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
         <input
           id={inputId}
           type='file'
-          accept={IMAGE_ACCEPT}
+          accept={props.firstFrameOnly ? FIRST_FRAME_ONLY_ACCEPT : IMAGE_ACCEPT}
           className='sr-only'
           disabled={props.disabled}
           onChange={(event) => void handleFrame(event, role)}
@@ -643,22 +654,26 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
           className='flex min-h-28 w-full min-w-0 items-center justify-start gap-2 sm:gap-3'
         >
           {frameSlot('first_frame', t('First frame'))}
-          <Button
-            type='button'
-            size='icon-sm'
-            variant='outline'
-            className='shrink-0 rounded-full'
-            aria-label={t('Swap first and last frames')}
-            disabled={
-              props.disabled ||
-              !props.content.some((item) => item.role === 'first_frame') ||
-              !props.content.some((item) => item.role === 'last_frame')
-            }
-            onClick={swapFrames}
-          >
-            <HugeiconsIcon icon={ArrowLeftRightIcon} aria-hidden='true' />
-          </Button>
-          {frameSlot('last_frame', t('Last frame'))}
+          {!props.firstFrameOnly ? (
+            <>
+              <Button
+                type='button'
+                size='icon-sm'
+                variant='outline'
+                className='shrink-0 rounded-full'
+                aria-label={t('Swap first and last frames')}
+                disabled={
+                  props.disabled ||
+                  !props.content.some((item) => item.role === 'first_frame') ||
+                  !props.content.some((item) => item.role === 'last_frame')
+                }
+                onClick={swapFrames}
+              >
+                <HugeiconsIcon icon={ArrowLeftRightIcon} aria-hidden='true' />
+              </Button>
+              {frameSlot('last_frame', t('Last frame'))}
+            </>
+          ) : null}
         </div>
       )}
       {imageError ? (

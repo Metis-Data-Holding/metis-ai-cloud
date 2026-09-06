@@ -43,8 +43,8 @@ import {
 import {
   buildVideoGenerationRequest,
   getVideoResolutionOptions,
+  isFirstFrameOnlyVideoPlaygroundModel,
   isSupportedVideoPlaygroundModel,
-  isTextOnlyVideoPlaygroundModel,
   isVideoResolutionDisabled,
   normalizeVideoResolution,
 } from '../../lib/video/video-generation'
@@ -83,7 +83,7 @@ export function VideoPlayground() {
   })
   const values = form.watch()
   const hasImageInput = inputContent.some((item) => item.type === 'image_url')
-  const textOnly = isTextOnlyVideoPlaygroundModel(values.model)
+  const firstFrameOnly = isFirstFrameOnlyVideoPlaygroundModel(values.model)
 
   const groupsQuery = useQuery({
     queryKey: ['playground', 'video-groups'],
@@ -136,11 +136,14 @@ export function VideoPlayground() {
   }, [form, hasImageInput, values.model, values.resolution])
 
   useEffect(() => {
-    if (!textOnly) return
-    form.setValue('mode', 'reference')
-    setInputContent([])
+    if (!firstFrameOnly) return
+    setInputContent((current) =>
+      values.mode === 'keyframes'
+        ? current.filter((item) => item.role === 'first_frame')
+        : []
+    )
     setInputContentValid(true)
-  }, [form, textOnly])
+  }, [firstFrameOnly, values.mode])
 
   const handleGroupChange = (value: string) => {
     setSelectedGroup(value)
@@ -182,10 +185,12 @@ export function VideoPlayground() {
     (values.mode === 'reference' &&
       inputContent.length === 0 &&
       values.prompt.trim() === '')
+  const promptMissing = firstFrameOnly && values.prompt.trim() === ''
   const submitDisabled =
     systemDisabled ||
     values.model === '' ||
     inputContentMissing ||
+    promptMissing ||
     !inputContentValid
   const hasResults = generation.tasks.length > 0
   const optionLoadError = groupsQuery.error || modelsQuery.error
@@ -209,7 +214,7 @@ export function VideoPlayground() {
       resolutions={resolutions}
       disabledResolutions={disabledResolutions}
       seconds={values.seconds}
-      textOnly={textOnly}
+      firstFrameOnly={firstFrameOnly}
       onAudioChange={(value) => form.setValue('generateAudio', value)}
       onGroupChange={handleGroupChange}
       onInputContentChange={setInputContent}

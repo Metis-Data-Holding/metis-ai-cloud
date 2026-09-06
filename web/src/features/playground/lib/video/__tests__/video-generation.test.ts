@@ -22,9 +22,9 @@ import { videoFormSchema } from '../video-form-schema'
 import {
   buildVideoGenerationRequest,
   getVideoResolutionOptions,
+  isFirstFrameOnlyVideoPlaygroundModel,
   isSupportedVideoPlaygroundModel,
   isTerminalVideoStatus,
-  isTextOnlyVideoPlaygroundModel,
   normalizeVideoResolution,
 } from '../video-generation'
 
@@ -244,13 +244,13 @@ describe('video model constraints', () => {
     ).toBe('720p')
   })
 
-  test('limits MiniMax H3 to its 768p text-to-video capability', () => {
+  test('limits MiniMax H3 to 768p and exposes its single first-frame capability', () => {
     expect(getVideoResolutionOptions('minimax-h3-fl2va')).toEqual(['768p'])
     expect(normalizeVideoResolution('minimax-h3-fl2va', '720p')).toBe('768p')
-    expect(isTextOnlyVideoPlaygroundModel('minimax-h3-fl2va')).toBe(true)
-    expect(isTextOnlyVideoPlaygroundModel('dreamina-seedance-2-0-260128')).toBe(
-      false
-    )
+    expect(isFirstFrameOnlyVideoPlaygroundModel('minimax-h3-fl2va')).toBe(true)
+    expect(
+      isFirstFrameOnlyVideoPlaygroundModel('dreamina-seedance-2-0-260128')
+    ).toBe(false)
   })
 
   test('accepts 768p in the shared video form schema', () => {

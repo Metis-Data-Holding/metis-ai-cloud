@@ -71,7 +71,7 @@ async function openVideoSettings(user: ReturnType<typeof userEvent.setup>) {
 
 async function selectGenerationMode(
   user: ReturnType<typeof userEvent.setup>,
-  mode: 'Reference generation' | 'First and last frames'
+  mode: 'Reference generation' | 'First and last frames' | 'First frame'
 ) {
   await user.click(
     await screen.findByRole('button', { name: /^Generation mode:/ })
@@ -216,7 +216,9 @@ describe('VideoPlayground', () => {
     await user.click(
       screen.getByRole('menuitemradio', { name: 'First and last frames' })
     )
-    expect(screen.getByLabelText('First frame')).toBeVisible()
+    expect(
+      screen.getByLabelText('First frame', { selector: 'input' })
+    ).toBeVisible()
     expect(screen.getByLabelText('Last frame')).toBeVisible()
     expect(
       screen.queryByLabelText('Last frame (optional)')
@@ -344,7 +346,7 @@ describe('VideoPlayground', () => {
     expect(screen.queryByRole('button', { name: '4k' })).not.toBeInTheDocument()
   })
 
-  test('uses a text-only 768p composer for MiniMax H3', async () => {
+  test('uses the existing keyframe UI as a single first-frame input for MiniMax H3', async () => {
     vi.mocked(getUserModels).mockResolvedValue([
       { label: 'MiniMax H3', value: 'minimax-h3-fl2va' },
     ])
@@ -362,8 +364,8 @@ describe('VideoPlayground', () => {
       screen.queryByLabelText('Add reference content')
     ).not.toBeInTheDocument()
     expect(
-      screen.queryByRole('button', { name: /^Generation mode:/ })
-    ).not.toBeInTheDocument()
+      screen.getByRole('button', { name: 'Generation mode: Text to Video' })
+    ).toBeVisible()
 
     await user.click(
       await screen.findByRole('button', {
@@ -376,6 +378,21 @@ describe('VideoPlayground', () => {
     ).not.toBeInTheDocument()
     await user.keyboard('{Escape}')
 
+    await selectGenerationMode(user, 'First frame')
+    expect(
+      screen.getByLabelText('First frame', { selector: 'input' })
+    ).toBeVisible()
+    expect(screen.queryByLabelText('Last frame')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Swap first and last frames' })
+    ).not.toBeInTheDocument()
+    await user.upload(
+      screen.getByLabelText('First frame', { selector: 'input' }),
+      new File(['image'], 'first.png', { type: 'image/png' })
+    )
+    expect(
+      screen.getByRole('button', { name: 'Generate video' })
+    ).toBeDisabled()
     await user.type(prompt, 'City traffic in cinematic rain')
     await user.click(screen.getByRole('button', { name: 'Generate video' }))
 
@@ -388,6 +405,13 @@ describe('VideoPlayground', () => {
           resolution: '768p',
           ratio: '16:9',
           generate_audio: false,
+          content: [
+            {
+              type: 'image_url',
+              image_url: { url: 'data:image/png;base64,aW1hZ2U=' },
+              role: 'first_frame',
+            },
+          ],
         },
       })
     )

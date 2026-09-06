@@ -25,6 +25,7 @@ import type {
   ModelOption,
   GroupOption,
   VideoGenerationRequest,
+  VideoImageContent,
   VideoReferenceUpload,
   VideoTask,
 } from './types'
@@ -103,7 +104,44 @@ export async function submitVideoGeneration(
   group: string,
   payload: VideoGenerationRequest
 ): Promise<VideoTask> {
-  const res = await api.post(API_ENDPOINTS.VIDEOS, payload, {
+  const content = payload.metadata.content ?? []
+  const firstFrame = content.find(
+    (item): item is VideoImageContent =>
+      item.type === 'image_url' && item.role === 'first_frame'
+  )
+  let body: VideoGenerationRequest | FormData = payload
+  if (payload.model.toLowerCase() === 'minimax-h3-fl2va' && firstFrame) {
+    const match = firstFrame.image_url.url.match(
+      /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/
+    )
+    if (!match || content.length !== 1) {
+      throw new Error('MiniMax H3 requires one JPEG, PNG, or WebP first frame')
+    }
+    const binary = atob(match[2])
+    const bytes = new Uint8Array(binary.length)
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index)
+    }
+    const extension = match[1] === 'image/jpeg' ? 'jpg' : match[1].slice(6)
+    const formData = new FormData()
+    formData.append('model', payload.model)
+    formData.append('prompt', payload.prompt)
+    formData.append('seconds', String(payload.seconds))
+    formData.append(
+      'metadata',
+      JSON.stringify({
+        resolution: payload.metadata.resolution,
+        ratio: payload.metadata.ratio,
+        generate_audio: payload.metadata.generate_audio,
+      })
+    )
+    formData.append(
+      'input_reference',
+      new File([bytes], `first-frame.${extension}`, { type: match[1] })
+    )
+    body = formData
+  }
+  const res = await api.post(API_ENDPOINTS.VIDEOS, body, {
     params: { group },
     skipErrorHandler: true,
   })
