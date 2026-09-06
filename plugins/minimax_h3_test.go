@@ -96,6 +96,75 @@ func TestMinimaxH3OpenAIVideoDecode(t *testing.T) {
 	}
 }
 
+func TestMinimaxH3OpenAIVideoDecodeMultipartFirstFrame(t *testing.T) {
+	plugin := loadMinimaxH3Plugin(t)
+	decode := func(body map[string]any) (map[string]any, error) {
+		value, err := plugin.Engine.CallPath(t.Context(), "protocols", []string{"openai_video", "decodeRequest"}, map[string]any{
+			"model": "minimax-h3-fl2va",
+			"body":  body,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return minimaxH3Map(t, value), nil
+	}
+
+	intent, err := decode(map[string]any{
+		"kind": "multipart",
+		"fields": map[string][]string{
+			"prompt":   {"cat by the window"},
+			"seconds":  {"5"},
+			"metadata": {`{"resolution":"768p","ratio":"16:9","generate_audio":false}`},
+		},
+		"files": []map[string]any{{
+			"ref": "request_file:input_reference", "field": "input_reference", "filename": "cat.png", "mimeType": "image/png", "size": 3,
+		}},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "image_to_video", intent["action"])
+	request := intent["requestBody"].(map[string]any)
+	assert.Equal(t, "cat by the window", request["prompt"])
+	assert.Equal(t, "request_file:input_reference", request["input_reference"].(map[string]any)["__fileRef"])
+	assert.Equal(t, "768p", request["resolution"])
+	assert.Equal(t, "16:9", request["ratio"])
+	assert.Equal(t, false, request["generate_audio"])
+
+	tests := []struct {
+		name  string
+		files []map[string]any
+		body  map[string][]string
+		err   string
+	}{
+		{
+			name: "multiple input references",
+			files: []map[string]any{
+				{"ref": "request_file:input_reference", "field": "input_reference", "filename": "one.png", "mimeType": "image/png"},
+				{"ref": "request_file:input_reference", "field": "input_reference", "filename": "two.png", "mimeType": "image/png"},
+			},
+			body: map[string][]string{"prompt": {"p"}},
+			err:  "input_reference must be provided once",
+		},
+		{
+			name:  "unexpected file field",
+			files: []map[string]any{{"ref": "request_file:reference", "field": "reference", "filename": "one.png", "mimeType": "image/png"}},
+			body:  map[string][]string{"prompt": {"p"}},
+			err:   "unexpected file field: reference",
+		},
+		{
+			name:  "invalid metadata",
+			files: []map[string]any{{"ref": "request_file:input_reference", "field": "input_reference", "filename": "one.png", "mimeType": "image/png"}},
+			body:  map[string][]string{"prompt": {"p"}, "metadata": {"not-json"}},
+			err:   "metadata must be a JSON object string",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, callErr := decode(map[string]any{"kind": "multipart", "fields": test.body, "files": test.files})
+			require.ErrorContains(t, callErr, test.err)
+		})
+	}
+}
+
 func TestMinimaxH3OpenAIVideoRender(t *testing.T) {
 	adaptor := taskjsplugin.New(loadMinimaxH3Plugin(t))
 	rendered, err := adaptor.ConvertToOpenAIVideo(&model.Task{
@@ -132,6 +201,7 @@ func TestMinimaxH3BuildsMinimalComfyWorkflow(t *testing.T) {
 				"prompt": "city at night", "duration": 5, "resolution": "768p", "ratio": ratio, "generate_audio": false,
 			}, "task-a"))
 			assert.Equal(t, "http://100.64.0.10:8888/prompt", descriptor["url"])
+			assert.NotContains(t, descriptor, "prepareRequest")
 			assert.Equal(t, "POST", descriptor["method"])
 			body := descriptor["body"].(map[string]any)
 			workflow := body["prompt"].(map[string]any)
@@ -156,6 +226,40 @@ func TestMinimaxH3BuildsMinimalComfyWorkflow(t *testing.T) {
 		assert.Contains(t, workflow, "14")
 		assert.Contains(t, workflow["11"].(map[string]any)["inputs"], "audio")
 		assert.EqualValues(t, 362, workflow["4"].(map[string]any)["inputs"].(map[string]any)["length"])
+	})
+
+	t.Run("first frame uses a prepared Comfy upload", func(t *testing.T) {
+		requestBody := map[string]any{
+			"prompt": "cat by the window", "duration": 5, "resolution": "768p", "ratio": "16:9", "generate_audio": false,
+			"input_reference": map[string]any{"__fileRef": "request_file:input_reference"},
+		}
+		context := minimaxH3SubmitContext(requestBody, "task/first-frame")
+		context["files"] = []map[string]any{{"ref": "request_file:input_reference", "field": "input_reference", "filename": "cat.png", "mimeType": "image/png", "size": 3}}
+		descriptor := callMinimaxH3Hook(t, plugin, "buildSubmitRequest", context)
+		prepare := descriptor["prepareRequest"].(map[string]any)
+		assert.Equal(t, "http://100.64.0.10:8888/upload/image", prepare["url"])
+		assert.Equal(t, "POST", prepare["method"])
+		assert.Equal(t, "multipart", prepare["bodyType"])
+		parts := prepare["parts"].([]any)
+		require.Len(t, parts, 3)
+		imagePart := parts[0].(map[string]any)
+		typePart := parts[1].(map[string]any)
+		overwritePart := parts[2].(map[string]any)
+		assert.Equal(t, "image", imagePart["name"])
+		assert.Equal(t, "request_file:input_reference", imagePart["fileRef"])
+		assert.Equal(t, "minimax-h3-task-first-frame.png", imagePart["filename"])
+		assert.Equal(t, "type", typePart["name"])
+		assert.Equal(t, "temp", typePart["value"])
+		assert.Equal(t, "overwrite", overwritePart["name"])
+		assert.Equal(t, true, overwritePart["value"])
+
+		workflow := descriptor["body"].(map[string]any)["prompt"].(map[string]any)
+		loadImage := workflow["15"].(map[string]any)
+		assert.Equal(t, "LoadImage", loadImage["class_type"])
+		loadImageInputs := loadImage["inputs"].(map[string]any)
+		assert.Equal(t, "minimax-h3-task-first-frame.png [temp]", loadImageInputs["image"])
+		videoInputs := workflow["4"].(map[string]any)["inputs"].(map[string]any)
+		assert.Equal(t, []any{"15", float64(0)}, videoInputs["first_frame"])
 	})
 
 	t.Run("seed is stable per public task", func(t *testing.T) {

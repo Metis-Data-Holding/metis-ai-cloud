@@ -42,13 +42,30 @@ function trimmed(value) {
   return String(value || "").trim();
 }
 
+const imageExtensions = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
+function inputReferenceMarker(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (Object.keys(value).length !== 1 || value.__fileRef !== "request_file:input_reference") return null;
+  return value;
+}
+
 function normalizedRequest(request) {
   const req = request || {};
   const metadata = req.metadata && typeof req.metadata === "object" && !Array.isArray(req.metadata) ? req.metadata : {};
   const prompt = trimmed(req.prompt);
   if (!prompt) throw new Error("prompt is required");
   if (Object.prototype.hasOwnProperty.call(metadata, "content")) throw new Error("reference content is not supported");
-  if (req.images !== undefined || req.input_reference !== undefined) throw new Error("reference content is not supported");
+  if (req.images !== undefined) throw new Error("reference content is not supported");
+  let inputReference;
+  if (req.input_reference !== undefined) {
+    inputReference = inputReferenceMarker(req.input_reference);
+    if (!inputReference) throw new Error("reference content is not supported");
+  }
 
   const rawDuration = req.duration === undefined ? req.seconds : req.duration;
   const duration = rawDuration === undefined ? 5 : Number(rawDuration);
@@ -59,7 +76,7 @@ function normalizedRequest(request) {
   const ratio = String(req.ratio || metadata.ratio || "16:9");
   if (!sizes[ratio]) throw new Error("ratio must be one of 16:9, 9:16, 1:1, 4:3, 3:4");
   const generateAudio = req.generate_audio === undefined ? metadata.generate_audio === true : req.generate_audio === true;
-  return { prompt, duration, resolution, ratio, generate_audio: generateAudio };
+  return { prompt, duration, resolution, ratio, generate_audio: generateAudio, input_reference: inputReference };
 }
 
 function frameCount(seconds) {
@@ -74,10 +91,10 @@ function taskSeed(taskId) {
     hash ^= value.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  return (hash >>> 0) || 1;
+  return hash >>> 0 || 1;
 }
 
-function workflowFor(request, publicTaskId) {
+function workflowFor(request, publicTaskId, firstFrame) {
   const size = sizes[request.ratio];
   const workflow = {
     1: { class_type: "UNETLoader", inputs: { unet_name: "minimax_h3_fl2va_pruned_int8_convrot.safetensors", weight_dtype: "default" } },
@@ -99,6 +116,10 @@ function workflowFor(request, publicTaskId) {
     11: { class_type: "CreateVideo", inputs: { images: ["10", 0], fps: 24, bit_depth: 8, color_space: "sRGB" } },
     12: { class_type: "SaveVideo", inputs: { video: ["11", 0], filename_prefix: "MiniMaxH3", format: "auto", codec: "auto" } },
   };
+  if (firstFrame) {
+    workflow[15] = { class_type: "LoadImage", inputs: { image: firstFrame.filename + " [temp]" } };
+    workflow[4].inputs.first_frame = ["15", 0];
+  }
   if (request.generate_audio) {
     workflow[13] = { class_type: "VAELoader", inputs: { vae_name: "minimax_h3_audio_vae_fp32.safetensors" } };
     workflow[14] = { class_type: "VAEDecodeAudio", inputs: { samples: ["9", 1], vae: ["13", 0] } };
@@ -109,13 +130,49 @@ function workflowFor(request, publicTaskId) {
 
 export function buildSubmitRequest(ctx) {
   const request = normalizedRequest(ctx.requestBody);
-  return {
+  const files = (ctx.files || []).filter(function (file) {
+    return file && file.field === "input_reference";
+  });
+  let firstFrame = null;
+  if (request.input_reference) {
+    if (files.length !== 1 || files[0].ref !== request.input_reference.__fileRef) throw new Error("input_reference file is missing");
+    const mimeType = String(files[0].mimeType || "")
+      .split(";", 1)[0]
+      .trim()
+      .toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(imageExtensions, mimeType)) throw new Error("input_reference must be image/jpeg, image/png, or image/webp");
+    const extension = imageExtensions[mimeType];
+    const taskID =
+      trimmed(ctx.publicTaskId)
+        .replace(/[^A-Za-z0-9_-]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "")
+        .slice(0, 80) || "task";
+    firstFrame = { ref: files[0].ref, filename: "minimax-h3-" + taskID + "." + extension };
+  } else if (files.length > 0) {
+    throw new Error("unexpected input_reference file");
+  }
+  const descriptor = {
     url: String(ctx.baseUrl || "").replace(/\/$/, "") + "/prompt",
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: { prompt: workflowFor(request, ctx.publicTaskId) },
-    action: "text_to_video",
+    body: { prompt: workflowFor(request, ctx.publicTaskId, firstFrame) },
+    action: firstFrame ? "image_to_video" : "text_to_video",
   };
+  if (firstFrame) {
+    descriptor.prepareRequest = {
+      url: String(ctx.baseUrl || "").replace(/\/$/, "") + "/upload/image",
+      method: "POST",
+      headers: { Accept: "application/json" },
+      bodyType: "multipart",
+      parts: [
+        { name: "image", fileRef: firstFrame.ref, filename: firstFrame.filename },
+        { name: "type", value: "temp" },
+        { name: "overwrite", value: true },
+      ],
+    };
+  }
+  return descriptor;
 }
 
 export function parseSubmitResponse(_ctx, response) {
@@ -203,12 +260,7 @@ export function buildContentRequest(ctx) {
   const output = videoOutput(ctx.data, ctx.upstreamTaskId, true);
   if (!output) throw new Error("artifact_not_found");
   const query =
-    "filename=" +
-    encodeURIComponent(output.filename) +
-    "&subfolder=" +
-    encodeURIComponent(output.subfolder) +
-    "&type=" +
-    encodeURIComponent(output.type);
+    "filename=" + encodeURIComponent(output.filename) + "&subfolder=" + encodeURIComponent(output.subfolder) + "&type=" + encodeURIComponent(output.type);
   return {
     url: String(ctx.baseUrl || "").replace(/\/$/, "") + "/view?" + query,
     method: ctx.clientRequest && ctx.clientRequest.method === "HEAD" ? "HEAD" : "GET",
@@ -219,10 +271,44 @@ export function buildContentRequest(ctx) {
 export const protocols = {
   openai_video: {
     decodeRequest: function (ctx) {
-      if (!ctx.body || ctx.body.kind !== "json") throw new Error("JSON body required");
-      if (!ctx.body.value || typeof ctx.body.value !== "object" || Array.isArray(ctx.body.value)) throw new Error("JSON object required");
-      const request = normalizedRequest(ctx.body.value);
-      return { kind: "submit", model: ctx.model, action: "text_to_video", requestBody: request };
+      if (!ctx.body || (ctx.body.kind !== "json" && ctx.body.kind !== "multipart")) throw new Error("JSON or multipart body required");
+      let req;
+      let hasInputReferenceFile = false;
+      if (ctx.body.kind === "json") {
+        if (!ctx.body.value || typeof ctx.body.value !== "object" || Array.isArray(ctx.body.value)) throw new Error("JSON object required");
+        req = Object.assign({}, ctx.body.value);
+      } else {
+        const first = function (name) {
+          const values = (ctx.body.fields || {})[name] || [];
+          if (values.length > 1) throw new Error(name + " must be provided once");
+          return values[0];
+        };
+        req = {};
+        const fields = ctx.body.fields || {};
+        for (const name of Object.keys(fields)) req[name] = first(name);
+        for (const file of ctx.body.files || []) {
+          if (file.field !== "input_reference") throw new Error("unexpected file field: " + file.field);
+          if (hasInputReferenceFile) throw new Error("input_reference must be provided once");
+          hasInputReferenceFile = true;
+        }
+        if (hasInputReferenceFile && Object.prototype.hasOwnProperty.call(req, "input_reference"))
+          throw new Error("input_reference must be provided as a file");
+        if (req.metadata !== undefined) {
+          let parsed;
+          try {
+            parsed = JSON.parse(req.metadata);
+          } catch (e) {
+            throw new Error("metadata must be a JSON object string");
+          }
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("metadata must be a JSON object string");
+          req.metadata = parsed;
+        }
+        if (req.seconds !== undefined) req.seconds = Number(req.seconds);
+        else if (req.duration !== undefined) req.duration = Number(req.duration);
+        if (hasInputReferenceFile) req.input_reference = { __fileRef: "request_file:input_reference" };
+      }
+      const request = normalizedRequest(req);
+      return { kind: "submit", model: ctx.model, action: request.input_reference ? "image_to_video" : "text_to_video", requestBody: request };
     },
     render: function () {
       return {};
