@@ -326,8 +326,14 @@ describe('VideoPlayground', () => {
       'data-layout',
       'results'
     )
-    expect(await screen.findByText('task-video-1')).toBeVisible()
+    const firstTaskId = await screen.findByText('task-video-1')
+    expect(firstTaskId).toBeVisible()
     expect(await screen.findByText('task-video-2')).toBeVisible()
+    expect(firstTaskId).toHaveClass('min-w-0', 'break-all')
+    expect(firstTaskId.closest('[data-slot="card"]')).toHaveClass(
+      'min-w-0',
+      'w-full'
+    )
   })
 
   test('shows only the supported resolution choices for Seedance Fast', async () => {
@@ -379,9 +385,13 @@ describe('VideoPlayground', () => {
     await user.keyboard('{Escape}')
 
     await selectGenerationMode(user, 'First frame')
+    const firstFrameInput = screen.getByLabelText('First frame', {
+      selector: 'input',
+    })
+    expect(firstFrameInput).toBeVisible()
     expect(
-      screen.getByLabelText('First frame', { selector: 'input' })
-    ).toBeVisible()
+      firstFrameInput.closest('[data-slot="video-reference-area"]')
+    ).toHaveClass('sm:w-28')
     expect(screen.queryByLabelText('Last frame')).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Swap first and last frames' })

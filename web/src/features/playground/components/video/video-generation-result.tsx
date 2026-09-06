@@ -123,10 +123,10 @@ export function VideoGenerationResult(props: VideoGenerationResultProps) {
         ? t('Task submitted')
         : t('Generating video')
     return (
-      <Card className='min-h-[28rem] justify-center'>
+      <Card className='min-h-[28rem] w-full min-w-0 justify-center'>
         <CardHeader>
           <CardTitle>{title}</CardTitle>
-          <CardDescription className='font-mono text-xs'>
+          <CardDescription className='min-w-0 font-mono text-xs break-all'>
             {props.task.id}
           </CardDescription>
           <CardAction>
@@ -215,10 +215,10 @@ export function VideoGenerationResult(props: VideoGenerationResultProps) {
   }
 
   return (
-    <Card>
+    <Card className='w-full min-w-0'>
       <CardHeader>
         <CardTitle>{t('Video ready')}</CardTitle>
-        <CardDescription className='font-mono text-xs'>
+        <CardDescription className='min-w-0 font-mono text-xs break-all'>
           {props.task.id}
         </CardDescription>
         <CardAction>

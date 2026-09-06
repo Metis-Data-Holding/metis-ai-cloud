@@ -2,7 +2,7 @@
 
 > 最后更新：2026-09-06
 > 当前 Milestone：Singapore MiniMax H3 文生视频接入
-> 当前目标：部署并验收 H3 首帧图生视频，补齐文生视频剩余验收
+> 当前目标：开发并验收 H3 首尾帧图生视频，补齐视频能力剩余验收
 
 本文档是项目当前状态的单一快照，采用覆盖式维护。长期背景见 [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)，执行历史与重要决策分别见 [`../WORKLOG.md`](../WORKLOG.md) 和 [`DECISIONS.md`](DECISIONS.md)。
 
@@ -16,7 +16,7 @@
 - 当前容量结论：老板现场建议并发 1～2；并发 4 已通过 30 分钟稳定性验证。将 LM Studio 预测槽位放宽至 6 只获得约 9.9% 吞吐增益，同时 TTFT P50 增加约 72.9%。
 - 加权路由 baseline：同一 `google/gemma-4-31b` 入口已验证按权重选择本地 Gemma 或映射到 DeepSeek；20 个短请求实际分布 13 / 7，30 个混合 Streaming 请求零错误。
 - Seedance 视频能力：Dreamina Seedance 2.0 / 2.0 Fast 的动态任务计费、Playground 文生视频、异步轮询、预览与下载已合入并完成公网生成验收；参考图片与首帧生成已完成公网验收，本地参考视频及统一参考内容入口已合入，尚待部署和真实 Provider 验收。
-- MiniMax H3 视频能力：`minimax-h3` Task Plugin 与 `minimax-h3-fl2va` Playground 文生视频已部署并通过 5 秒 768p 无声任务公网验收；首帧图生视频代码已完成，复用现有关键帧输入，通过单次受控预上传将 JPEG / PNG / WebP 首帧传入 ComfyUI，再提交同一 H3 工作流。首帧平台链路尚未部署和真实验收；有声生成、实际扣费及失败退款仍待验证。
+- MiniMax H3 视频能力：`minimax-h3` Task Plugin 与 `minimax-h3-fl2va` Playground 文生视频已部署并通过 5 秒 768p 无声任务公网验收；首帧图生视频复用现有关键帧输入，通过单次受控预上传将 JPEG / PNG / WebP 首帧传入 ComfyUI，再提交同一 H3 工作流，已由用户完成公网生成验收。首尾帧模式、有声生成、实际扣费及失败退款仍待验证。
 - 网关容量 baseline：固定延迟 Mock 短时闭环中，非流式 100 VU、Streaming 25 VU 通过，下一档分别在 200 / 50 VU 触发延迟停止线。
 - 网关稳定性：Streaming 20 VU 运行 30 分钟，完成 42779 请求，其中 6 次 HTTP 503，错误率 0.014%；容器无重启、OOM 或内存持续增长。
 - 下一主 Milestone：完善老板 Demo 交付，归因网关稳定性轮次中的 6 次 HTTP 503，并设计开放到达率与真实服务器复测。
@@ -122,7 +122,7 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 7. Self-hosted Runner 依赖 ECS 出站网络与 DNS；该依赖需要持续监控，但不应扩大 Runner 的系统权限。
 8. 网关 Mock 测试只是固定 VU 闭环容量，不代表实际用户数、开放到达率、Production SLA 或真实模型容量；30 分钟轮次的 6 次 HTTP 503 尚待日志级归因。
 9. MiniMax H3 文生视频核心公网链路已通过 5 秒无声任务验收，但尚不能据此确认有声音频、实际计费和失败退款链路；Windows Firewall 边界及模型许可证和商业使用条件仍需单独核对。
-10. H3 首帧图生视频目前只有本地自动化验证及 ComfyUI 直接生成证据，尚未完成平台部署、素材预上传、任务轮询、制品代理与计费的端到端验收。
+10. H3 首帧图生视频已完成平台生成验收，但任务日志制品链和实际计费未在本轮单独复核；首尾帧输入尚未完成 ComfyUI 直接验证和平台开发。
 
 ## 8. 当前 Scope
 
@@ -153,7 +153,7 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 
 ## 9. 下一步行动
 
-1. 将 H3 首帧图生视频部署到 `develop` 环境，使用 JPEG / PNG / WebP 首帧完成预上传、生成、轮询、任务日志、播放与下载验收；同时使用 5 秒 768p 有声任务补验原生音频、管理员显式计费表达式，并在晋级 `main` 前验证失败退款。继续保持 ComfyUI `8888` 仅通过受控 Tailscale 私网访问。
+1. 先在 ComfyUI 使用首帧与尾帧直接验证 H3 工作流，并导出对应 API Format JSON；确认 `last_frame` 输入契约后开发 Playground 首尾帧模式。随后补验任务日志制品链、5 秒 768p 有声任务、管理员显式计费表达式及失败退款。继续保持 ComfyUI `8888` 仅通过受控 Tailscale 私网访问。
 2. 部署 Playground 本地参考视频功能后，使用 MP4 / MOV 文件完成上传、任务提交、BytePlus 拉取、生成结果及临时文件清理验收，并核对任务日志与实际扣费；同时补验尾帧输入和首尾帧交换。
 3. 完善老板汇报稿、架构图、HTML/PDF/PPT 交付与现场 Demo 脚本。
 4. 对网关 Streaming 30 分钟轮次中的 6 次 HTTP 503 做 many-models、Cloudflare 和 Mock 日志交叉归因。

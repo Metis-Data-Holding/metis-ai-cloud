@@ -121,6 +121,17 @@ export function VideoComposer(props: VideoComposerProps) {
   const expandLabel = expanded
     ? t('Collapse prompt input')
     : t('Expand prompt input')
+  let referenceAreaLayout = 'w-full sm:w-28 sm:overflow-visible'
+  if (props.mode === 'keyframes') {
+    referenceAreaLayout = props.firstFrameOnly
+      ? 'w-full sm:w-28'
+      : 'w-full sm:w-[22rem] sm:max-w-[46%]'
+  } else if (referenceTrayExpanded) {
+    referenceAreaLayout =
+      'w-full sm:w-[min(46%,var(--expanded-reference-width))] sm:max-w-[46%] sm:overflow-hidden'
+  } else {
+    referenceAreaLayout = 'w-full sm:w-28 sm:max-w-[46%] sm:overflow-visible'
+  }
 
   const submit = (_message: PromptInputMessage) => props.onSubmit()
 
@@ -185,14 +196,7 @@ export function VideoComposer(props: VideoComposerProps) {
             data-slot='video-reference-area'
             className={cn(
               'min-w-0 shrink-0 self-stretch transition-[width] duration-200',
-              props.mode === 'keyframes'
-                ? 'w-full sm:w-[22rem] sm:max-w-[46%]'
-                : cn(
-                    'w-full sm:max-w-[46%]',
-                    referenceTrayExpanded
-                      ? 'sm:w-[min(46%,var(--expanded-reference-width))] sm:overflow-hidden'
-                      : 'sm:w-28 sm:overflow-visible'
-                  )
+              referenceAreaLayout
             )}
             style={
               props.mode === 'reference'
