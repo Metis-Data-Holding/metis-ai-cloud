@@ -201,7 +201,7 @@ func TestTaskAdaptorPrepareRequestFailureSkipsSubmit(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/upload/image":
-			w.WriteHeader(http.StatusBadGateway)
+			w.WriteHeader(http.StatusUnsupportedMediaType)
 			_, _ = w.Write([]byte("upload failed"))
 		case "/submit":
 			submitCalled = true
@@ -230,8 +230,13 @@ export function parseTaskResult(){return {status:"SUCCESS"}}
 	body, err := adaptor.BuildRequestBody(c, info)
 	require.NoError(t, err)
 	resp, err := adaptor.DoRequest(c, info, body)
-	require.Error(t, err)
-	assert.Nil(t, resp)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusUnsupportedMediaType, resp.StatusCode)
+	responseBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, "upload failed", string(responseBody))
 	assert.False(t, submitCalled)
 }
 

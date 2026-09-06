@@ -437,8 +437,12 @@ func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, bod
 		if err != nil {
 			return nil, fmt.Errorf("build prepare request failed: %w", err)
 		}
-		if err = a.doPrepareRequest(c, info, prepareBody); err != nil {
+		prepareResponse, err := a.doPrepareRequest(c, info, prepareBody)
+		if err != nil {
 			return nil, fmt.Errorf("prepare request failed: %w", err)
+		}
+		if prepareResponse != nil {
+			return prepareResponse, nil
 		}
 	}
 	if a.submit != nil && strings.TrimSpace(a.submit.Method) != "" {
@@ -449,7 +453,7 @@ func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, bod
 	return channel.DoTaskApiRequest(a, c, info, body)
 }
 
-func (a *TaskAdaptor) doPrepareRequest(c *gin.Context, info *relaycommon.RelayInfo, body io.Reader) error {
+func (a *TaskAdaptor) doPrepareRequest(c *gin.Context, info *relaycommon.RelayInfo, body io.Reader) (*http.Response, error) {
 	descriptor := a.submit.PrepareRequest
 	method := strings.ToUpper(strings.TrimSpace(descriptor.Method))
 	if method == "" {
@@ -457,7 +461,7 @@ func (a *TaskAdaptor) doPrepareRequest(c *gin.Context, info *relaycommon.RelayIn
 	}
 	request, err := http.NewRequestWithContext(c.Request.Context(), method, descriptor.URL, body)
 	if err != nil {
-		return fmt.Errorf("new request failed: %w", err)
+		return nil, fmt.Errorf("new request failed: %w", err)
 	}
 	for name, value := range descriptor.Headers {
 		request.Header.Set(name, value)
@@ -467,20 +471,17 @@ func (a *TaskAdaptor) doPrepareRequest(c *gin.Context, info *relaycommon.RelayIn
 	}
 	response, err := channel.DoRequest(c, request, info)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if response == nil {
-		return fmt.Errorf("prepare request returned an empty response")
+		return nil, fmt.Errorf("prepare request returned an empty response")
 	}
-	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		responseBody, _ := io.ReadAll(io.LimitReader(response.Body, 4<<10))
-		if len(responseBody) == 0 {
-			return fmt.Errorf("prepare request returned status %d", response.StatusCode)
-		}
-		return fmt.Errorf("prepare request returned status %d: %s", response.StatusCode, strings.TrimSpace(string(responseBody)))
+		return response, nil
 	}
-	return nil
+	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4<<10))
+	response.Body.Close()
+	return nil, nil
 }
 
 func (a *TaskAdaptor) ParseResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (*channel.TaskSubmitResponse, *dto.TaskError) {
