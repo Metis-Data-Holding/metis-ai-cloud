@@ -4,10 +4,10 @@ export const meta = {
   name: "MiniMax H3",
   icon: "Minimax.Color",
   description: {
-    en: "Self-hosted MiniMax H3 text-to-video through ComfyUI",
-    zh: "通过 ComfyUI 接入自托管 MiniMax H3 文生视频",
+    en: "Self-hosted MiniMax H3 text and first-frame image to video through ComfyUI",
+    zh: "通过 ComfyUI 接入自托管 MiniMax H3 文生及首帧图生视频",
   },
-  version: "1.0.0",
+  version: "1.1.0",
   author: { name: "Metis Data" },
   models: ["minimax-h3-fl2va"],
   fetchMode: "per_task",
