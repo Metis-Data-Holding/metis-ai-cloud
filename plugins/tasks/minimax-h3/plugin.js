@@ -47,6 +47,7 @@ const imageExtensions = {
   "image/png": "png",
   "image/webp": "webp",
 };
+const maxFirstFrameBytes = 30 * 1024 * 1024;
 
 function inputReferenceMarker(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -141,6 +142,8 @@ export function buildSubmitRequest(ctx) {
       .trim()
       .toLowerCase();
     if (!Object.prototype.hasOwnProperty.call(imageExtensions, mimeType)) throw new Error("input_reference must be image/jpeg, image/png, or image/webp");
+    const fileSize = Number(files[0].size);
+    if (!Number.isFinite(fileSize) || fileSize <= 0 || fileSize >= maxFirstFrameBytes) throw new Error("input_reference must be smaller than 30 MiB");
     const extension = imageExtensions[mimeType];
     const taskID =
       trimmed(ctx.publicTaskId)

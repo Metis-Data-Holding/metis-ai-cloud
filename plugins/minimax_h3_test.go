@@ -262,6 +262,19 @@ func TestMinimaxH3BuildsMinimalComfyWorkflow(t *testing.T) {
 		assert.Equal(t, []any{"15", float64(0)}, videoInputs["first_frame"])
 	})
 
+	t.Run("first frame enforces the server-side size limit", func(t *testing.T) {
+		requestBody := map[string]any{
+			"prompt": "cat by the window", "duration": 5, "resolution": "768p", "ratio": "16:9", "generate_audio": false,
+			"input_reference": map[string]any{"__fileRef": "request_file:input_reference"},
+		}
+		for _, size := range []int{0, 30 * 1024 * 1024} {
+			context := minimaxH3SubmitContext(requestBody, "task-oversized")
+			context["files"] = []map[string]any{{"ref": "request_file:input_reference", "field": "input_reference", "filename": "cat.png", "mimeType": "image/png", "size": size}}
+			_, err := plugin.Engine.Call(t.Context(), "buildSubmitRequest", context)
+			require.ErrorContains(t, err, "input_reference must be smaller than 30 MiB")
+		}
+	})
+
 	t.Run("seed is stable per public task", func(t *testing.T) {
 		request := map[string]any{"prompt": "p", "duration": 5, "resolution": "768p", "ratio": "16:9", "generate_audio": false}
 		seed := func(taskID string) any {
