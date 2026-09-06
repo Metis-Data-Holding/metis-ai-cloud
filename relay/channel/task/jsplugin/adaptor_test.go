@@ -116,6 +116,125 @@ export function parseSubmitResponse(ctx,r){return {taskId:"1"}} export function 
 	assert.Equal(t, "image-bytes", string(content))
 }
 
+func TestTaskAdaptorRunsPrepareRequestBeforeSubmit(t *testing.T) {
+	service.InitHttpClient()
+	var calls []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/upload/image":
+			calls = append(calls, "prepare")
+			assert.Equal(t, "yes", r.Header.Get("X-Prepare"))
+			require.NoError(t, r.ParseMultipartForm(1<<20))
+			assert.Equal(t, []string{"temp"}, r.MultipartForm.Value["type"])
+			uploads := r.MultipartForm.File["image"]
+			require.Len(t, uploads, 1)
+			file, err := uploads[0].Open()
+			require.NoError(t, err)
+			defer file.Close()
+			content, err := io.ReadAll(file)
+			require.NoError(t, err)
+			assert.Equal(t, "image-bytes", string(content))
+			_, _ = w.Write([]byte(`{"name":"uploaded.png"}`))
+		case "/submit":
+			calls = append(calls, "submit")
+			assert.Equal(t, "yes", r.Header.Get("X-Submit"))
+			_, _ = w.Write([]byte(`{"id":"upstream-prepare"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	source := `
+export const meta = {apiVersion:1,key:"prepare",name:"Prepare",version:"1.0.0",author:{name:"Test"},models:["m"],fetchMode:"per_task"};
+export function buildSubmitRequest(ctx) { return {
+  url:ctx.baseUrl+"/submit", method:"POST", headers:{"X-Submit":"yes"}, body:{prompt:"p"},
+  prepareRequest:{url:ctx.baseUrl+"/upload/image",method:"POST",headers:{"X-Prepare":"yes"},bodyType:"multipart",parts:[
+    {name:"type",value:"temp"},{name:"image",fileRef:ctx.files[0].ref,filename:"uploaded.png"}
+  ]}
+}; }
+export function parseSubmitResponse(){return {taskId:"upstream-prepare"}}
+export function buildQueryRequest(ctx){return {url:ctx.baseUrl+"/query"}}
+export function parseTaskResult(){return {status:"SUCCESS"}}
+`
+	plugin, err := pluginruntime.NewRegistry().Register(source, pluginruntime.Options{})
+	require.NoError(t, err)
+	adaptor := New(plugin)
+	info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelBaseUrl: server.URL}, TaskRelayInfo: &relaycommon.TaskRelayInfo{PublicTaskID: "task_prepare"}}
+	adaptor.Init(info)
+	c := newMultipartFileContext(t, "input_reference", "ref.png", "image/png", []byte("image-bytes"))
+	c.Set("task_request", map[string]any{"prompt": "p"})
+	require.Nil(t, adaptor.ValidateRequestAndSetAction(c, info))
+	body, err := adaptor.BuildRequestBody(c, info)
+	require.NoError(t, err)
+	resp, err := adaptor.DoRequest(c, info, body)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, []string{"prepare", "submit"}, calls)
+}
+
+func TestTaskAdaptorPrepareRequestRejectsDisallowedURL(t *testing.T) {
+	source := `
+export const meta = {apiVersion:1,key:"prepare-url",name:"Prepare URL",version:"1.0.0",author:{name:"Test"},models:["m"],fetchMode:"per_task"};
+export function buildSubmitRequest(ctx) { return {url:ctx.baseUrl+"/submit",prepareRequest:{url:"https://evil.example/upload",method:"POST",bodyType:"multipart",parts:[]}}; }
+export function parseSubmitResponse(){return {taskId:"1"}}
+export function buildQueryRequest(){return {url:"https://example.com"}}
+export function parseTaskResult(){return {status:"SUCCESS"}}
+`
+	plugin, err := pluginruntime.NewRegistry().Register(source, pluginruntime.Options{})
+	require.NoError(t, err)
+	adaptor := New(plugin)
+	info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelBaseUrl: "https://provider.example"}, TaskRelayInfo: &relaycommon.TaskRelayInfo{}}
+	adaptor.Init(info)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", nil)
+	c.Set("task_request", map[string]any{"prompt": "p"})
+	taskErr := adaptor.ValidateRequestAndSetAction(c, info)
+	require.NotNil(t, taskErr)
+	assert.Equal(t, "plugin_request_invalid", taskErr.Code)
+	assert.Contains(t, taskErr.Message, "not allowed")
+}
+
+func TestTaskAdaptorPrepareRequestFailureSkipsSubmit(t *testing.T) {
+	service.InitHttpClient()
+	submitCalled := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/upload/image":
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write([]byte("upload failed"))
+		case "/submit":
+			submitCalled = true
+			_, _ = w.Write([]byte(`{"id":"unexpected"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	source := `
+export const meta = {apiVersion:1,key:"prepare-failure",name:"Prepare Failure",version:"1.0.0",author:{name:"Test"},models:["m"],fetchMode:"per_task"};
+export function buildSubmitRequest(ctx) { return {url:ctx.baseUrl+"/submit",method:"POST",body:{prompt:"p"},prepareRequest:{url:ctx.baseUrl+"/upload/image",method:"POST",bodyType:"multipart",parts:[{name:"image",fileRef:ctx.files[0].ref}]}}; }
+export function parseSubmitResponse(){return {taskId:"1"}}
+export function buildQueryRequest(){return {url:"https://example.com"}}
+export function parseTaskResult(){return {status:"SUCCESS"}}
+`
+	plugin, err := pluginruntime.NewRegistry().Register(source, pluginruntime.Options{})
+	require.NoError(t, err)
+	adaptor := New(plugin)
+	info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelBaseUrl: server.URL}, TaskRelayInfo: &relaycommon.TaskRelayInfo{}}
+	adaptor.Init(info)
+	c := newMultipartFileContext(t, "input_reference", "ref.png", "image/png", []byte("image-bytes"))
+	c.Set("task_request", map[string]any{"prompt": "p"})
+	require.Nil(t, adaptor.ValidateRequestAndSetAction(c, info))
+	body, err := adaptor.BuildRequestBody(c, info)
+	require.NoError(t, err)
+	resp, err := adaptor.DoRequest(c, info, body)
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.False(t, submitCalled)
+}
+
 func TestTaskAdaptorInlinesJSONFilePlaceholders(t *testing.T) {
 	const fileBytes = "image-bytes"
 	encoded := base64.StdEncoding.EncodeToString([]byte(fileBytes))

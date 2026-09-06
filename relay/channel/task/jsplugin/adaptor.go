@@ -33,16 +33,17 @@ import (
 )
 
 type requestDescriptor struct {
-	URL            string            `json:"url"`
-	Method         string            `json:"method"`
-	Headers        map[string]string `json:"headers"`
-	Body           any               `json:"body"`
-	Credentialless bool              `json:"credentialless"`
-	Action         string            `json:"action"`
-	Model          string            `json:"model"`
-	RewriteModel   string            `json:"rewriteModel"`
-	BodyType       string            `json:"bodyType"`
-	Parts          []requestPart     `json:"parts"`
+	URL            string             `json:"url"`
+	Method         string             `json:"method"`
+	Headers        map[string]string  `json:"headers"`
+	Body           any                `json:"body"`
+	PrepareRequest *requestDescriptor `json:"prepareRequest"`
+	Credentialless bool               `json:"credentialless"`
+	Action         string             `json:"action"`
+	Model          string             `json:"model"`
+	RewriteModel   string             `json:"rewriteModel"`
+	BodyType       string             `json:"bodyType"`
+	Parts          []requestPart      `json:"parts"`
 }
 
 type requestPart struct {
@@ -225,6 +226,13 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	if err != nil {
 		return nil, err
 	}
+	return buildDescriptorBody(c, descriptor)
+}
+
+func buildDescriptorBody(c *gin.Context, descriptor *requestDescriptor) (io.Reader, error) {
+	if descriptor == nil {
+		return nil, fmt.Errorf("request descriptor is missing")
+	}
 	if descriptor.BodyType == "multipart" {
 		form, parseErr := common.ParseMultipartFormReusable(c)
 		if parseErr != nil {
@@ -233,6 +241,7 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		defer form.RemoveAll()
 		var body bytes.Buffer
 		writer := multipart.NewWriter(&body)
+		var err error
 		for _, part := range descriptor.Parts {
 			if part.FileRef == "" {
 				header := make(textproto.MIMEHeader)
@@ -423,12 +432,55 @@ func encodeFilePlaceholder(placeholder map[string]any, form *multipart.Form, lim
 }
 
 func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io.Reader) (*http.Response, error) {
+	if a.submit != nil && a.submit.PrepareRequest != nil {
+		prepareBody, err := buildDescriptorBody(c, a.submit.PrepareRequest)
+		if err != nil {
+			return nil, fmt.Errorf("build prepare request failed: %w", err)
+		}
+		if err = a.doPrepareRequest(c, info, prepareBody); err != nil {
+			return nil, fmt.Errorf("prepare request failed: %w", err)
+		}
+	}
 	if a.submit != nil && strings.TrimSpace(a.submit.Method) != "" {
 		originalMethod := c.Request.Method
 		c.Request.Method = strings.ToUpper(a.submit.Method)
 		defer func() { c.Request.Method = originalMethod }()
 	}
 	return channel.DoTaskApiRequest(a, c, info, body)
+}
+
+func (a *TaskAdaptor) doPrepareRequest(c *gin.Context, info *relaycommon.RelayInfo, body io.Reader) error {
+	descriptor := a.submit.PrepareRequest
+	method := strings.ToUpper(strings.TrimSpace(descriptor.Method))
+	if method == "" {
+		method = http.MethodPost
+	}
+	request, err := http.NewRequestWithContext(c.Request.Context(), method, descriptor.URL, body)
+	if err != nil {
+		return fmt.Errorf("new request failed: %w", err)
+	}
+	for name, value := range descriptor.Headers {
+		request.Header.Set(name, value)
+	}
+	if descriptor.BodyType == "multipart" {
+		request.Header.Set("Content-Type", c.GetHeader("Content-Type"))
+	}
+	response, err := channel.DoRequest(c, request, info)
+	if err != nil {
+		return err
+	}
+	if response == nil {
+		return fmt.Errorf("prepare request returned an empty response")
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		responseBody, _ := io.ReadAll(io.LimitReader(response.Body, 4<<10))
+		if len(responseBody) == 0 {
+			return fmt.Errorf("prepare request returned status %d", response.StatusCode)
+		}
+		return fmt.Errorf("prepare request returned status %d: %s", response.StatusCode, strings.TrimSpace(string(responseBody)))
+	}
+	return nil
 }
 
 func (a *TaskAdaptor) ParseResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (*channel.TaskSubmitResponse, *dto.TaskError) {
@@ -1147,6 +1199,12 @@ func (a *TaskAdaptor) buildSubmit(c *gin.Context, info *relaycommon.RelayInfo) (
 		logger.LogDebug(c, "task_plugin subsystem=adaptor event=build_submit_failed plugin=%q stage=validate_url reason=url_not_allowed", a.plugin.Meta.Key)
 		return nil, err
 	}
+	if descriptor.PrepareRequest != nil {
+		if err = validatePrepareRequest(descriptor.PrepareRequest, info.ChannelBaseUrl, a.plugin.Meta.AllowedHosts); err != nil {
+			logger.LogDebug(c, "task_plugin subsystem=adaptor event=build_submit_failed plugin=%q stage=validate_prepare_request reason=invalid_descriptor", a.plugin.Meta.Key)
+			return nil, err
+		}
+	}
 	if descriptor.Action != "" {
 		info.Action = descriptor.Action
 	}
@@ -1185,6 +1243,37 @@ func (a *TaskAdaptor) buildSubmit(c *gin.Context, info *relaycommon.RelayInfo) (
 		time.Since(started).Milliseconds(),
 	)
 	return a.submit, nil
+}
+
+func validatePrepareRequest(descriptor *requestDescriptor, baseURL string, allowedHosts []string) error {
+	if descriptor == nil {
+		return fmt.Errorf("plugin prepare request is missing")
+	}
+	if descriptor.PrepareRequest != nil {
+		return fmt.Errorf("plugin prepare request cannot contain another prepare request")
+	}
+	if descriptor.Credentialless {
+		return fmt.Errorf("plugin prepare request cannot be credentialless")
+	}
+	if strings.TrimSpace(descriptor.URL) == "" {
+		return fmt.Errorf("plugin prepare request URL is empty")
+	}
+	if err := pluginruntime.ValidateRequestURL(descriptor.URL, baseURL, allowedHosts); err != nil {
+		return err
+	}
+	method := strings.ToUpper(strings.TrimSpace(descriptor.Method))
+	if method == "" {
+		method = http.MethodPost
+	}
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPost:
+	default:
+		return fmt.Errorf("plugin prepare request returned an unsupported method")
+	}
+	if descriptor.BodyType != "" && descriptor.BodyType != "multipart" {
+		return fmt.Errorf("plugin prepare request returned an unsupported body type")
+	}
+	return nil
 }
 
 func (a *TaskAdaptor) submitContext(c *gin.Context, info *relaycommon.RelayInfo) map[string]any {
