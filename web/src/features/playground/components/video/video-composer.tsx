@@ -130,7 +130,7 @@ export function VideoComposer(props: VideoComposerProps) {
     : t('Expand prompt input')
   let referenceAreaLayout = 'w-full sm:w-28 sm:overflow-visible'
   if (props.mode === 'keyframes') {
-    referenceAreaLayout = 'w-full sm:w-fit sm:max-w-[46%]'
+    referenceAreaLayout = 'w-full sm:w-fit'
   } else if (referenceTrayExpanded) {
     referenceAreaLayout =
       'w-full sm:w-[min(46%,var(--expanded-reference-width))] sm:max-w-[46%] sm:overflow-hidden'

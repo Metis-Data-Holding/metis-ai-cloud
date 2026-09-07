@@ -188,7 +188,10 @@ describe('VideoPlayground', () => {
     expect(keyframeInputs).not.toHaveClass('sm:w-full')
     expect(
       keyframeInputs?.closest('[data-slot="video-reference-area"]')
-    ).toHaveClass('sm:w-fit', 'sm:max-w-[46%]')
+    ).toHaveClass('sm:w-fit')
+    expect(
+      keyframeInputs?.closest('[data-slot="video-reference-area"]')
+    ).not.toHaveClass('sm:max-w-[46%]')
     expect(
       keyframeInputs?.closest('[data-slot="video-reference-area"]')
     ).not.toHaveClass('sm:w-[22rem]')
