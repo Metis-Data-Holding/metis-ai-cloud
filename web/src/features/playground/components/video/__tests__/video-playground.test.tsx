@@ -165,6 +165,47 @@ describe('VideoPlayground', () => {
     ).not.toBeInTheDocument()
   })
 
+  test('gives the video model selector more room without overflowing narrow viewports', async () => {
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    expect(await screen.findByRole('combobox')).toHaveClass(
+      'w-64',
+      'max-w-[calc(100vw-6rem)]'
+    )
+  })
+
+  test('sizes the keyframe controls to their content instead of reserving a fixed column', async () => {
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await selectGenerationMode(user, 'First and last frames')
+
+    const firstFrameInput = screen.getByLabelText('First frame')
+    const keyframeInputs = firstFrameInput.closest(
+      '[data-slot="video-keyframe-inputs"]'
+    )
+    expect(keyframeInputs).toHaveClass('sm:w-fit')
+    expect(keyframeInputs).not.toHaveClass('sm:w-full')
+    expect(
+      keyframeInputs?.closest('[data-slot="video-reference-area"]')
+    ).toHaveClass('sm:w-fit', 'sm:max-w-[46%]')
+    expect(
+      keyframeInputs?.closest('[data-slot="video-reference-area"]')
+    ).not.toHaveClass('sm:w-[22rem]')
+  })
+
+  test('uses a keyframe-specific prompt instead of advertising reference mentions', async () => {
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await selectGenerationMode(user, 'First and last frames')
+
+    expect(screen.getByRole('textbox', { name: 'Prompt' })).toHaveAttribute(
+      'placeholder',
+      'Describe how the scene should change between the first and last frames.'
+    )
+  })
+
   test('opens video settings and changes every disclosed parameter', async () => {
     const user = userEvent.setup()
     render(<VideoPlayground />, { wrapper: createWrapper() })
@@ -409,6 +450,10 @@ describe('VideoPlayground', () => {
     await user.keyboard('{Escape}')
 
     await selectGenerationMode(user, 'First and last frames')
+    expect(prompt).toHaveAttribute(
+      'placeholder',
+      'Describe the video you want to create'
+    )
     const firstFrameInput = screen.getByLabelText('First frame', {
       selector: 'input',
     })

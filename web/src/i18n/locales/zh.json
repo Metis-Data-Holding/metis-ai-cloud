@@ -1438,6 +1438,7 @@
     "Desc": "降序",
     "Describe": "图生文",
     "Describe the scene, motion, camera, lighting, and style...": "描述场景、运动、镜头、光线和风格……",
+    "Describe how the scene should change between the first and last frames.": "描述首帧到尾帧之间的画面变化和动作。",
     "Describe the video you want to create": "请描述你想生成的视频",
     "Describe this model...": "描述此模型...",
     "Describe this vendor...": "描述此供应商...",

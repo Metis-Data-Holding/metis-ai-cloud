@@ -653,7 +653,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
       ) : (
         <div
           data-slot='video-keyframe-inputs'
-          className='flex min-h-28 w-full min-w-0 items-center justify-start gap-2 sm:gap-3'
+          className='flex min-h-28 w-full min-w-0 items-center justify-start gap-2 sm:w-fit sm:gap-3'
         >
           {frameSlot('first_frame', t('First frame'))}
           <Button

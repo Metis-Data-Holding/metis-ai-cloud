@@ -114,13 +114,23 @@ export function VideoComposer(props: VideoComposerProps) {
   if (props.mode === 'reference') {
     modeLabel = t(props.isH3 ? 'Text to Video' : 'Reference generation')
   }
+  let promptPlaceholder = t(
+    'Describe how the scene should change between the first and last frames.'
+  )
+  if (props.isH3) {
+    promptPlaceholder = t('Describe the video you want to create')
+  } else if (props.mode === 'reference') {
+    promptPlaceholder = t(
+      'Use @ to quickly reference uploaded files, for example: use the motion from @Video 1 to generate a video in which the characters from @Image 2 and @Image 3 fight.'
+    )
+  }
   const showReferenceInput = !props.isH3 || props.mode === 'keyframes'
   const expandLabel = expanded
     ? t('Collapse prompt input')
     : t('Expand prompt input')
   let referenceAreaLayout = 'w-full sm:w-28 sm:overflow-visible'
   if (props.mode === 'keyframes') {
-    referenceAreaLayout = 'w-full sm:w-[22rem] sm:max-w-[46%]'
+    referenceAreaLayout = 'w-full sm:w-fit sm:max-w-[46%]'
   } else if (referenceTrayExpanded) {
     referenceAreaLayout =
       'w-full sm:w-[min(46%,var(--expanded-reference-width))] sm:max-w-[46%] sm:overflow-hidden'
@@ -235,11 +245,7 @@ export function VideoComposer(props: VideoComposerProps) {
                 event.currentTarget.selectionStart
               )
             }
-            placeholder={t(
-              props.isH3
-                ? 'Describe the video you want to create'
-                : 'Use @ to quickly reference uploaded files, for example: use the motion from @Video 1 to generate a video in which the characters from @Image 2 and @Image 3 fight.'
-            )}
+            placeholder={promptPlaceholder}
             className='h-full max-h-none min-h-28 resize-none pr-12 text-base leading-7'
           />
           {mentionRange && mentionOptions.length > 0 ? (
@@ -385,7 +391,7 @@ export function VideoComposer(props: VideoComposerProps) {
             groups={props.groups}
             onGroupChange={props.onGroupChange}
             disabled={props.disabled}
-            className='max-w-48'
+            className='w-64 max-w-[calc(100vw-6rem)]'
           />
           <PromptInputButton
             type='button'
