@@ -34,6 +34,7 @@ import {
 import { JsonCodeEditor } from '@/components/json-code-editor'
 import { MultiSelect } from '@/components/multi-select'
 import { Button } from '@/components/ui/button'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Form,
   FormControl,
@@ -196,7 +197,7 @@ export function CreateDeploymentDrawer({
         map.set(key, { label: String(name), value: key })
       }
     })
-    return Array.from(map.values())
+    return [...map.values()]
   }, [replicasData])
 
   const { data: priceData, isLoading: _isLoadingPrice } = useQuery({
@@ -415,17 +416,22 @@ export function CreateDeploymentDrawer({
                     <FormControl>
                       <Input placeholder={t('Enter a name')} {...field} />
                     </FormControl>
-                    {open && field.value?.trim() ? (
+                    {open && field.value?.trim() && (
                       <div className='text-muted-foreground text-xs'>
-                        {isCheckingName
-                          ? t('Checking name...')
-                          : nameAvailable === true
-                            ? t('Name is available')
-                            : nameAvailable === false
-                              ? t('Name is not available')
-                              : ''}
+                        {(() => {
+                          if (isCheckingName) {
+                            return t('Checking name...')
+                          }
+                          if (nameAvailable === true) {
+                            return t('Name is available')
+                          }
+                          if (nameAvailable === false) {
+                            return t('Name is not available')
+                          }
+                          return ''
+                        })()}
                       </div>
-                    ) : null}
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -459,32 +465,19 @@ export function CreateDeploymentDrawer({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>{t('Hardware type')}</FormLabel>
-                      <Select
-                        items={[
-                          ...hardwareOptions.map((opt) => ({
+                      <FormControl>
+                        <Combobox
+                          options={hardwareOptions.map((opt) => ({
                             value: opt.value,
                             label: opt.label,
-                          })),
-                        ]}
-                        value={field.value}
-                        onValueChange={(v) => field.onChange(v)}
-                        disabled={isLoadingHardware}
-                      >
-                        <FormControl>
-                          <SelectTrigger className='w-full'>
-                            <SelectValue placeholder={t('Select')} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent alignItemWithTrigger={false}>
-                          <SelectGroup>
-                            {hardwareOptions.map((opt) => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
+                          }))}
+                          value={field.value}
+                          onValueChange={(v) => field.onChange(v)}
+                          disabled={isLoadingHardware}
+                          className='w-full'
+                          placeholder={t('Select')}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

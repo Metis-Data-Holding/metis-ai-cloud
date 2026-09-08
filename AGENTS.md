@@ -56,6 +56,14 @@
 - 客户端请求再转发给 Provider 的可选标量使用指针加 `omitempty`，确保缺省值省略、显式 `0`/`false` 保留。
 - 新 channel 应核对 `StreamOptions` 支持，并在适用时更新 `streamSupportedChannels`。
 
+### Authentication Security (OWASP Mandatory)
+
+- Any implementation, modification, or review involving authentication-related flows MUST comply with the applicable requirements of the latest stable [OWASP Application Security Verification Standard (ASVS)](https://owasp.org/www-project-application-security-verification-standard/) and the relevant [OWASP Cheat Sheet Series](https://cheatsheetseries.owasp.org/). This applies to both backend and frontend changes, including registration, login/logout, password changes and recovery, email verification, MFA, WebAuthn/Passkeys, OAuth/OIDC, account linking/unlinking, sessions, JWTs, API credentials, and re-authentication for sensitive actions.
+- Before changing these flows, read the applicable OWASP guidance, starting with the [Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html) and [Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html). Consult the password storage, forgot password, MFA, OAuth, and CSRF guidance when those mechanisms are involved. Identify the applicable controls before implementation; existing code is not a justification for retaining or introducing an insecure pattern.
+- Enforce security controls on the server. Apply the relevant requirements for credential storage and transport, resistance to account enumeration and brute force, CSRF and replay protection, token/challenge expiry and single use where required, protocol-specific verification, session rotation and invalidation, and re-authentication for sensitive account changes. Frontend checks MUST NOT substitute for server-side enforcement, and recovery or alternative login paths MUST NOT bypass the required authentication assurance.
+- Authentication audit events MUST exclude passwords, verification codes, recovery codes, private keys, and usable session or authentication tokens. Record enough non-secret context to investigate authentication failures and sensitive account changes.
+- Verify affected security controls with focused regression tests, including applicable failure, expiry, replay, and bypass cases, following the existing backend/frontend test conventions. Record the OWASP references (including the ASVS version and requirement IDs when used), validation performed, and any unresolved gaps in the change summary or PR description. Do not claim compliance or completion while an applicable security requirement remains unmet or unverified.
+
 ### Billing 安全
 
 - 新增内置模型价格必须写入 `setting/billing_setting/builtin_billing.go` 的自包含 billing expression，使用真实 USD/百万 tokens 价格；不得向旧 `model/completion/cache ratio` 表增加新的内置价格。保留管理员显式定价覆盖，旧价格仅在明确要求时迁移，并核验公开价格来源、适用的 context length threshold 和 cache category。
@@ -70,6 +78,7 @@
 
 - 用户可见文本通过 `useTranslation()` 与 `t()` 接入 i18n；locale 使用 `web/src/i18n/locales/{lang}.json`。
 - 依赖、组件、TypeScript、可访问性、测试和样式细则以 `web/AGENTS.md` 为准；脚本以 `web/package.json` 为事实来源。
+- 修改 UI 前必须阅读 `web/AGENTS.md` 和项目 `shadcn-ui` skill，先检索并复用现有业务组件、基础组件及调用示例；新增通用交互前须说明现有候选的具体能力缺口。
 
 ## 测试与验证
 
@@ -117,6 +126,7 @@ Commit 使用 Conventional Commits：`<type>(<scope>): <中文说明>`。类型�
 - Cloudflare/BytePlus 凭据、数据库/Redis 密码、Session Secret、Provider/模型 API Key、SSH/TLS private key 等真实 Secret 只能放在未跟踪的 `.env` 或部署平台 Secret 管理中。
 - 仓库只保留 `.env.example` 等无真实值模板；文档、WORKLOG、Commit、注释和 Agent 总结也不得记录 Secret。
 - 提交前检查 `git diff`、`git status`，确认没有 Secret、临时凭据、日志、敏感数据或任务外文件。
+- 未经用户明确要求，不在 `docs/` 及其子目录新增文件。
 
 ## Multi-Agent 工作流
 

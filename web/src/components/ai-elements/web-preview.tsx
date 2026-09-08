@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+/* oxlint-disable react/iframe-missing-sandbox -- Preview callers intentionally support same-origin applications. */
 'use client'
 
 import { ChevronDownIcon } from 'lucide-react'
@@ -280,6 +281,7 @@ export const WebPreviewConsole = ({
                   log.level === 'warn' && 'text-warning',
                   log.level === 'log' && 'text-foreground'
                 )}
+                // oxlint-disable-next-line react/no-array-index-key -- Duplicate log entries are valid and have no server-provided id.
                 key={`${log.timestamp.getTime()}-${index}`}
               >
                 <span className='text-muted-foreground'>

@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { Combobox } from '@/components/ui/combobox'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -91,13 +92,9 @@ function TaskBillingPreview(props: TaskBillingPreviewProps) {
   const { t } = useTranslation()
   const enumFields = getTaskEnumFields(props.usageSchema)
   const numberFields = getTaskNumberFields(props.usageSchema)
-    const result = props.config
-      ? evaluateTaskVisualConfig(
-          props.config,
-          props.sample,
-          props.usageSchema
-        )
-      : null
+  const result = props.config
+    ? evaluateTaskVisualConfig(props.config, props.sample, props.usageSchema)
+    : null
 
   if (!result) {
     return (
@@ -141,8 +138,8 @@ function TaskBillingPreview(props: TaskBillingPreviewProps) {
       {props.usageExamples && props.usageExamples.length > 0 ? (
         <Field className='gap-1.5'>
           <FieldLabel>{t('Example spec')}</FieldLabel>
-          <Select
-            items={props.usageExamples.map((example) => ({
+          <Combobox
+            options={props.usageExamples.map((example) => ({
               value: example.label,
               label: example.label,
             }))}
@@ -159,20 +156,9 @@ function TaskBillingPreview(props: TaskBillingPreviewProps) {
               )
               if (example) props.onSampleReplace({ ...example.facts })
             }}
-          >
-            <SelectTrigger size='sm'>
-              <SelectValue placeholder={t('Example spec')} />
-            </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false}>
-              <SelectGroup>
-                {props.usageExamples.map((example) => (
-                  <SelectItem key={example.label} value={example.label}>
-                    {example.label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+            className='w-full'
+            placeholder={t('Example spec')}
+          />
         </Field>
       ) : null}
       {enumFields.length + numberFields.length > 0 ? (
@@ -187,26 +173,14 @@ function TaskBillingPreview(props: TaskBillingPreviewProps) {
                 <FieldLabel>
                   <code>{field}</code>
                 </FieldLabel>
-                <Select
-                  items={items}
+                <Combobox
+                  options={items}
                   value={String(props.sample[field] ?? '')}
                   onValueChange={(value) =>
                     value !== null && props.onSampleChange(field, value)
                   }
-                >
-                  <SelectTrigger size='sm'>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent alignItemWithTrigger={false}>
-                    <SelectGroup>
-                      {items.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
+                  className='w-full'
+                />
               </Field>
             )
           })}
@@ -506,7 +480,10 @@ export const TaskUsagePricingEditor = memo(function TaskUsagePricingEditor(
                                 className='font-mono'
                               />
                               <span className='text-muted-foreground shrink-0 text-xs'>
-                                $/{t(getTaskUsagePriceUnitLabelKey(definition.unit))}
+                                $/
+                                {t(
+                                  getTaskUsagePriceUnitLabelKey(definition.unit)
+                                )}
                               </span>
                             </div>
                             {description ? (
