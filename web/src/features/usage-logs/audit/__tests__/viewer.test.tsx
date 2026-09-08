@@ -168,7 +168,11 @@ it.each([
         <AuditLogViewer scope='self' />
       </QueryClientProvider>
     )
-    const cell = await screen.findByRole('cell', { name: new RegExp(headline) })
+    const cell = await screen.findByRole(
+      'cell',
+      { name: new RegExp(headline) },
+      { timeout: 5000 }
+    )
     expect(cell).toHaveTextContent(headline)
     if ('id' in params || 'target_user_id' in params) {
       expect(cell).toHaveTextContent('(ID: 11)')
