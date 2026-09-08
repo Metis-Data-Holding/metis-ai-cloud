@@ -76,7 +76,7 @@ export function EmailBindDialog({
       } else {
         toast.error(response.message || t('Failed to send verification code'))
       }
-    } catch (_error) {
+    } catch {
       toast.error(t('Failed to send verification code'))
     } finally {
       setSendingCode(false)
@@ -104,7 +104,7 @@ export function EmailBindDialog({
       } else {
         toast.error(response.message || t('Failed to bind email'))
       }
-    } catch (_error) {
+    } catch {
       toast.error(t('Failed to bind email'))
     } finally {
       setLoading(false)
@@ -122,6 +122,10 @@ export function EmailBindDialog({
       }
     }
   }
+
+  let sendCodeLabel = t('Send')
+  if (sendingCode) sendCodeLabel = t('Sending...')
+  if (isActive) sendCodeLabel = `${secondsLeft}s`
 
   return (
     <Dialog
@@ -189,11 +193,7 @@ export function EmailBindDialog({
               onClick={handleSendCode}
               disabled={sendingCode || isActive || !email}
             >
-              {isActive
-                ? `${secondsLeft}s`
-                : sendingCode
-                  ? t('Sending...')
-                  : t('Send')}
+              {sendCodeLabel}
             </Button>
           </div>
         </div>
