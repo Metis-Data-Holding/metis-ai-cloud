@@ -66,6 +66,8 @@ import type {
 import { VideoParameterPanel } from './video-parameter-panel'
 import { VideoReferenceInput } from './video-reference-input'
 
+const H3_MAX_REFERENCE_VIDEO_BYTES = 64 * 1024 * 1024
+
 type VideoComposerProps = {
   audio: boolean
   disabled: boolean
@@ -112,19 +114,17 @@ export function VideoComposer(props: VideoComposerProps) {
   const referenceAssets = getVideoReferenceAssets(props.inputContent)
   let modeLabel = t('First and last frames')
   if (props.mode === 'reference') {
-    modeLabel = t(props.isH3 ? 'Text to Video' : 'Reference generation')
+    modeLabel = t('Reference generation')
   }
   let promptPlaceholder = t(
     'Describe how the scene should change between the first and last frames.'
   )
-  if (props.isH3) {
-    promptPlaceholder = t('Describe the video you want to create')
-  } else if (props.mode === 'reference') {
+  if (props.mode === 'reference') {
     promptPlaceholder = t(
       'Use @ to quickly reference uploaded files, for example: use the motion from @Video 1 to generate a video in which the characters from @Image 2 and @Image 3 fight.'
     )
   }
-  const showReferenceInput = !props.isH3 || props.mode === 'keyframes'
+  const showReferenceInput = true
   const expandLabel = expanded
     ? t('Collapse prompt input')
     : t('Expand prompt input')
@@ -222,6 +222,13 @@ export function VideoComposer(props: VideoComposerProps) {
               onValidityChange={props.onInputValidityChange}
               disabled={props.disabled}
               strictKeyframeFormats={props.isH3}
+              strictReferenceFormats={props.isH3 && props.mode === 'reference'}
+              maxReferenceImages={props.isH3 ? 2 : undefined}
+              maxReferenceVideos={props.isH3 ? 1 : undefined}
+              maxReferenceVideoBytes={
+                props.isH3 ? H3_MAX_REFERENCE_VIDEO_BYTES : undefined
+              }
+              resetKey={props.modelValue}
               variant='composer'
             />
           </div>
@@ -348,9 +355,7 @@ export function VideoComposer(props: VideoComposerProps) {
                     className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
                   >
                     <HugeiconsIcon icon={AiVideoIcon} aria-hidden='true' />
-                    <span>
-                      {t(props.isH3 ? 'Text to Video' : 'Reference generation')}
-                    </span>
+                    <span>{t('Reference generation')}</span>
                   </DropdownMenuRadioItem>
                   <DropdownMenuRadioItem
                     value='keyframes'

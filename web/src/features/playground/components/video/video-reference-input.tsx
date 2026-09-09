@@ -37,6 +37,7 @@ import {
   type VideoReferenceAsset,
 } from '../../lib/video/video-reference-assets'
 import {
+  MAX_REFERENCE_VIDEO_BYTES,
   readReferenceVideoDuration,
   validateReferenceVideoDuration,
   validateReferenceVideoFile,
@@ -76,6 +77,11 @@ interface VideoReferenceInputProps {
   onValidityChange: (valid: boolean) => void
   disabled?: boolean
   strictKeyframeFormats?: boolean
+  strictReferenceFormats?: boolean
+  maxReferenceImages?: number
+  maxReferenceVideos?: number
+  maxReferenceVideoBytes?: number
+  resetKey?: string
   variant?: 'default' | 'composer'
 }
 
@@ -118,6 +124,15 @@ function isSupportedImage(file: File): boolean {
   return /\.(jpe?g|png|webp|bmp|tiff?|gif|heic|heif)$/i.test(file.name)
 }
 
+function isStrictReferenceImage(file: File): boolean {
+  if (file.type !== '') {
+    return ['image/jpeg', 'image/png', 'image/webp'].includes(
+      file.type.toLowerCase()
+    )
+  }
+  return /\.(jpe?g|png|webp)$/i.test(file.name)
+}
+
 function imageContent(url: string, role: VideoImageRole): VideoInputContent {
   return { type: 'image_url', image_url: { url }, role }
 }
@@ -148,6 +163,10 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
   const [referenceExpanded, setReferenceExpanded] = useState(false)
   const uploadGeneration = useRef(0)
   const interactionDisabled = props.disabled || isUploadingVideo
+  const maxReferenceImages = props.maxReferenceImages ?? MAX_REFERENCE_IMAGES
+  const maxReferenceVideos = props.maxReferenceVideos ?? MAX_REFERENCE_VIDEOS
+  const maxReferenceVideoBytes =
+    props.maxReferenceVideoBytes ?? MAX_REFERENCE_VIDEO_BYTES
 
   useEffect(() => {
     setImageError('')
@@ -159,7 +178,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
     setReferenceExpanded(false)
     onExpandedChange?.(false)
     uploadGeneration.current += 1
-  }, [props.mode, onExpandedChange])
+  }, [props.mode, props.resetKey, onExpandedChange])
 
   const replaceRole = (role: VideoImageRole, next?: VideoInputContent) => {
     const content = props.content.filter((item) => item.role !== role)
@@ -192,8 +211,19 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
     const currentImages = props.content.filter(
       (item) => item.role === 'reference_image'
     )
-    if (currentImages.length + imageFiles.length > MAX_REFERENCE_IMAGES) {
-      setImageError(t('You can add up to 9 reference images.'))
+    if (
+      props.strictReferenceFormats &&
+      imageFiles.some((file) => !isStrictReferenceImage(file))
+    ) {
+      setImageError(t('Choose a supported image file.'))
+      return
+    }
+    if (currentImages.length + imageFiles.length > maxReferenceImages) {
+      setImageError(
+        t('You can add up to {{count}} reference images.', {
+          count: maxReferenceImages,
+        })
+      )
       return
     }
     if (imageFiles.some((file) => !isSupportedImage(file))) {
@@ -215,17 +245,29 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
       setImageError(t('The combined image size is too large.'))
       return
     }
-    if (uploadedVideos.length + videoFiles.length > MAX_REFERENCE_VIDEOS) {
-      setVideoError(t('You can add up to 3 reference videos.'))
+    if (uploadedVideos.length + videoFiles.length > maxReferenceVideos) {
+      setVideoError(
+        t('You can add up to {{count}} reference videos.', {
+          count: maxReferenceVideos,
+        })
+      )
       return
     }
-    const fileErrors = new Set(videoFiles.map(validateReferenceVideoFile))
+    const fileErrors = new Set(
+      videoFiles.map((file) =>
+        validateReferenceVideoFile(file, maxReferenceVideoBytes)
+      )
+    )
     if (fileErrors.has('format')) {
       setVideoError(t('Choose an MP4 or MOV video.'))
       return
     }
     if (fileErrors.has('size')) {
-      setVideoError(t('Each reference video must not exceed 80 MB.'))
+      setVideoError(
+        t('Each reference video must not exceed {{count}} MB.', {
+          count: Math.floor(maxReferenceVideoBytes / (1024 * 1024)),
+        })
+      )
       return
     }
     const finishVideoSelection = () => {

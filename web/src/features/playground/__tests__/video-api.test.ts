@@ -21,7 +21,10 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { submitVideoGeneration } from '../api'
 import type { VideoGenerationRequest } from '../types'
 
-const { post } = vi.hoisted(() => ({ post: vi.fn() }))
+const { post, fetchReference } = vi.hoisted(() => ({
+  post: vi.fn(),
+  fetchReference: vi.fn(),
+}))
 
 vi.mock('@/lib/api', () => ({ api: { post } }))
 
@@ -52,6 +55,8 @@ function h3Request(
 
 describe('video submission transport', () => {
   beforeEach(() => {
+    fetchReference.mockReset()
+    vi.stubGlobal('fetch', fetchReference)
     post.mockReset()
     post.mockResolvedValue({ data: task })
   })
@@ -140,6 +145,70 @@ describe('video submission transport', () => {
 
     expect(post.mock.calls[0]?.[1]).toBe(textRequest)
     expect(post.mock.calls[1]?.[1]).toBe(seedanceRequest)
+  })
+
+  test('submits MiniMax H3 reference images and video as prepared multipart files', async () => {
+    const referenceVideoUrl =
+      'https://many-models.example/v1/video-reference-files/abcdefghijklmnopqrstuvwx.mp4/content?expires=1&access=signed'
+    fetchReference.mockResolvedValue({
+      ok: true,
+      blob: vi
+        .fn()
+        .mockResolvedValue(new Blob(['video'], { type: 'video/mp4' })),
+    })
+
+    await submitVideoGeneration(
+      'default',
+      h3Request([
+        {
+          type: 'image_url',
+          image_url: { url: 'data:image/png;base64,aW1hZ2Ux' },
+          role: 'reference_image',
+        },
+        {
+          type: 'video_url',
+          video_url: { url: referenceVideoUrl },
+          role: 'reference_video',
+        },
+        {
+          type: 'image_url',
+          image_url: { url: 'data:image/jpeg;base64,aW1hZ2Uy' },
+          role: 'reference_image',
+        },
+      ])
+    )
+
+    expect(fetchReference).toHaveBeenCalledWith(new URL(referenceVideoUrl), {
+      credentials: 'omit',
+    })
+    const body = post.mock.calls[0]?.[1]
+    expect(body).toBeInstanceOf(FormData)
+    if (!(body instanceof FormData)) return
+    expect(body.get('reference_image_0')).toBeInstanceOf(File)
+    expect(body.get('reference_image_1')).toBeInstanceOf(File)
+    const video = body.get('reference_video_0')
+    expect(video).toBeInstanceOf(File)
+    if (!(video instanceof File)) return
+    expect(video.type).toBe('video/mp4')
+    expect(await video.text()).toBe('video')
+  })
+
+  test('rejects an untrusted MiniMax H3 reference video URL', async () => {
+    await expect(
+      submitVideoGeneration(
+        'default',
+        h3Request([
+          {
+            type: 'video_url',
+            video_url: { url: 'https://example.com/reference.mp4' },
+            role: 'reference_video',
+          },
+        ])
+      )
+    ).rejects.toThrow('Unable to upload the reference video.')
+
+    expect(fetchReference).not.toHaveBeenCalled()
+    expect(post).not.toHaveBeenCalled()
   })
 
   test('rejects invalid MiniMax H3 content before sending a request', async () => {

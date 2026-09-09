@@ -431,14 +431,14 @@ describe('VideoPlayground', () => {
     await waitFor(() =>
       expect(prompt).toHaveAttribute(
         'placeholder',
-        'Describe the video you want to create'
+        'Use @ to quickly reference uploaded files, for example: use the motion from @Video 1 to generate a video in which the characters from @Image 2 and @Image 3 fight.'
       )
     )
+    expect(screen.getByLabelText('Add reference content')).toBeInTheDocument()
     expect(
-      screen.queryByLabelText('Add reference content')
-    ).not.toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: 'Generation mode: Text to Video' })
+      screen.getByRole('button', {
+        name: 'Generation mode: Reference generation',
+      })
     ).toBeVisible()
 
     await user.click(
@@ -455,7 +455,7 @@ describe('VideoPlayground', () => {
     await selectGenerationMode(user, 'First and last frames')
     expect(prompt).toHaveAttribute(
       'placeholder',
-      'Describe the video you want to create'
+      'Describe how the scene should change between the first and last frames.'
     )
     const firstFrameInput = screen.getByLabelText('First frame', {
       selector: 'input',
@@ -505,6 +505,71 @@ describe('VideoPlayground', () => {
     )
   })
 
+  test('allows MiniMax H3 reference images and one reference video', async () => {
+    vi.mocked(getUserModels).mockResolvedValue([
+      { label: 'MiniMax H3', value: 'minimax-h3-fl2va' },
+    ])
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    const input = await screen.findByLabelText('Add reference content')
+    const imageOne = new File(['one'], 'one.png', { type: 'image/png' })
+    const video = new File(['video'], 'motion.mp4', { type: 'video/mp4' })
+    const imageTwo = new File(['two'], 'two.webp', { type: 'image/webp' })
+    await user.upload(input, [imageOne, video, imageTwo])
+
+    expect(await screen.findByText('Image 1')).toBeVisible()
+    expect(await screen.findByText('Video 1')).toBeVisible()
+    expect(await screen.findByText('Image 2')).toBeVisible()
+    await user.upload(
+      input,
+      new File(['three'], 'three.png', { type: 'image/png' })
+    )
+    expect(
+      await screen.findByText('You can add up to 2 reference images.')
+    ).toBeVisible()
+    await user.type(
+      screen.getByRole('textbox', { name: 'Prompt' }),
+      'Use @Video 1 motion with @Image 1 and @Image 2'
+    )
+    await user.click(screen.getByRole('button', { name: 'Generate video' }))
+
+    await waitFor(() =>
+      expect(submitVideoGeneration).toHaveBeenCalledWith(
+        'default',
+        expect.objectContaining({
+          model: 'minimax-h3-fl2va',
+          metadata: expect.objectContaining({
+            content: expect.arrayContaining([
+              expect.objectContaining({ role: 'reference_image' }),
+              expect.objectContaining({ role: 'reference_video' }),
+            ]),
+          }),
+        })
+      )
+    )
+  })
+
+  test('rejects MiniMax H3 reference videos above the gateway limit', async () => {
+    vi.mocked(getUserModels).mockResolvedValue([
+      { label: 'MiniMax H3', value: 'minimax-h3-fl2va' },
+    ])
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    const file = new File(['video'], 'large.mp4', { type: 'video/mp4' })
+    Object.defineProperty(file, 'size', { value: 64 * 1024 * 1024 + 1 })
+    await user.upload(
+      await screen.findByLabelText('Add reference content'),
+      file
+    )
+
+    expect(
+      await screen.findByText('Each reference video must not exceed 64 MB.')
+    ).toBeVisible()
+    expect(uploadVideoReference).not.toHaveBeenCalled()
+  })
+
   test('clears reference content when switching to MiniMax H3', async () => {
     vi.mocked(getUserModels).mockResolvedValue([
       {
@@ -529,7 +594,7 @@ describe('VideoPlayground', () => {
     await waitFor(() =>
       expect(prompt).toHaveAttribute(
         'placeholder',
-        'Describe the video you want to create'
+        'Use @ to quickly reference uploaded files, for example: use the motion from @Video 1 to generate a video in which the characters from @Image 2 and @Image 3 fight.'
       )
     )
     await user.type(prompt, 'A quiet city at night')
@@ -547,6 +612,51 @@ describe('VideoPlayground', () => {
         },
       })
     )
+  })
+
+  test('clears the hidden video count when switching models', async () => {
+    vi.mocked(getUserModels).mockResolvedValue([
+      {
+        label: 'dreamina-seedance-2-0-fast-260128',
+        value: 'dreamina-seedance-2-0-fast-260128',
+      },
+      { label: 'MiniMax H3', value: 'minimax-h3-fl2va' },
+    ])
+    vi.mocked(uploadVideoReference)
+      .mockResolvedValueOnce({
+        id: 'first-reference.mp4',
+        url: 'https://many-models.example/v1/video-reference-files/first-reference.mp4/content?access=signed',
+        name: 'first.mp4',
+        content_type: 'video/mp4',
+        size: 5,
+      })
+      .mockResolvedValueOnce({
+        id: 'second-reference.mp4',
+        url: 'https://many-models.example/v1/video-reference-files/second-reference.mp4/content?access=signed',
+        name: 'second.mp4',
+        content_type: 'video/mp4',
+        size: 6,
+      })
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await user.upload(
+      await screen.findByLabelText('Add reference content'),
+      new File(['first'], 'first.mp4', { type: 'video/mp4' })
+    )
+    expect(await screen.findByText('Video 1')).toBeVisible()
+
+    await user.click(screen.getByRole('combobox'))
+    await user.click(await screen.findByText('MiniMax H3'))
+    await user.upload(
+      screen.getByLabelText('Add reference content'),
+      new File(['second'], 'second.mp4', { type: 'video/mp4' })
+    )
+
+    await waitFor(() => expect(uploadVideoReference).toHaveBeenCalledTimes(2))
+    expect(
+      screen.queryByText('You can add up to 1 reference video.')
+    ).not.toBeInTheDocument()
   })
 
   test('clears unsupported keyframes when switching to MiniMax H3', async () => {

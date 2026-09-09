@@ -77,7 +77,7 @@ var taskArtifactKeyPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._~-]{0,1
 
 const maxTaskArtifacts = 64
 
-const maxPrepareRequests = 2
+const maxPrepareRequests = 3
 
 // maxTaskPluginPersistedJSONBytes is the shared ceiling for taskData and plugin state.
 const maxTaskPluginPersistedJSONBytes = 1 << 20

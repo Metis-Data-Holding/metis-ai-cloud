@@ -206,3 +206,13 @@
 - Deploy Run `34038331884` 将 `develop` 的 `634659a5d320228849c460801662d7ce142084f0` 发布至 BytePlus ECS；现场复核确认该 release 正在运行，app、PostgreSQL 与 Redis 均为 healthy，公网 `/api/status` 返回成功。
 - 用户通过公网 Playground 完成真实首尾帧视频任务，确认任务成功完成且生成结果可正常播放和下载。
 - 本次没有核对有声生成、实际扣费对账或失败退款，因此不将这些能力记录为已验收。
+
+## 2026-09-09
+
+### MiniMax H3 参考内容生视频接入
+
+- 根据远端 ComfyUI Ref2VA API Format 工作流扩展 `minimax-h3` Task Plugin：参考模式自动切换 Ref2VA checkpoint，支持最多 2 张 JPEG / PNG / WebP 参考图和 1 个不超过 64 MiB 的 MP4 / MOV 参考视频。
+- 参考图片上传到 ComfyUI 临时输入目录，参考视频上传到输入目录，并分别接入 `MiniMaxH3ReferenceToVideo` 的 `ref_images` 与 `ref_videos`；纯文生、首帧和首尾帧路径保持不变。
+- Playground 复用既有参考素材上传、堆叠预览和 `@` 引用交互；H3 参考视频从平台签名制品地址由浏览器取回，再随任务 multipart 请求提交，未新增服务端任意 URL 拉取。
+- 增加参考素材解码、工作流映射、三次预处理请求上限、仅参考视频路径及前端提交回归测试；参考视频按 24 fps、最多 360 帧加载，避免绕过前端时无界解码，并补齐 7 种前端语言的动态数量提示。
+- 本轮只完成代码和本地自动化验证；尚未部署或执行真实 Ref2VA 平台生成，参考视频原始音频当前不作为模型参考输入。

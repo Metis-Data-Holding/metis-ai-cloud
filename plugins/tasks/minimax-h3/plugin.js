@@ -4,10 +4,10 @@ export const meta = {
   name: "MiniMax H3",
   icon: "Minimax.Color",
   description: {
-    en: "Self-hosted MiniMax H3 text, first-frame, and first-and-last-frame video through ComfyUI",
-    zh: "通过 ComfyUI 接入自托管 MiniMax H3 文生、首帧及首尾帧图生视频",
+    en: "Self-hosted MiniMax H3 text, reference, first-frame, and first-and-last-frame video through ComfyUI",
+    zh: "通过 ComfyUI 接入自托管 MiniMax H3 文生、参考内容、首帧及首尾帧图生视频",
   },
-  version: "1.2.0",
+  version: "1.3.0",
   author: { name: "Metis Data" },
   models: ["minimax-h3-fl2va"],
   fetchMode: "per_task",
@@ -49,6 +49,11 @@ const imageExtensions = {
 };
 const maxFrameBytes = 30 * 1024 * 1024;
 const maxCombinedFrameBytes = 45 * 1024 * 1024;
+const maxReferenceVideoBytes = 64 * 1024 * 1024;
+const videoExtensions = {
+  "video/mp4": "mp4",
+  "video/quicktime": "mov",
+};
 
 function frameMarker(value, field) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -64,13 +69,19 @@ function frameSize(frameFiles, field) {
   return fileSize;
 }
 
+function referenceMarker(request, field) {
+  if (request[field] === undefined) return null;
+  const marker = frameMarker(request[field], field);
+  if (!marker) throw new Error("reference content is not supported");
+  return marker;
+}
+
 function normalizedRequest(request) {
   const req = request || {};
   const metadata = req.metadata && typeof req.metadata === "object" && !Array.isArray(req.metadata) ? req.metadata : {};
   const prompt = trimmed(req.prompt);
   if (!prompt) throw new Error("prompt is required");
-  if (Object.prototype.hasOwnProperty.call(metadata, "content")) throw new Error("reference content is not supported");
-  if (req.images !== undefined) throw new Error("reference content is not supported");
+  if (Object.prototype.hasOwnProperty.call(metadata, "content") || req.images !== undefined) throw new Error("reference content is not supported");
   let inputReference;
   if (req.input_reference !== undefined) {
     inputReference = frameMarker(req.input_reference, "input_reference");
@@ -82,6 +93,13 @@ function normalizedRequest(request) {
     if (!inputLastFrame) throw new Error("reference content is not supported");
     if (!inputReference) throw new Error("input_last_frame requires input_reference");
   }
+  const referenceImage0 = referenceMarker(req, "reference_image_0");
+  const referenceImage1 = referenceMarker(req, "reference_image_1");
+  const referenceVideo0 = referenceMarker(req, "reference_video_0");
+  if (referenceImage1 && !referenceImage0) throw new Error("reference_image_1 requires reference_image_0");
+  if ((referenceImage0 || referenceImage1 || referenceVideo0) && (inputReference || inputLastFrame)) {
+    throw new Error("reference content cannot be combined with keyframes");
+  }
 
   const rawDuration = req.duration === undefined ? req.seconds : req.duration;
   const duration = rawDuration === undefined ? 5 : Number(rawDuration);
@@ -92,7 +110,18 @@ function normalizedRequest(request) {
   const ratio = String(req.ratio || metadata.ratio || "16:9");
   if (!sizes[ratio]) throw new Error("ratio must be one of 16:9, 9:16, 1:1, 4:3, 3:4");
   const generateAudio = req.generate_audio === undefined ? metadata.generate_audio === true : req.generate_audio === true;
-  return { prompt, duration, resolution, ratio, generate_audio: generateAudio, input_reference: inputReference, input_last_frame: inputLastFrame };
+  return {
+    prompt,
+    duration,
+    resolution,
+    ratio,
+    generate_audio: generateAudio,
+    input_reference: inputReference,
+    input_last_frame: inputLastFrame,
+    reference_image_0: referenceImage0,
+    reference_image_1: referenceImage1,
+    reference_video_0: referenceVideo0,
+  };
 }
 
 function frameCount(seconds) {
@@ -110,28 +139,58 @@ function taskSeed(taskId) {
   return hash >>> 0 || 1;
 }
 
-function workflowFor(request, publicTaskId, firstFrame, lastFrame) {
-  const size = sizes[request.ratio];
-  const workflow = {
-    1: { class_type: "UNETLoader", inputs: { unet_name: "minimax_h3_fl2va_pruned_int8_convrot.safetensors", weight_dtype: "default" } },
+function baseWorkflow(request, publicTaskId, modelName, conditioning, size) {
+  return {
+    1: { class_type: "UNETLoader", inputs: { unet_name: modelName, weight_dtype: "default" } },
     2: { class_type: "CLIPLoader", inputs: { clip_name: "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors", type: "minimax", device: "default" } },
     3: { class_type: "VAELoader", inputs: { vae_name: "minimax_h3_video_vae_fp16.safetensors" } },
     4: {
-      class_type: "MiniMaxH3ImageToVideo",
-      inputs: { clip: ["2", 0], vae: ["3", 0], prompt: request.prompt, width: size[0], height: size[1], length: frameCount(request.duration) },
+      class_type: conditioning.class_type,
+      inputs: {
+        ...conditioning.inputs,
+        clip: ["2", 0],
+        vae: ["3", 0],
+        prompt: request.prompt,
+        width: size[0],
+        height: size[1],
+        length: frameCount(request.duration),
+      },
     },
     5: { class_type: "RandomNoise", inputs: { noise_seed: taskSeed(publicTaskId) } },
     6: { class_type: "KSamplerSelect", inputs: { sampler_name: "res_multistep" } },
     7: { class_type: "BasicScheduler", inputs: { model: ["1", 0], scheduler: "simple", steps: 20, denoise: 1 } },
     8: { class_type: "BasicGuider", inputs: { model: ["1", 0], conditioning: ["4", 0] } },
-    9: {
-      class_type: "SamplerCustomAdvanced",
-      inputs: { noise: ["5", 0], guider: ["8", 0], sampler: ["6", 0], sigmas: ["7", 0], latent_image: ["4", 1] },
-    },
+    9: { class_type: "SamplerCustomAdvanced", inputs: { noise: ["5", 0], guider: ["8", 0], sampler: ["6", 0], sigmas: ["7", 0], latent_image: ["4", 1] } },
     10: { class_type: "VAEDecode", inputs: { samples: ["9", 1], vae: ["3", 0] } },
     11: { class_type: "CreateVideo", inputs: { images: ["10", 0], fps: 24, bit_depth: 8, color_space: "sRGB" } },
     12: { class_type: "SaveVideo", inputs: { video: ["11", 0], filename_prefix: "MiniMaxH3", format: "auto", codec: "auto" } },
   };
+}
+
+function workflowFor(request, publicTaskId, firstFrame, lastFrame, referenceImages, referenceVideo) {
+  const size = sizes[request.ratio];
+  const hasReferences = referenceImages.length > 0 || Boolean(referenceVideo);
+  const workflow = hasReferences
+    ? baseWorkflow(
+        request,
+        publicTaskId,
+        "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        {
+          class_type: "MiniMaxH3ReferenceToVideo",
+          inputs: { ref_image_size: "match" },
+        },
+        size
+      )
+    : baseWorkflow(
+        request,
+        publicTaskId,
+        "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        {
+          class_type: "MiniMaxH3ImageToVideo",
+          inputs: {},
+        },
+        size
+      );
   if (firstFrame) {
     workflow[15] = { class_type: "LoadImage", inputs: { image: firstFrame.filename + " [temp]" } };
     workflow[4].inputs.first_frame = ["15", 0];
@@ -140,10 +199,40 @@ function workflowFor(request, publicTaskId, firstFrame, lastFrame) {
     workflow[16] = { class_type: "LoadImage", inputs: { image: lastFrame.filename + " [temp]" } };
     workflow[4].inputs.last_frame = ["16", 0];
   }
-  if (request.generate_audio) {
+  if (hasReferences) {
+    if (referenceImages[0]) {
+      workflow[14] = { class_type: "LoadImage", inputs: { image: referenceImages[0].filename + " [temp]" } };
+      workflow[4].inputs["ref_images.ref_image_0"] = ["14", 0];
+    }
+    if (referenceImages[1]) {
+      workflow[15] = { class_type: "LoadImage", inputs: { image: referenceImages[1].filename + " [temp]" } };
+      workflow[4].inputs["ref_images.ref_image_1"] = ["15", 0];
+    }
+    if (referenceVideo) {
+      workflow[16] = {
+        class_type: "VHS_LoadVideo",
+        inputs: {
+          video: referenceVideo.filename,
+          force_rate: 24,
+          custom_width: 0,
+          custom_height: 0,
+          frame_load_cap: 360,
+          skip_first_frames: 0,
+          select_every_nth: 1,
+          format: "AnimateDiff",
+        },
+      };
+      workflow[4].inputs["ref_videos.ref_video_0"] = ["16", 0];
+    }
+    workflow[10].inputs.samples = ["9", 0];
     workflow[13] = { class_type: "VAELoader", inputs: { vae_name: "minimax_h3_audio_vae_fp32.safetensors" } };
-    workflow[14] = { class_type: "VAEDecodeAudio", inputs: { samples: ["9", 1], vae: ["13", 0] } };
-    workflow[11].inputs.audio = ["14", 0];
+    workflow[4].inputs.audio_vae = ["13", 0];
+  }
+  if (request.generate_audio) {
+    const audioDecodeNode = hasReferences ? 17 : 14;
+    if (!hasReferences) workflow[13] = { class_type: "VAELoader", inputs: { vae_name: "minimax_h3_audio_vae_fp32.safetensors" } };
+    workflow[audioDecodeNode] = { class_type: "VAEDecodeAudio", inputs: { samples: ["9", hasReferences ? 0 : 1], vae: ["13", 0] } };
+    workflow[11].inputs.audio = [String(audioDecodeNode), 0];
   }
   return workflow;
 }
@@ -159,8 +248,16 @@ export function buildSubmitRequest(ctx) {
   const lastFiles = files.filter(function (file) {
     return file.field === "input_last_frame";
   });
+  const referenceImageFiles = [0, 1].map(function (index) {
+    return files.filter(function (file) {
+      return file.field === "reference_image_" + index;
+    });
+  });
+  const referenceVideoFiles = files.filter(function (file) {
+    return file.field === "reference_video_0";
+  });
   const unexpectedFile = files.find(function (file) {
-    return file.field !== "input_reference" && file.field !== "input_last_frame";
+    return !["input_reference", "input_last_frame", "reference_image_0", "reference_image_1", "reference_video_0"].includes(file.field);
   });
   if (unexpectedFile) throw new Error("unexpected file field: " + unexpectedFile.field);
   let firstFrame = null;
@@ -191,12 +288,65 @@ export function buildSubmitRequest(ctx) {
   if (firstFrame && lastFrame && firstFrame.size + lastFrame.size > maxCombinedFrameBytes) {
     throw new Error("input frames must not exceed 45 MiB in total");
   }
+  const referenceImages = referenceImageFiles
+    .map(function (frameFiles, index) {
+      const marker = request["reference_image_" + index];
+      if (!marker) {
+        if (frameFiles.length > 0) throw new Error("unexpected reference_image_" + index + " file");
+        return null;
+      }
+      if (frameFiles.length !== 1 || frameFiles[0].ref !== marker.__fileRef) throw new Error("reference_image_" + index + " file is missing");
+      const mimeType = String(frameFiles[0].mimeType || "")
+        .split(";", 1)[0]
+        .trim()
+        .toLowerCase();
+      if (!Object.prototype.hasOwnProperty.call(imageExtensions, mimeType)) throw new Error("reference images must be image/jpeg, image/png, or image/webp");
+      const size = frameSize(frameFiles, "reference_image_" + index);
+      const taskID =
+        trimmed(ctx.publicTaskId)
+          .replace(/[^A-Za-z0-9_-]/g, "-")
+          .replace(/-+/g, "-")
+          .replace(/^-|-$/g, "")
+          .slice(0, 80) || "task";
+      return { ref: frameFiles[0].ref, filename: "minimax-h3-" + taskID + "-reference-" + index + "." + imageExtensions[mimeType], size: size };
+    })
+    .filter(Boolean);
+  const referenceVideo = request.reference_video_0
+    ? (function () {
+        if (referenceVideoFiles.length !== 1 || referenceVideoFiles[0].ref !== request.reference_video_0.__fileRef)
+          throw new Error("reference_video_0 file is missing");
+        const mimeType = String(referenceVideoFiles[0].mimeType || "")
+          .split(";", 1)[0]
+          .trim()
+          .toLowerCase();
+        if (!Object.prototype.hasOwnProperty.call(videoExtensions, mimeType)) throw new Error("reference video must be video/mp4 or video/quicktime");
+        const size = Number(referenceVideoFiles[0].size);
+        if (!Number.isFinite(size) || size <= 0 || size > maxReferenceVideoBytes) throw new Error("reference video must not exceed 64 MiB");
+        const taskID =
+          trimmed(ctx.publicTaskId)
+            .replace(/[^A-Za-z0-9_-]/g, "-")
+            .replace(/-+/g, "-")
+            .replace(/^-|-$/g, "")
+            .slice(0, 80) || "task";
+        return { ref: referenceVideoFiles[0].ref, filename: "minimax-h3-" + taskID + "-reference-video." + videoExtensions[mimeType], size: size };
+      })()
+    : null;
+  if (!request.reference_video_0 && referenceVideoFiles.length > 0) throw new Error("unexpected reference_video_0 file");
+  if (
+    referenceImages.length > 0 &&
+    referenceImages.reduce(function (total, image) {
+      return total + image.size;
+    }, 0) > maxCombinedFrameBytes
+  )
+    throw new Error("reference images must not exceed 45 MiB in total");
+  if (referenceImages.length + Number(Boolean(referenceVideo)) > 0 && (firstFrame || lastFrame))
+    throw new Error("reference content cannot be combined with keyframes");
   const descriptor = {
     url: String(ctx.baseUrl || "").replace(/\/$/, "") + "/prompt",
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: { prompt: workflowFor(request, ctx.publicTaskId, firstFrame, lastFrame) },
-    action: firstFrame ? "image_to_video" : "text_to_video",
+    body: { prompt: workflowFor(request, ctx.publicTaskId, firstFrame, lastFrame, referenceImages, referenceVideo) },
+    action: referenceImages.length > 0 || referenceVideo ? "reference_to_video" : firstFrame ? "image_to_video" : "text_to_video",
   };
   const prepareRequest = function (frameInfo) {
     return {
@@ -215,6 +365,25 @@ export function buildSubmitRequest(ctx) {
     descriptor.prepareRequests = [prepareRequest(firstFrame), prepareRequest(lastFrame)];
   } else if (firstFrame) {
     descriptor.prepareRequest = prepareRequest(firstFrame);
+  }
+  const referencePrepareRequest = function (fileInfo, type) {
+    return {
+      url: String(ctx.baseUrl || "").replace(/\/$/, "") + "/upload/image",
+      method: "POST",
+      headers: { Accept: "application/json" },
+      bodyType: "multipart",
+      parts: [
+        { name: "image", fileRef: fileInfo.ref, filename: fileInfo.filename },
+        { name: "type", value: type },
+        { name: "overwrite", value: true },
+      ],
+    };
+  };
+  if (referenceImages.length > 0 || referenceVideo) {
+    descriptor.prepareRequests = referenceImages.map(function (image) {
+      return referencePrepareRequest(image, "temp");
+    });
+    if (referenceVideo) descriptor.prepareRequests.push(referencePrepareRequest(referenceVideo, "input"));
   }
   return descriptor;
 }
@@ -319,6 +488,8 @@ export const protocols = {
       let req;
       let hasInputReferenceFile = false;
       let hasInputLastFrameFile = false;
+      const referenceFileFields = ["reference_image_0", "reference_image_1", "reference_video_0"];
+      const referenceFiles = new Set();
       if (ctx.body.kind === "json") {
         if (!ctx.body.value || typeof ctx.body.value !== "object" || Array.isArray(ctx.body.value)) throw new Error("JSON object required");
         req = Object.assign({}, ctx.body.value);
@@ -338,6 +509,9 @@ export const protocols = {
           } else if (file.field === "input_last_frame") {
             if (hasInputLastFrameFile) throw new Error("input_last_frame must be provided once");
             hasInputLastFrameFile = true;
+          } else if (referenceFileFields.includes(file.field)) {
+            if (referenceFiles.has(file.field)) throw new Error(file.field + " must be provided once");
+            referenceFiles.add(file.field);
           } else {
             throw new Error("unexpected file field: " + file.field);
           }
@@ -358,9 +532,17 @@ export const protocols = {
         else if (req.duration !== undefined) req.duration = Number(req.duration);
         if (hasInputReferenceFile) req.input_reference = { __fileRef: "request_file:input_reference" };
         if (hasInputLastFrameFile) req.input_last_frame = { __fileRef: "request_file:input_last_frame" };
+        for (const field of referenceFileFields) {
+          if (referenceFiles.has(field)) req[field] = { __fileRef: "request_file:" + field };
+        }
       }
       const request = normalizedRequest(req);
-      return { kind: "submit", model: ctx.model, action: request.input_reference ? "image_to_video" : "text_to_video", requestBody: request };
+      return {
+        kind: "submit",
+        model: ctx.model,
+        action: request.reference_image_0 || request.reference_video_0 ? "reference_to_video" : request.input_reference ? "image_to_video" : "text_to_video",
+        requestBody: request,
+      };
     },
     render: function () {
       return {};

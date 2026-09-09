@@ -202,6 +202,29 @@ func TestMinimaxH3OpenAIVideoDecodeMultipartKeyframes(t *testing.T) {
 	require.ErrorContains(t, err, "input_last_frame requires input_reference")
 }
 
+func TestMinimaxH3OpenAIVideoDecodeMultipartReferenceContent(t *testing.T) {
+	plugin := loadMinimaxH3Plugin(t)
+	value, err := plugin.Engine.CallPath(t.Context(), "protocols", []string{"openai_video", "decodeRequest"}, map[string]any{
+		"model": "minimax-h3-fl2va",
+		"body": map[string]any{
+			"kind":   "multipart",
+			"fields": map[string][]string{"prompt": {"use the references"}},
+			"files": []map[string]any{
+				{"ref": "request_file:reference_image_0", "field": "reference_image_0", "filename": "one.png", "mimeType": "image/png"},
+				{"ref": "request_file:reference_image_1", "field": "reference_image_1", "filename": "two.jpg", "mimeType": "image/jpeg"},
+				{"ref": "request_file:reference_video_0", "field": "reference_video_0", "filename": "motion.mp4", "mimeType": "video/mp4"},
+			},
+		},
+	})
+	require.NoError(t, err)
+	decoded := minimaxH3Map(t, value)
+	assert.Equal(t, "reference_to_video", decoded["action"])
+	request := decoded["requestBody"].(map[string]any)
+	assert.Equal(t, "request_file:reference_image_0", request["reference_image_0"].(map[string]any)["__fileRef"])
+	assert.Equal(t, "request_file:reference_image_1", request["reference_image_1"].(map[string]any)["__fileRef"])
+	assert.Equal(t, "request_file:reference_video_0", request["reference_video_0"].(map[string]any)["__fileRef"])
+}
+
 func TestMinimaxH3OpenAIVideoRender(t *testing.T) {
 	adaptor := taskjsplugin.New(loadMinimaxH3Plugin(t))
 	rendered, err := adaptor.ConvertToOpenAIVideo(&model.Task{
@@ -263,6 +286,89 @@ func TestMinimaxH3BuildsMinimalComfyWorkflow(t *testing.T) {
 		assert.Contains(t, workflow, "14")
 		assert.Contains(t, workflow["11"].(map[string]any)["inputs"], "audio")
 		assert.EqualValues(t, 362, workflow["4"].(map[string]any)["inputs"].(map[string]any)["length"])
+	})
+
+	t.Run("reference images and video use the Ref2VA workflow", func(t *testing.T) {
+		requestBody := map[string]any{
+			"prompt": "use the pictures and video", "duration": 5, "resolution": "768p", "ratio": "16:9", "generate_audio": false,
+			"reference_image_0": map[string]any{"__fileRef": "request_file:reference_image_0"},
+			"reference_image_1": map[string]any{"__fileRef": "request_file:reference_image_1"},
+			"reference_video_0": map[string]any{"__fileRef": "request_file:reference_video_0"},
+		}
+		context := minimaxH3SubmitContext(requestBody, "task/reference")
+		context["files"] = []map[string]any{
+			{"ref": "request_file:reference_image_0", "field": "reference_image_0", "filename": "one.png", "mimeType": "image/png", "size": 3},
+			{"ref": "request_file:reference_image_1", "field": "reference_image_1", "filename": "two.jpg", "mimeType": "image/jpeg", "size": 4},
+			{"ref": "request_file:reference_video_0", "field": "reference_video_0", "filename": "motion.mp4", "mimeType": "video/mp4", "size": 5},
+		}
+		descriptor := callMinimaxH3Hook(t, plugin, "buildSubmitRequest", context)
+		prepare := descriptor["prepareRequests"].([]any)
+		require.Len(t, prepare, 3)
+		assert.Equal(t, "temp", prepare[0].(map[string]any)["parts"].([]any)[1].(map[string]any)["value"])
+		assert.Equal(t, "temp", prepare[1].(map[string]any)["parts"].([]any)[1].(map[string]any)["value"])
+		assert.Equal(t, "input", prepare[2].(map[string]any)["parts"].([]any)[1].(map[string]any)["value"])
+
+		workflow := descriptor["body"].(map[string]any)["prompt"].(map[string]any)
+		assert.Equal(t, "minimax_h3_ref2va_pruned_int8_convrot.safetensors", workflow["1"].(map[string]any)["inputs"].(map[string]any)["unet_name"])
+		ref2va := workflow["4"].(map[string]any)
+		assert.Equal(t, "MiniMaxH3ReferenceToVideo", ref2va["class_type"])
+		inputs := ref2va["inputs"].(map[string]any)
+		assert.Equal(t, []any{"14", float64(0)}, inputs["ref_images.ref_image_0"])
+		assert.Equal(t, []any{"15", float64(0)}, inputs["ref_images.ref_image_1"])
+		assert.Equal(t, []any{"16", float64(0)}, inputs["ref_videos.ref_video_0"])
+		assert.Equal(t, []any{"9", float64(0)}, workflow["10"].(map[string]any)["inputs"].(map[string]any)["samples"])
+		video := workflow["16"].(map[string]any)["inputs"].(map[string]any)
+		assert.Equal(t, "minimax-h3-task-reference-reference-video.mp4", video["video"])
+		assert.EqualValues(t, 24, video["force_rate"])
+		assert.EqualValues(t, 360, video["frame_load_cap"])
+		assert.Equal(t, "AnimateDiff", video["format"])
+	})
+
+	t.Run("reference video works without reference images", func(t *testing.T) {
+		requestBody := map[string]any{
+			"prompt": "follow the reference motion", "duration": 5, "resolution": "768p", "ratio": "16:9", "generate_audio": false,
+			"reference_video_0": map[string]any{"__fileRef": "request_file:reference_video_0"},
+		}
+		context := minimaxH3SubmitContext(requestBody, "task/video-only")
+		context["files"] = []map[string]any{{
+			"ref": "request_file:reference_video_0", "field": "reference_video_0", "filename": "motion.mp4", "mimeType": "video/mp4", "size": 5,
+		}}
+
+		descriptor := callMinimaxH3Hook(t, plugin, "buildSubmitRequest", context)
+		workflow := descriptor["body"].(map[string]any)["prompt"].(map[string]any)
+		assert.NotContains(t, workflow, "14")
+		assert.Equal(t, []any{"16", float64(0)}, workflow["4"].(map[string]any)["inputs"].(map[string]any)["ref_videos.ref_video_0"])
+	})
+
+	t.Run("reference image supports generated audio", func(t *testing.T) {
+		requestBody := map[string]any{
+			"prompt": "animate the subject", "duration": 5, "resolution": "768p", "ratio": "16:9", "generate_audio": true,
+			"reference_image_0": map[string]any{"__fileRef": "request_file:reference_image_0"},
+		}
+		context := minimaxH3SubmitContext(requestBody, "task/image-audio")
+		context["files"] = []map[string]any{{
+			"ref": "request_file:reference_image_0", "field": "reference_image_0", "filename": "subject.png", "mimeType": "image/png", "size": 5,
+		}}
+
+		descriptor := callMinimaxH3Hook(t, plugin, "buildSubmitRequest", context)
+		workflow := descriptor["body"].(map[string]any)["prompt"].(map[string]any)
+		assert.Equal(t, []any{"14", float64(0)}, workflow["4"].(map[string]any)["inputs"].(map[string]any)["ref_images.ref_image_0"])
+		assert.Equal(t, []any{"9", float64(0)}, workflow["17"].(map[string]any)["inputs"].(map[string]any)["samples"])
+		assert.Equal(t, []any{"17", float64(0)}, workflow["11"].(map[string]any)["inputs"].(map[string]any)["audio"])
+	})
+
+	t.Run("reference video respects the gateway multipart limit", func(t *testing.T) {
+		requestBody := map[string]any{
+			"prompt": "follow the reference motion", "duration": 5, "resolution": "768p", "ratio": "16:9", "generate_audio": false,
+			"reference_video_0": map[string]any{"__fileRef": "request_file:reference_video_0"},
+		}
+		context := minimaxH3SubmitContext(requestBody, "task/large-video")
+		context["files"] = []map[string]any{{
+			"ref": "request_file:reference_video_0", "field": "reference_video_0", "filename": "motion.mp4", "mimeType": "video/mp4", "size": 64*1024*1024 + 1,
+		}}
+
+		_, err := plugin.Engine.Call(t.Context(), "buildSubmitRequest", context)
+		require.ErrorContains(t, err, "reference video must not exceed 64 MiB")
 	})
 
 	t.Run("first frame uses a prepared Comfy upload", func(t *testing.T) {

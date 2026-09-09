@@ -28,7 +28,8 @@ export type ReferenceVideoValidationError =
   | 'total-duration'
 
 export function validateReferenceVideoFile(
-  file: File
+  file: File,
+  maxBytes = MAX_REFERENCE_VIDEO_BYTES
 ): ReferenceVideoValidationError | null {
   const nameSupported = /\.(mp4|mov)$/i.test(file.name)
   const typeSupported =
@@ -38,7 +39,7 @@ export function validateReferenceVideoFile(
   if (!nameSupported || !typeSupported) {
     return 'format'
   }
-  return file.size > MAX_REFERENCE_VIDEO_BYTES ? 'size' : null
+  return file.size > maxBytes ? 'size' : null
 }
 
 export function validateReferenceVideoDuration(

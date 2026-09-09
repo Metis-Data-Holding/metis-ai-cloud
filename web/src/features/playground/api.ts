@@ -28,6 +28,7 @@ import type {
   GroupOption,
   VideoGenerationRequest,
   VideoImageContent,
+  VideoReferenceContent,
   VideoReferenceUpload,
   VideoTask,
 } from './types'
@@ -115,17 +116,82 @@ export async function submitVideoGeneration(
     (item): item is VideoImageContent =>
       item.type === 'image_url' && item.role === 'last_frame'
   )
+  const referenceImages = content.filter(
+    (item): item is VideoImageContent => item.role === 'reference_image'
+  )
+  const referenceVideos = content.filter(
+    (item): item is VideoReferenceContent => item.role === 'reference_video'
+  )
   let body: VideoGenerationRequest | FormData = payload
   const isH3 = payload.model.toLowerCase() === 'minimax-h3-fl2va'
   const h3FrameCount = Number(Boolean(firstFrame)) + Number(Boolean(lastFrame))
+  const hasH3References =
+    referenceImages.length > 0 || referenceVideos.length > 0
   if (
     isH3 &&
     content.length > 0 &&
+    !hasH3References &&
     (!firstFrame || content.length !== h3FrameCount)
   ) {
     throw new Error(i18next.t('Choose a supported image file.'))
   }
-  if (isH3 && firstFrame) {
+  if (isH3 && hasH3References) {
+    if (
+      firstFrame ||
+      lastFrame ||
+      content.length !== referenceImages.length + referenceVideos.length ||
+      referenceImages.length > 2 ||
+      referenceVideos.length > 1
+    ) {
+      throw new Error(i18next.t('Choose a supported image file.'))
+    }
+    const formData = new FormData()
+    formData.append('model', payload.model)
+    formData.append('prompt', payload.prompt)
+    formData.append('seconds', String(payload.seconds))
+    formData.append(
+      'metadata',
+      JSON.stringify({
+        resolution: payload.metadata.resolution,
+        ratio: payload.metadata.ratio,
+        generate_audio: payload.metadata.generate_audio,
+      })
+    )
+    referenceImages.forEach((image, index) => {
+      formData.append(
+        `reference_image_${index}`,
+        imageContentFile(image, `reference-${index}`)
+      )
+    })
+    const videoFiles = await Promise.all(
+      referenceVideos.map(async (video, index) => {
+        const url = new URL(video.video_url.url, window.location.origin)
+        if (
+          !['http:', 'https:'].includes(url.protocol) ||
+          !/^\/v1\/video-reference-files\/[0-9A-Za-z]{24}\.(?:mp4|mov)\/content$/.test(
+            url.pathname
+          ) ||
+          !url.searchParams.has('expires') ||
+          !url.searchParams.has('access')
+        ) {
+          throw new Error(i18next.t('Unable to upload the reference video.'))
+        }
+        const response = await fetch(url, { credentials: 'omit' })
+        if (!response.ok) {
+          throw new Error(i18next.t('Unable to upload the reference video.'))
+        }
+        const blob = await response.blob()
+        const type =
+          blob.type === 'video/quicktime' ? 'video/quicktime' : 'video/mp4'
+        const extension = type === 'video/quicktime' ? 'mov' : 'mp4'
+        return new File([blob], `reference-${index}.${extension}`, { type })
+      })
+    )
+    videoFiles.forEach((video, index) => {
+      formData.append(`reference_video_${index}`, video)
+    })
+    body = formData
+  } else if (isH3 && firstFrame) {
     const formData = new FormData()
     formData.append('model', payload.model)
     formData.append('prompt', payload.prompt)
@@ -151,10 +217,7 @@ export async function submitVideoGeneration(
   return res.data
 }
 
-function imageContentFile(
-  content: VideoImageContent,
-  frame: 'first' | 'last'
-): File {
+function imageContentFile(content: VideoImageContent, frame: string): File {
   const match = content.image_url.url.match(
     /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/
   )

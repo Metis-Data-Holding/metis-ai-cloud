@@ -324,9 +324,23 @@ func TestValidatePrepareRequestsRejectsMixedDescriptors(t *testing.T) {
 	assert.Contains(t, err.Error(), "both prepareRequest and prepareRequests")
 }
 
-func TestValidatePrepareRequestsRejectsMoreThanTwoRequests(t *testing.T) {
+func TestValidatePrepareRequestsAllowsThreeRequests(t *testing.T) {
 	descriptor := &requestDescriptor{
-		PrepareRequests: []requestDescriptor{{}, {}, {}},
+		PrepareRequests: []requestDescriptor{
+			{URL: "https://provider.example/one"},
+			{URL: "https://provider.example/two"},
+			{URL: "https://provider.example/three"},
+		},
+	}
+
+	requests, err := validatePrepareRequests(descriptor, "https://provider.example", nil)
+	require.NoError(t, err)
+	assert.Len(t, requests, 3)
+}
+
+func TestValidatePrepareRequestsRejectsMoreThanThreeRequests(t *testing.T) {
+	descriptor := &requestDescriptor{
+		PrepareRequests: []requestDescriptor{{}, {}, {}, {}},
 	}
 
 	_, err := validatePrepareRequests(descriptor, "https://provider.example", nil)

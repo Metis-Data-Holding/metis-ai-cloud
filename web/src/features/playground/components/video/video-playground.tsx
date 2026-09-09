@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { Alert02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
@@ -79,6 +79,7 @@ export function VideoPlayground() {
   const [selectedGroup, setSelectedGroup] = useState<string>(DEFAULT_GROUP)
   const [inputContent, setInputContent] = useState<VideoInputContent[]>([])
   const [inputContentValid, setInputContentValid] = useState(true)
+  const previousModel = useRef('')
   const generation = useVideoGeneration()
   const form = useForm<VideoFormValues>({
     defaultValues: DEFAULT_VALUES,
@@ -138,16 +139,22 @@ export function VideoPlayground() {
   }, [form, hasImageInput, values.model, values.resolution])
 
   useEffect(() => {
-    if (!isH3) return
+    if (previousModel.current && previousModel.current !== values.model) {
+      setInputContent([])
+      setInputContentValid(true)
+    }
+    previousModel.current = values.model
+  }, [values.model])
+
+  useEffect(() => {
+    if (!isH3 || values.mode !== 'keyframes') return
     setInputContent((current) =>
-      values.mode === 'keyframes'
-        ? current.filter(
-            (item) =>
-              item.type === 'image_url' &&
-              (item.role === 'first_frame' || item.role === 'last_frame') &&
-              H3_FRAME_DATA_URL_PATTERN.test(item.image_url.url)
-          )
-        : []
+      current.filter(
+        (item) =>
+          item.type === 'image_url' &&
+          (item.role === 'first_frame' || item.role === 'last_frame') &&
+          H3_FRAME_DATA_URL_PATTERN.test(item.image_url.url)
+      )
     )
     setInputContentValid(true)
   }, [isH3, values.mode])
