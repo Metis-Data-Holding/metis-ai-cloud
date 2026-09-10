@@ -204,6 +204,9 @@ func InitDB() (err error) {
 		if err := ensureUserQuotaColumns(DB, common.MainDatabaseType()); err != nil {
 			return err
 		}
+		if err := migrateOptionPrimaryKey(DB); err != nil {
+			return err
+		}
 		sqlDB, err := DB.DB()
 		if err != nil {
 			return err
