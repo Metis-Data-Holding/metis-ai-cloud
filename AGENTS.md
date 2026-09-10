@@ -22,8 +22,9 @@
 - 后端：Go 1.25.1、Gin、GORM v2；入口 `main.go`，分层为 `router -> controller -> service -> model`。
 - Provider relay：`relay/`、`relay/channel/`；共享 DTO/类型位于 `dto/`、`types/`、`constant/`。
 - 独立 Go 模块：`relaykit/`，主模块通过本地 `replace` 引用。
-- 数据与认证：SQLite、MySQL、PostgreSQL，Redis/内存缓存，JWT、WebAuthn 和 OAuth。
-- 前端：`web/`，React 19、TypeScript、Rsbuild、Base UI、Tailwind CSS；包管理和脚本运行使用 Bun。
+- 数据与认证：SQLite、MySQL、PostgreSQL，独立日志库可使用 ClickHouse；缓存使用 Redis/内存，认证覆盖浏览器 Session、API Token、JWT、WebAuthn、TOTP 和 OAuth/OIDC，授权使用 Casbin。
+- 前端：`web/`，React 19、TypeScript、Rsbuild 2、TanStack Router/Query/Table、Zustand、Base UI、Tailwind CSS 4；包管理和脚本运行使用 Bun。
+- 扩展：JavaScript task plugin 位于 `plugins/tasks/`，通过 `pkg/jsplugin/` 的 Sobek runtime 执行；`electron/` 为桌面封装。
 - 国际化：后端 `i18n/`（en/zh）；前端 `web/src/i18n/`（i18next，多语言）。
 - 容器：`Dockerfile` 为前后端多阶段生产构建；`Dockerfile.dev` 与 `docker-compose.dev.yml` 用于本地后端；`docker-compose.yml` 默认拉取 upstream 镜像并启动 PostgreSQL/Redis。
 - 前端任务必须同时阅读 `web/AGENTS.md`；计费表达式任务必须先阅读 `pkg/billingexpr/expr.md`。
@@ -49,12 +50,19 @@
 ### 后端
 
 - `relaykit/` 不得依赖根模块或根模块专有配置；相关变更必须执行 `cd relaykit && GOWORK=off go build ./...`。
-- 业务代码的 JSON 编解码统一使用 `common/json.go` 的 wrapper；`encoding/json` 仅可用于 `RawMessage`、`Number` 等类型。
+- 根模块业务代码的 JSON 编解码统一使用 `common/json.go` 的 wrapper；`relaykit/` 使用 `relaykit/relayconvert/kitutil/json.go`，不得依赖根模块 `common`；`encoding/json` 仅可用于 `RawMessage`、`Number` 等类型。
 - 数据库代码必须同时支持 SQLite、MySQL >= 5.7.8、PostgreSQL >= 9.6。优先 GORM；原生 SQL 必须提供各 dialect 分支与 fallback。
 - 标准行锁使用 `model/` 的 `lockForUpdate(tx)`；保留字列、布尔值和主/日志库分支使用 `model/main.go` / `common` 的既有适配。
 - migration 不得引入单数据库语法；SQLite 采用其支持的 `ALTER TABLE` 方式。业务默认值优先在代码归一化，不用不稳定的 GORM boolean default tag。
 - 客户端请求再转发给 Provider 的可选标量使用指针加 `omitempty`，确保缺省值省略、显式 `0`/`false` 保留。
 - 新 channel 应核对 `StreamOptions` 支持，并在适用时更新 `streamSupportedChannels`。
+
+#### Modern Go
+
+- 新增或修改的 Go 代码以对应模块 `go.mod` 声明版本为基线；在不改变行为时优先使用 `any`、`strings.Cut*`、`strings.SplitSeq`、`slices`、`maps.Copy`、内置 `min`/`max`、`reflect.TypeFor`/`reflect.Pointer` 等现代标准库能力。
+- 循环中重复字符串拼接使用 `strings.Builder`；固定次数循环和 `sync.WaitGroup.Go` 仅在边界、生命周期及 panic 语义一致时采用。
+- 移除仅为旧版闭包捕获而存在的循环变量副本；只有确认当前 JSON encoder 的省略语义不变时，才移除非指针字段上无效的 `omitempty`。
+- 这些风格规则不得覆盖协议兼容、可选标量指针、计费边界、错误处理或 `relaykit` 独立性要求；修改后的 Go 文件须运行 `gofmt` 并清理未使用 import。
 
 ### Authentication Security (OWASP Mandatory)
 
