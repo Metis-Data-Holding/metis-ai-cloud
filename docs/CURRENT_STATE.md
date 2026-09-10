@@ -1,8 +1,8 @@
 # Metis AI Cloud 当前状态
 
-> 最后更新：2026-09-09
+> 最后更新：2026-09-10
 > 当前 Milestone：Singapore MiniMax H3 视频能力产品化
-> 当前目标：部署并验收 H3 参考内容生视频，补齐视频能力剩余验收
+> 当前目标：完成 H3 视频能力主线收口，继续补验失败退款与参考素材清理
 
 本文档是项目当前状态的单一快照，采用覆盖式维护。长期背景见 [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)，执行历史与重要决策分别见 [`../WORKLOG.md`](../WORKLOG.md) 和 [`DECISIONS.md`](DECISIONS.md)。
 
@@ -11,15 +11,15 @@
 - 项目：`metis-ai-cloud`，来源于 New API fork。
 - Step 0：已完成 AI 开发协作与上下文基础设施。
 - 当前阶段：BytePlus ECS 公网部署、Cloudflare HTTPS、持久化、自动发布 / 回滚、Singapore Local Model Provider 和 Usage / Billing 闭环均已完成真实验收。
-- Git 基线：H3 文生、首帧与首尾帧能力已完成验收；参考内容生视频代码已进入 `develop`，尚未合入 `main`。当前 ECS release 仍为 `634659a5d320228849c460801662d7ce142084f0`。
+- Git 基线：H3 文生、首帧、首尾帧与参考内容生视频均已完成验收，相关代码已同步至 `main` 与 `develop`。当前 ECS release 为 `de6d2992eb6115f477b0c71e3efc11652aa6b3f3`；后续 upstream 合并提交尚未部署。
 - Local Model Provider、普通用户 API、Streaming、Usage / Billing 与 Serving Benchmark 均已形成真实验证证据。
 - 当前容量结论：老板现场建议并发 1～2；并发 4 已通过 30 分钟稳定性验证。将 LM Studio 预测槽位放宽至 6 只获得约 9.9% 吞吐增益，同时 TTFT P50 增加约 72.9%。
 - 加权路由 baseline：同一 `google/gemma-4-31b` 入口已验证按权重选择本地 Gemma 或映射到 DeepSeek；20 个短请求实际分布 13 / 7，30 个混合 Streaming 请求零错误。
 - Seedance 视频能力：Dreamina Seedance 2.0 / 2.0 Fast 的动态任务计费、Playground 文生视频、异步轮询、预览与下载已合入并完成公网生成验收；参考图片与首帧生成已完成公网验收，本地参考视频及统一参考内容入口已合入，尚待部署和真实 Provider 验收。
-- MiniMax H3 视频能力：`minimax-h3` Task Plugin 与 `minimax-h3-fl2va` Playground 已支持文生、首帧、首尾帧和 Ref2VA 参考内容生视频。参考模式支持最多 2 张 JPEG / PNG / WebP 图片和 1 个不超过 64 MiB 的 MP4 / MOV 视频，前端沿用参考素材与 `@` 引用交互；Ref2VA 代码已完成本地自动化验证，尚未部署和执行真实平台端到端验收。文生、首帧与首尾帧已完成公网验收；有声生成、实际扣费对账及失败退款仍待验证。
+- MiniMax H3 视频能力：`minimax-h3` Task Plugin 与 `minimax-h3-fl2va` Playground 已支持文生、首帧、首尾帧和 Ref2VA 参考内容生视频。参考模式支持最多 2 张 JPEG / PNG / WebP 图片和 1 个不超过 64 MiB 的 MP4 / MOV 视频，前端沿用参考素材与 `@` 引用交互。用户已通过公网完成参考图、参考视频及二者混合的真实生成，制品可播放和下载；有声任务与实际扣费已完成数据库对账，失败退款仍待验证。
 - 网关容量 baseline：固定延迟 Mock 短时闭环中，非流式 100 VU、Streaming 25 VU 通过，下一档分别在 200 / 50 VU 触发延迟停止线。
 - 网关稳定性：Streaming 20 VU 运行 30 分钟，完成 42779 请求，其中 6 次 HTTP 503，错误率 0.014%；容器无重启、OOM 或内存持续增长。
-- 下一主 Milestone：部署 `develop` 的 H3 Ref2VA 能力，验证参考图、参考视频及混合素材的真实生成、制品和计费链路。
+- 下一主 Milestone：补验 H3 失败退款并落实 ComfyUI 参考素材 TTL 清理，再推进 Seedance 本地参考视频验收与 Demo 收口。
 - 可运行 Deployment Baseline：应用通过 `https://many-models.metisdata.ai` 对外提供 HTTPS 访问，app、PostgreSQL 与 Redis 均通过健康和持久化验证。
 
 目标闭环：
@@ -72,11 +72,11 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 
 | 项目 | 当前状态 | 说明 |
 |---|---|---|
-| 本地仓库 | ✅ | H3 参考内容生视频代码已进入 `develop`，尚未合入 `main` 或部署；此前验收版本仍在运行 |
+| 本地仓库 | ✅ | H3 参考内容生视频已完成验收并同步至 `main` 与 `develop`；后续 upstream 合并提交尚未部署 |
 | BytePlus ECS | ✅ | app、PostgreSQL、Redis 均为 healthy；应用仅监听 `127.0.0.1:3000` |
 | Cloudflare DNS | ✅ | `many-models.metisdata.ai` 已通过 Tunnel Published application route 生效 |
 | HTTPS | ✅ | Universal SSL Active；公网首页与 `/api/status` 均返回 HTTP 200，TLS 校验通过 |
-| GitHub Actions 发布 | ✅ | 最新 Deploy Run `34038331884` 成功部署 `634659a5d…`；固定镜像发布与历史 release 回滚能力均已验证 |
+| GitHub Actions 发布 | ✅ | Deploy Run `34429230406` 成功部署 `de6d2992e…`；固定镜像发布与历史 release 回滚能力均已验证 |
 | Singapore Local Model | ✅ Gemma 闭环已验证 | LM Studio 提供 OpenAI-compatible API；平台非流式、Streaming、Usage、Billing、权限边界和停服恢复均已验证 |
 | ECS → Singapore 网络 | ✅ | Tailscale 固定私网链路已验证；不使用 exit node 或 subnet route，Tailscale 不接管 ECS DNS |
 | 公网 Demo | ✅ 核心闭环已建立 | 管理员已初始化为对外营业模式；Playground 与限模型 API Token 均已完成真实模型调用 |
@@ -102,7 +102,7 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 - ECS 主机：通过 SSH alias `ECS-RI4m` 管理；本文不记录凭据
 - Domain：`many-models.metisdata.ai`
 - DNS / HTTPS：Cloudflare Tunnel `byteplus-hk-RI4m`；route 指向 `http://127.0.0.1:3000`
-- Deployment：应用 commit `634659a5d320228849c460801662d7ce142084f0`，使用 GHCR 固定 digest 的 `linux/amd64` 镜像；release 目录为 `/data/metis-ai-cloud/releases/<full-sha>`，`current` 已指向该 release
+- Deployment：应用 commit `de6d2992eb6115f477b0c71e3efc11652aa6b3f3`，使用 GHCR 固定 digest 的 `linux/amd64` 镜像；release 目录为 `/data/metis-ai-cloud/releases/<full-sha>`，`current` 已指向该 release
 - Runtime：app、PostgreSQL、Redis 均通过健康检查；PostgreSQL / Redis 未发布宿主端口
 - Persistence：容器重启与 app、PostgreSQL、Redis 分别重建后，管理员数据及非敏感 Redis 探针均通过恢复验证；探针已删除
 - 初始化：管理员初始化完成，运行模式为对外营业模式
@@ -121,8 +121,8 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 6. 本次部署未创建 BytePlus 云盘快照，shared 数据发生破坏时无法依赖部署前云盘快照恢复。
 7. Self-hosted Runner 依赖 ECS 出站网络与 DNS；该依赖需要持续监控，但不应扩大 Runner 的系统权限。
 8. 网关 Mock 测试只是固定 VU 闭环容量，不代表实际用户数、开放到达率、Production SLA 或真实模型容量；30 分钟轮次的 6 次 HTTP 503 尚待日志级归因。
-9. MiniMax H3 文生、首帧和首尾帧的公网生成链路已完成验收，但尚不能据此确认有声音频、实际计费对账和失败退款链路；Windows Firewall 边界及模型许可证和商业使用条件仍需单独核对。
-10. H3 参考内容生成已按远端 API Format 工作流完成代码接入，但尚未部署并验证真实 Ref2VA 生成；参考视频原始音频当前不作为模型参考输入。视频会复制到远端 ComfyUI `input` 目录，部署前仍需建立只清理 `minimax-h3-*-reference-video.*` 的安全 TTL 任务，避免磁盘累积与素材长期留存。
+9. MiniMax H3 文生、首帧、首尾帧、参考内容与有声生成均已完成公网验收，实际扣费记录也已对账；失败退款、Windows Firewall 边界及模型许可证和商业使用条件仍需单独核对。
+10. H3 参考视频原始音频当前不作为模型参考输入。视频会复制到远端 ComfyUI `input` 目录，仍需建立只清理 `minimax-h3-*-reference-video.*` 的安全 TTL 任务，避免磁盘累积与素材长期留存。
 
 ## 8. 当前 Scope
 
@@ -153,8 +153,8 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 
 ## 9. 下一步行动
 
-1. 为远端 ComfyUI `input` 目录配置 H3 参考视频安全 TTL 清理，再从 `develop` 部署 Ref2VA 接入，分别验证仅参考图、仅参考视频、图文混合素材的任务提交、轮询、生成、播放与下载。
-2. 补验 H3 5 秒 768p 有声任务、管理员显式计费表达式、实际扣费对账及失败退款；继续保持 ComfyUI `8888` 仅通过受控 Tailscale 私网访问。
+1. 为远端 ComfyUI `input` 目录配置 H3 参考视频安全 TTL 清理，并继续保持 ComfyUI `8888` 仅通过受控 Tailscale 私网访问。
+2. 补验 H3 失败退款，确认失败任务不会形成最终扣费且预扣额度能够正确退回。
 3. 部署并验收 Seedance 本地参考视频功能，覆盖 MP4 / MOV 上传、Provider 拉取、生成结果、任务日志、实际扣费及临时文件清理。
 4. 完善老板汇报稿、架构图、HTML/PDF/PPT 交付与现场 Demo 脚本。
 5. 对网关 Streaming 30 分钟轮次中的 6 次 HTTP 503 做 many-models、Cloudflare 和 Mock 日志交叉归因。
