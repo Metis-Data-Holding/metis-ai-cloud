@@ -1,6 +1,8 @@
 package model
 
 import (
+	"errors"
+	"maps"
 	"strconv"
 	"strings"
 	"time"
@@ -18,7 +20,7 @@ import (
 )
 
 type Option struct {
-	Key   string `json:"key" gorm:"primaryKey"`
+	Key   string `json:"key" gorm:"primaryKey;not null"`
 	Value string `json:"value"`
 }
 
@@ -187,9 +189,7 @@ func InitOptionMap() {
 
 	// 自动添加所有注册的模型配置
 	modelConfigs := config.GlobalConfig.ExportAllConfigs()
-	for k, v := range modelConfigs {
-		common.OptionMap[k] = v
-	}
+	maps.Copy(common.OptionMap, modelConfigs)
 
 	common.OptionMapRWMutex.Unlock()
 	loadOptionsFromDatabase()
@@ -227,23 +227,27 @@ func validateOptionValue(key string, value string) error {
 }
 
 func UpdateOption(key string, value string) error {
+	if key == "" {
+		return errors.New("option key is required")
+	}
 	if IsModelPricingOption(key) {
 		return UpdateModelPricingOptions(map[string]string{key: value})
 	}
 	if err := validateOptionValue(key, value); err != nil {
 		return err
 	}
-	// Save to database first
-	option := Option{
-		Key: key,
-	}
+	option := Option{Key: key}
 	// https://gorm.io/docs/update.html#Save-All-Fields
-	DB.FirstOrCreate(&option, Option{Key: key})
+	if err := DB.FirstOrCreate(&option, Option{Key: key}).Error; err != nil {
+		return err
+	}
 	option.Value = value
 	// Save is a combination function.
 	// If save value does not contain primary key, it will execute Create,
 	// otherwise it will execute Update (with all fields).
-	DB.Save(&option)
+	if err := DB.Save(&option).Error; err != nil {
+		return err
+	}
 	// Update OptionMap
 	return updateOptionMap(key, value)
 }
@@ -258,6 +262,9 @@ func UpdateOptionsBulk(values map[string]string) error {
 		return nil
 	}
 	for key, value := range values {
+		if key == "" {
+			return errors.New("option key is required")
+		}
 		if err := validateOptionValue(key, value); err != nil {
 			return err
 		}
