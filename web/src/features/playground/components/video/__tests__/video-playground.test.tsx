@@ -954,6 +954,55 @@ describe('VideoPlayground', () => {
     )
   })
 
+  test('selects reference mentions with arrow keys and Enter', async () => {
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await user.upload(await screen.findByLabelText('Add reference content'), [
+      new File(['first-image'], 'subject.png', { type: 'image/png' }),
+      new File(['second-image'], 'setting.png', { type: 'image/png' }),
+    ])
+    const prompt = screen.getByRole('textbox', { name: 'Prompt' })
+    await user.type(prompt, 'Use @')
+    const firstOption = await screen.findByRole('option', { name: '@Image 1' })
+    const secondOption = screen.getByRole('option', { name: '@Image 2' })
+
+    expect(firstOption).toHaveAttribute('aria-selected', 'true')
+    await user.keyboard('{ArrowDown}')
+    expect(secondOption).toHaveAttribute('aria-selected', 'true')
+    await user.keyboard('{ArrowUp}')
+    expect(firstOption).toHaveAttribute('aria-selected', 'true')
+    await user.keyboard('{ArrowUp}{Enter}')
+
+    expect(prompt).toHaveValue('Use @Image 2 ')
+    expect(
+      screen.queryByRole('listbox', { name: 'Reference content' })
+    ).not.toBeInTheDocument()
+    expect(prompt).toHaveFocus()
+  })
+
+  test('closes reference mentions with Escape without changing the prompt', async () => {
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await user.upload(
+      await screen.findByLabelText('Add reference content'),
+      new File(['image'], 'subject.png', { type: 'image/png' })
+    )
+    const prompt = screen.getByRole('textbox', { name: 'Prompt' })
+    await user.type(prompt, 'Use @')
+    expect(
+      await screen.findByRole('listbox', { name: 'Reference content' })
+    ).toBeVisible()
+
+    await user.keyboard('{Escape}')
+
+    expect(prompt).toHaveValue('Use @')
+    expect(
+      screen.queryByRole('listbox', { name: 'Reference content' })
+    ).not.toBeInTheDocument()
+  })
+
   test('keeps 1080p enabled for video-only references and disables it after adding an image', async () => {
     const user = userEvent.setup()
     vi.mocked(getUserModels).mockResolvedValue([

@@ -225,6 +225,30 @@ func TestMinimaxH3OpenAIVideoDecodeMultipartReferenceContent(t *testing.T) {
 	assert.Equal(t, "request_file:reference_video_0", request["reference_video_0"].(map[string]any)["__fileRef"])
 }
 
+func TestMinimaxH3ReferenceContentSurvivesHostSerialization(t *testing.T) {
+	plugin := loadMinimaxH3Plugin(t)
+	value, err := plugin.Engine.CallPath(t.Context(), "protocols", []string{"openai_video", "decodeRequest"}, map[string]any{
+		"model": "minimax-h3-fl2va",
+		"body": map[string]any{
+			"kind":   "multipart",
+			"fields": map[string][]string{"prompt": {"animate the subject"}},
+			"files": []map[string]any{{
+				"ref": "request_file:reference_image_0", "field": "reference_image_0", "filename": "subject.png", "mimeType": "image/png", "size": 5,
+			}},
+		},
+	})
+	require.NoError(t, err)
+	request := minimaxH3Map(t, value)["requestBody"].(map[string]any)
+	context := minimaxH3SubmitContext(request, "task/reference-image")
+	context["files"] = []map[string]any{{
+		"ref": "request_file:reference_image_0", "field": "reference_image_0", "filename": "subject.png", "mimeType": "image/png", "size": 5,
+	}}
+
+	descriptor := callMinimaxH3Hook(t, plugin, "buildSubmitRequest", context)
+	workflow := descriptor["body"].(map[string]any)["prompt"].(map[string]any)
+	assert.Equal(t, "MiniMaxH3ReferenceToVideo", workflow["4"].(map[string]any)["class_type"])
+}
+
 func TestMinimaxH3OpenAIVideoRender(t *testing.T) {
 	adaptor := taskjsplugin.New(loadMinimaxH3Plugin(t))
 	rendered, err := adaptor.ConvertToOpenAIVideo(&model.Task{

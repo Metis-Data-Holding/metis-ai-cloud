@@ -26,7 +26,13 @@ import {
   SendIcon,
   VideoIcon,
 } from 'lucide-react'
-import { type CSSProperties, useRef, useState } from 'react'
+import {
+  type CSSProperties,
+  type KeyboardEvent,
+  useId,
+  useRef,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -105,11 +111,13 @@ export function VideoComposer(props: VideoComposerProps) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
   const [referenceTrayExpanded, setReferenceTrayExpanded] = useState(false)
+  const [activeMentionIndex, setActiveMentionIndex] = useState(0)
   const [mentionRange, setMentionRange] = useState<{
     start: number
     end: number
     query: string
   } | null>(null)
+  const mentionListboxId = useId()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const referenceAssets = getVideoReferenceAssets(props.inputContent)
   let modeLabel = t('First and last frames')
@@ -158,6 +166,7 @@ export function VideoComposer(props: VideoComposerProps) {
         ? { start: end - match[0].length, end, query: match[0].slice(1) }
         : null
     )
+    setActiveMentionIndex(0)
   }
 
   const insertMention = (mention: string) => {
@@ -166,6 +175,7 @@ export function VideoComposer(props: VideoComposerProps) {
     const nextCaret = mentionRange.start + mention.length + 2
     props.onPromptChange(nextPrompt)
     setMentionRange(null)
+    setActiveMentionIndex(0)
     queueMicrotask(() => {
       textareaRef.current?.focus()
       textareaRef.current?.setSelectionRange(nextCaret, nextCaret)
@@ -179,6 +189,39 @@ export function VideoComposer(props: VideoComposerProps) {
           .includes(mentionRange.query.toLocaleLowerCase())
       )
     : []
+  const selectedMentionIndex = Math.min(
+    activeMentionIndex,
+    Math.max(mentionOptions.length - 1, 0)
+  )
+  const mentionMenuOpen = Boolean(mentionRange && mentionOptions.length > 0)
+
+  const handleMentionKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!mentionMenuOpen) return
+    if (event.key === 'Enter' && event.nativeEvent.isComposing) return
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      event.stopPropagation()
+      const direction = event.key === 'ArrowDown' ? 1 : -1
+      setActiveMentionIndex(
+        (selectedMentionIndex + direction + mentionOptions.length) %
+          mentionOptions.length
+      )
+      return
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      event.stopPropagation()
+      insertMention(assetLabel(mentionOptions[selectedMentionIndex]))
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      setMentionRange(null)
+      setActiveMentionIndex(0)
+    }
+  }
 
   return (
     <PromptInput
@@ -246,31 +289,47 @@ export function VideoComposer(props: VideoComposerProps) {
             spellCheck={false}
             disabled={props.disabled}
             value={props.prompt}
+            aria-autocomplete='list'
+            aria-controls={mentionMenuOpen ? mentionListboxId : undefined}
+            aria-expanded={mentionMenuOpen}
+            aria-activedescendant={
+              mentionMenuOpen
+                ? `${mentionListboxId}-option-${selectedMentionIndex}`
+                : undefined
+            }
             onChange={(event) =>
               handlePromptChange(
                 event.currentTarget.value,
                 event.currentTarget.selectionStart
               )
             }
+            onKeyDownCapture={handleMentionKeyDown}
             placeholder={promptPlaceholder}
             className='h-full max-h-none min-h-28 resize-none pr-12 text-base leading-7'
           />
           {mentionRange && mentionOptions.length > 0 ? (
             <div
+              id={mentionListboxId}
               role='listbox'
               aria-label={t('Reference content')}
               className='border-border bg-popover absolute bottom-0 left-2 z-30 flex max-h-24 min-w-44 flex-col gap-1 overflow-y-auto rounded-xl border p-1.5 shadow-lg'
             >
-              {mentionOptions.map((asset) => {
+              {mentionOptions.map((asset, index) => {
                 const label = assetLabel(asset)
+                const selected = index === selectedMentionIndex
                 return (
                   <button
                     key={`${asset.kind}-${asset.number}`}
+                    id={`${mentionListboxId}-option-${index}`}
                     type='button'
                     role='option'
-                    aria-selected='false'
-                    className='hover:bg-accent focus-visible:bg-accent flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none'
+                    aria-selected={selected}
+                    className={cn(
+                      'hover:bg-accent focus-visible:bg-accent flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none',
+                      selected && 'bg-accent'
+                    )}
                     onMouseDown={(event) => event.preventDefault()}
+                    onMouseEnter={() => setActiveMentionIndex(index)}
                     onClick={() => insertMention(label)}
                   >
                     {asset.kind === 'video' ? (

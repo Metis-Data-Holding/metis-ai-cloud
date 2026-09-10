@@ -7,7 +7,7 @@ export const meta = {
     en: "Self-hosted MiniMax H3 text, reference, first-frame, and first-and-last-frame video through ComfyUI",
     zh: "通过 ComfyUI 接入自托管 MiniMax H3 文生、参考内容、首帧及首尾帧图生视频",
   },
-  version: "1.3.0",
+  version: "1.3.1",
   author: { name: "Metis Data" },
   models: ["minimax-h3-fl2va"],
   fetchMode: "per_task",
@@ -110,18 +110,19 @@ function normalizedRequest(request) {
   const ratio = String(req.ratio || metadata.ratio || "16:9");
   if (!sizes[ratio]) throw new Error("ratio must be one of 16:9, 9:16, 1:1, 4:3, 3:4");
   const generateAudio = req.generate_audio === undefined ? metadata.generate_audio === true : req.generate_audio === true;
-  return {
+  const normalized = {
     prompt,
     duration,
     resolution,
     ratio,
     generate_audio: generateAudio,
-    input_reference: inputReference,
-    input_last_frame: inputLastFrame,
-    reference_image_0: referenceImage0,
-    reference_image_1: referenceImage1,
-    reference_video_0: referenceVideo0,
   };
+  if (inputReference) normalized.input_reference = inputReference;
+  if (inputLastFrame) normalized.input_last_frame = inputLastFrame;
+  if (referenceImage0) normalized.reference_image_0 = referenceImage0;
+  if (referenceImage1) normalized.reference_image_1 = referenceImage1;
+  if (referenceVideo0) normalized.reference_video_0 = referenceVideo0;
+  return normalized;
 }
 
 function frameCount(seconds) {
@@ -411,8 +412,8 @@ function validVideoOutput(value) {
   const filename = trimmed(value.filename);
   const subfolder = String(value.subfolder || "");
   const type = String(value.type || "output");
-  if (!filename || !/\.mp4$/i.test(filename) || /[\\/\0]/.test(filename)) return null;
-  if (/\\|\0/.test(subfolder) || subfolder.split("/").includes("..")) return null;
+  if (!filename || !/\.mp4$/i.test(filename) || /[\\/]/.test(filename) || filename.includes("\0")) return null;
+  if (/\\/.test(subfolder) || subfolder.includes("\0") || subfolder.split("/").includes("..")) return null;
   if (!["input", "output", "temp"].includes(type)) return null;
   return { filename, subfolder, type };
 }
