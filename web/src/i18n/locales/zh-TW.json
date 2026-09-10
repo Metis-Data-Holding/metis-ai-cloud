@@ -5644,6 +5644,7 @@
     "Upload plugin": "上傳外掛",
     "Upload task plugin": "上傳任务外掛",
     "Uploading a plugin is an administrator-level trust decision. A plugin can access channel credentials and shape upstream requests. Review its source and diff before activation.": "上傳外掛属于管理员级信任行为。外掛可访问渠道凭据并构造上游请求，请在激活前审查原始碼及差异。",
+    "Uploading reference content and submitting the task...": "正在上傳參考內容並提交任務...",
     "Uploading video {{progress}}%": "正在上傳影片 {{progress}}%",
     "Uploading...": "上傳中...",
     "Upscale": "放大",

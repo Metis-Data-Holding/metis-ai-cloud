@@ -55,7 +55,10 @@ import type {
   VideoInputContent,
 } from '../../types'
 import { VideoComposer } from './video-composer'
-import { VideoTaskResult } from './video-generation-result'
+import {
+  VideoSubmissionPending,
+  VideoTaskResult,
+} from './video-generation-result'
 
 const EMPTY_GROUPS: GroupOption[] = []
 const EMPTY_MODELS: ModelOption[] = []
@@ -207,6 +210,7 @@ export function VideoPlayground() {
     promptMissing ||
     !inputContentValid
   const hasResults = generation.tasks.length > 0
+  const showResults = generation.isSubmitting || hasResults
   const optionLoadError = groupsQuery.error || modelsQuery.error
 
   const composer = (
@@ -249,12 +253,17 @@ export function VideoPlayground() {
   return (
     <div
       data-testid='video-playground-layout'
-      data-layout={hasResults ? 'results' : 'centered'}
+      data-layout={showResults ? 'results' : 'centered'}
       className='relative flex min-h-0 flex-1 flex-col overflow-hidden'
     >
-      {hasResults ? (
+      {showResults ? (
         <div className='min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6'>
           <div className='mx-auto grid w-full max-w-5xl gap-5 md:grid-cols-2'>
+            {generation.isSubmitting ? (
+              <VideoSubmissionPending
+                hasReferenceContent={inputContent.length > 0}
+              />
+            ) : null}
             {generation.tasks.map((task) => (
               <VideoTaskResult key={task.id} initialTask={task} />
             ))}
@@ -273,7 +282,7 @@ export function VideoPlayground() {
         </div>
       )}
 
-      {hasResults ? (
+      {showResults ? (
         <div className='bg-background/95 shrink-0 px-4 pt-3 pb-4 backdrop-blur sm:px-6'>
           <div className='mx-auto w-full max-w-5xl'>{composer}</div>
         </div>

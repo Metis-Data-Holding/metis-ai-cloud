@@ -404,6 +404,59 @@ describe('VideoPlayground', () => {
     )
   })
 
+  test('shows reference submission feedback before the provider returns a task', async () => {
+    const user = userEvent.setup()
+    let resolveSubmission:
+      | ((task: Awaited<ReturnType<typeof submitVideoGeneration>>) => void)
+      | undefined
+    vi.mocked(submitVideoGeneration).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSubmission = resolve
+        })
+    )
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await user.upload(
+      await screen.findByLabelText('Add reference content'),
+      new File(['image'], 'subject.png', { type: 'image/png' })
+    )
+    await screen.findByText('Image 1')
+    const prompt = screen.getByRole('textbox', { name: 'Prompt' })
+    await user.type(prompt, 'Let the subject turn toward the camera')
+    await user.click(screen.getByRole('button', { name: 'Generate video' }))
+
+    expect(screen.getByTestId('video-playground-layout')).toHaveAttribute(
+      'data-layout',
+      'results'
+    )
+    expect(
+      screen.getByRole('status', {
+        name: 'Uploading reference content and submitting the task...',
+      })
+    ).toBeVisible()
+    expect(prompt).toHaveValue('Let the subject turn toward the camera')
+    expect(screen.queryByText('Task progress')).not.toBeInTheDocument()
+
+    resolveSubmission?.({
+      id: 'task-video-delayed',
+      object: 'video',
+      model: 'dreamina-seedance-2-0-fast-260128',
+      status: 'queued',
+      progress: 0,
+      created_at: 1,
+    })
+
+    expect(await screen.findByText('task-video-delayed')).toBeVisible()
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('status', {
+          name: 'Uploading reference content and submitting the task...',
+        })
+      ).not.toBeInTheDocument()
+    )
+  })
+
   test('shows only the supported resolution choices for Seedance Fast', async () => {
     const user = userEvent.setup()
     render(<VideoPlayground />, { wrapper: createWrapper() })

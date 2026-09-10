@@ -5644,6 +5644,7 @@
     "Upload plugin": "Tải plugin lên",
     "Upload task plugin": "Tải plugin tác vụ lên",
     "Uploading a plugin is an administrator-level trust decision. A plugin can access channel credentials and shape upstream requests. Review its source and diff before activation.": "Tải plugin lên là quyết định tin cậy ở cấp quản trị viên. Plugin có thể truy cập thông tin xác thực của kênh và tạo yêu cầu tới thượng nguồn. Hãy xem mã nguồn và phần khác biệt trước khi kích hoạt.",
+    "Uploading reference content and submitting the task...": "Đang tải nội dung tham chiếu lên và gửi tác vụ...",
     "Uploading video {{progress}}%": "Đang tải video lên {{progress}}%",
     "Uploading...": "Đang tải lên...",
     "Upscale": "Phóng to",

@@ -5644,6 +5644,7 @@
     "Upload plugin": "Загрузить плагин",
     "Upload task plugin": "Загрузить плагин задач",
     "Uploading a plugin is an administrator-level trust decision. A plugin can access channel credentials and shape upstream requests. Review its source and diff before activation.": "Загрузка плагина — решение об уровне доверия администратора. Плагин может получать доступ к данным каналов и формировать запросы к провайдеру. Перед активацией проверьте код и различия.",
+    "Uploading reference content and submitting the task...": "Загрузка справочных материалов и отправка задачи...",
     "Uploading video {{progress}}%": "Загрузка видео: {{progress}}%",
     "Uploading...": "Загрузка...",
     "Upscale": "Увеличение",

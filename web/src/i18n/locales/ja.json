@@ -5644,6 +5644,7 @@
     "Upload plugin": "プラグインをアップロード",
     "Upload task plugin": "タスクプラグインをアップロード",
     "Uploading a plugin is an administrator-level trust decision. A plugin can access channel credentials and shape upstream requests. Review its source and diff before activation.": "プラグインのアップロードは管理者レベルの信頼判断です。プラグインはチャネル認証情報にアクセスし、上流リクエストを構成できます。有効化前にソースと差分を確認してください。",
+    "Uploading reference content and submitting the task...": "参照コンテンツをアップロードしてタスクを送信しています...",
     "Uploading video {{progress}}%": "動画をアップロード中 {{progress}}%",
     "Uploading...": "アップロード中...",
     "Upscale": "アップスケール",

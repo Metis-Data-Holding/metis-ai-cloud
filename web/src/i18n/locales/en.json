@@ -5644,6 +5644,7 @@
     "Upload plugin": "Upload plugin",
     "Upload task plugin": "Upload task plugin",
     "Uploading a plugin is an administrator-level trust decision. A plugin can access channel credentials and shape upstream requests. Review its source and diff before activation.": "Uploading a plugin is an administrator-level trust decision. A plugin can access channel credentials and shape upstream requests. Review its source and diff before activation.",
+    "Uploading reference content and submitting the task...": "Uploading reference content and submitting the task...",
     "Uploading video {{progress}}%": "Uploading video {{progress}}%",
     "Uploading...": "Uploading...",
     "Upscale": "Upscale",

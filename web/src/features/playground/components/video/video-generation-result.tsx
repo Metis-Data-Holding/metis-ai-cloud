@@ -25,6 +25,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useTranslation } from 'react-i18next'
 
+import { LoadingState } from '@/components/loading-state'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -65,6 +66,10 @@ type VideoGenerationResultProps = {
   onRetryContent: () => void
 }
 
+type VideoSubmissionPendingProps = {
+  hasReferenceContent: boolean
+}
+
 function taskStatusLabel(
   status: VideoTask['status'],
   t: ReturnType<typeof useTranslation>['t']
@@ -81,6 +86,26 @@ function taskStatusLabel(
     case 'unknown':
       return t('Unknown')
   }
+}
+
+export function VideoSubmissionPending(props: VideoSubmissionPendingProps) {
+  const { t } = useTranslation()
+  const message = props.hasReferenceContent
+    ? t('Uploading reference content and submitting the task...')
+    : t('Submitting...')
+
+  return (
+    <Card
+      role='status'
+      aria-label={message}
+      aria-live='polite'
+      className='min-h-[28rem] w-full min-w-0 justify-center'
+    >
+      <CardContent>
+        <LoadingState className='min-h-0' size='lg' message={message} />
+      </CardContent>
+    </Card>
+  )
 }
 
 export function VideoGenerationResult(props: VideoGenerationResultProps) {
