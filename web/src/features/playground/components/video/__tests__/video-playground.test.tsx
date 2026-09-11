@@ -174,6 +174,40 @@ describe('VideoPlayground', () => {
     )
   })
 
+  test('can switch back from a group without video models', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getUserGroups).mockResolvedValue([
+      { label: 'default', value: 'default', ratio: 1 },
+      { label: 'vip', value: 'vip', ratio: 1 },
+    ])
+    vi.mocked(getUserModels).mockImplementation(async (group) =>
+      group === 'vip'
+        ? []
+        : [
+            {
+              label: 'dreamina-seedance-2-0-fast-260128',
+              value: 'dreamina-seedance-2-0-fast-260128',
+            },
+          ]
+    )
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await user.click(await screen.findByRole('combobox'))
+    await user.click(screen.getByRole('button', { name: 'vip' }))
+    expect(await screen.findByText('No model found.')).toBeVisible()
+
+    const defaultGroup = screen.getByRole('button', { name: 'default' })
+    expect(defaultGroup).toBeEnabled()
+    await user.click(defaultGroup)
+
+    await waitFor(() =>
+      expect(vi.mocked(getUserModels).mock.calls.at(-1)?.[0]).toBe('default')
+    )
+    expect(
+      screen.getAllByText('dreamina-seedance-2-0-fast-260128')
+    ).not.toHaveLength(0)
+  })
+
   test('sizes the keyframe controls to their content instead of reserving a fixed column', async () => {
     const user = userEvent.setup()
     render(<VideoPlayground />, { wrapper: createWrapper() })

@@ -193,7 +193,7 @@ export function VideoPlayground() {
   }
 
   const noVideoModels = !modelsQuery.isPending && models.length === 0
-  const composerDisabled = generation.isSubmitting || noVideoModels
+  const composerDisabled = generation.isSubmitting
   const systemDisabled =
     generation.isSubmitting || modelsQuery.isPending || noVideoModels
   const hasFirstFrame = inputContent.some((item) => item.role === 'first_frame')
