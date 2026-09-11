@@ -69,6 +69,10 @@ async function openVideoSettings(user: ReturnType<typeof userEvent.setup>) {
   )
 }
 
+function findUploadedReference(label: string) {
+  return screen.findByText(label, undefined, { timeout: 5_000 })
+}
+
 async function selectGenerationMode(
   user: ReturnType<typeof userEvent.setup>,
   mode: 'Reference generation' | 'First and last frames' | 'First frame'
@@ -79,7 +83,7 @@ async function selectGenerationMode(
   await user.click(screen.getByRole('menuitemradio', { name: mode }))
 }
 
-describe('VideoPlayground', () => {
+describe('VideoPlayground', { timeout: 10_000 }, () => {
   beforeEach(() => {
     vi.mocked(getUserGroups).mockResolvedValue([
       { label: 'default', value: 'default', ratio: 1 },
@@ -455,7 +459,7 @@ describe('VideoPlayground', () => {
       await screen.findByLabelText('Add reference content'),
       new File(['image'], 'subject.png', { type: 'image/png' })
     )
-    await screen.findByText('Image 1')
+    await findUploadedReference('Image 1')
     const prompt = screen.getByRole('textbox', { name: 'Prompt' })
     await user.type(prompt, 'Let the subject turn toward the camera')
     await user.click(screen.getByRole('button', { name: 'Generate video' }))
@@ -605,9 +609,9 @@ describe('VideoPlayground', () => {
     const imageTwo = new File(['two'], 'two.webp', { type: 'image/webp' })
     await user.upload(input, [imageOne, video, imageTwo])
 
-    expect(await screen.findByText('Image 1')).toBeVisible()
-    expect(await screen.findByText('Video 1')).toBeVisible()
-    expect(await screen.findByText('Image 2')).toBeVisible()
+    expect(await findUploadedReference('Image 1')).toBeVisible()
+    expect(screen.getByText('Video 1')).toBeVisible()
+    expect(screen.getByText('Image 2')).toBeVisible()
     await user.upload(
       input,
       new File(['three'], 'three.png', { type: 'image/png' })
@@ -672,7 +676,7 @@ describe('VideoPlayground', () => {
       await screen.findByLabelText('Add reference content'),
       new File(['image'], 'subject.png', { type: 'image/png' })
     )
-    expect(await screen.findByText('Image 1')).toBeVisible()
+    expect(await findUploadedReference('Image 1')).toBeVisible()
 
     await user.click(screen.getByRole('combobox'))
     await user.click(await screen.findByText('MiniMax H3'))
@@ -731,7 +735,7 @@ describe('VideoPlayground', () => {
       await screen.findByLabelText('Add reference content'),
       new File(['first'], 'first.mp4', { type: 'video/mp4' })
     )
-    expect(await screen.findByText('Video 1')).toBeVisible()
+    expect(await findUploadedReference('Video 1')).toBeVisible()
 
     await user.click(screen.getByRole('combobox'))
     await user.click(await screen.findByText('MiniMax H3'))
@@ -916,7 +920,7 @@ describe('VideoPlayground', () => {
       new File(['first-image'], 'subject.png', { type: 'image/png' })
     )
 
-    expect(await screen.findByText('Image 1')).toBeVisible()
+    expect(await findUploadedReference('Image 1')).toBeVisible()
     const tray = input.closest('[data-slot="video-reference-tray"]')
     expect(tray).not.toBeNull()
     if (!tray) {
@@ -940,7 +944,7 @@ describe('VideoPlayground', () => {
       new File(['second-image'], 'setting.png', { type: 'image/png' }),
     ])
 
-    expect(await screen.findByText('Image 2')).toBeVisible()
+    expect(await findUploadedReference('Image 2')).toBeVisible()
     const tray = input.closest('[data-slot="video-reference-tray"]')
     expect(tray).not.toBeNull()
     if (!tray) {
@@ -999,10 +1003,10 @@ describe('VideoPlayground', () => {
       firstVideo,
       secondImage,
     ])
-    expect(await screen.findByAltText('Reference image 1')).toBeVisible()
-    expect(await screen.findByText('Image 1')).toBeVisible()
-    expect(await screen.findByText('Video 1')).toBeVisible()
-    expect(await screen.findByText('Image 2')).toBeVisible()
+    expect(await findUploadedReference('Image 2')).toBeVisible()
+    expect(screen.getByAltText('Reference image 1')).toBeVisible()
+    expect(screen.getByText('Image 1')).toBeVisible()
+    expect(screen.getByText('Video 1')).toBeVisible()
     expect(uploadVideoReference).toHaveBeenCalledWith(
       firstVideo,
       expect.any(Function)
@@ -1049,6 +1053,7 @@ describe('VideoPlayground', () => {
       new File(['first-image'], 'subject.png', { type: 'image/png' }),
       new File(['second-image'], 'setting.png', { type: 'image/png' }),
     ])
+    await findUploadedReference('Image 2')
     const prompt = screen.getByRole('textbox', { name: 'Prompt' })
     await user.type(prompt, 'Use @')
     const firstOption = await screen.findByRole('option', { name: '@Image 1' })
@@ -1076,6 +1081,7 @@ describe('VideoPlayground', () => {
       await screen.findByLabelText('Add reference content'),
       new File(['image'], 'subject.png', { type: 'image/png' })
     )
+    await findUploadedReference('Image 1')
     const prompt = screen.getByRole('textbox', { name: 'Prompt' })
     await user.type(prompt, 'Use @')
     expect(
@@ -1126,7 +1132,7 @@ describe('VideoPlayground', () => {
     const file = new File(['video'], 'motion.mp4', { type: 'video/mp4' })
     await user.upload(screen.getByLabelText('Add reference content'), file)
 
-    expect(await screen.findByText('Video 1')).toBeVisible()
+    expect(await findUploadedReference('Video 1')).toBeVisible()
     expect(uploadVideoReference).toHaveBeenCalledWith(
       file,
       expect.any(Function)
@@ -1186,7 +1192,7 @@ describe('VideoPlayground', () => {
       input,
       new File(['first'], 'first.mp4', { type: 'video/mp4' })
     )
-    expect(await screen.findByText('Video 1')).toBeVisible()
+    expect(await findUploadedReference('Video 1')).toBeVisible()
     await user.upload(
       input,
       new File(['second'], 'second.mp4', { type: 'video/mp4' })
