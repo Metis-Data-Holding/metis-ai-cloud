@@ -17,7 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { toast } from 'sonner'
@@ -51,18 +58,11 @@ const credential = {
   getClientExtensionResults: () => ({}),
 }
 
-function renderWithQueryClient(ui: ReactNode) {
-  const client = new QueryClient({
+let client: QueryClient
+beforeEach(() => {
+  client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-  client.setQueryData(STATUS_QUERY_KEY, {
-    passkey_rp_ids: [],
-    passkey_origins: '',
-  })
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
-}
-
-beforeEach(() => {
   vi.stubGlobal(
     'PublicKeyCredential',
     class {
@@ -80,7 +80,17 @@ beforeEach(() => {
   })
 })
 
+function renderWithQueryClient(ui: ReactNode) {
+  client.setQueryData(STATUS_QUERY_KEY, {
+    passkey_rp_ids: [],
+    passkey_origins: '',
+  })
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
+}
+
 afterEach(() => {
+  cleanup()
+  client.clear()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
   if (credentialsDescriptor) {
@@ -186,9 +196,6 @@ it('refreshes Telegram bindings from the server result after the callback popup 
   })
   const onUpdate = vi.fn()
   const user = userEvent.setup()
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  })
   render(
     <QueryClientProvider client={client}>
       <AccountBindings

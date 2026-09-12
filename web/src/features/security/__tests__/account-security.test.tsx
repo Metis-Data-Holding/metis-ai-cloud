@@ -17,10 +17,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import { STATUS_QUERY_KEY } from '@/lib/status-query'
@@ -38,18 +45,21 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
   useNavigate: () => navigate,
 }))
 
-function renderWithQueryClient(ui: ReactNode) {
-  const client = new QueryClient({
+let client: QueryClient
+beforeEach(() => {
+  client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-  client.setQueryData(STATUS_QUERY_KEY, {
-    passkey_rp_ids: [],
-    passkey_origins: '',
-  })
+  client.setQueryData(STATUS_QUERY_KEY, { passkey_rp_ids: ['localhost'] })
+})
+
+function renderWithQueryClient(ui: ReactNode) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
 }
 
 afterEach(() => {
+  cleanup()
+  client.clear()
   navigate.mockReset()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
