@@ -74,6 +74,9 @@
 
 ### Billing 安全
 
+- 修改或审查 JavaScript task plugin 及其 Host API/runtime 前，必须阅读 `docs/plugin-api/v1.md`；变更插件契约时同步核对 `docs/plugin-api/v1.schema.json` 与 `docs/plugin-api/v1.d.ts`。
+- `usageSchema` 与 `usageProfiles[].schema` 的数值计费字段中，`description` 必须描述“计费对象 + 单价”，`unit` 单独记录单位；协议限制、usage 来源、默认值、估算和结算细节写入代码注释或技术文档。各语言文案应简短、等义，不包含具体价格或末尾标点，并按 API 文档区分 action、boolean 与其他 enum condition 的写法。
+- 完成 plugin 工作前必须单独审查 metadata 文案；编译、schema 校验或测试通过不能替代该审查。
 - 新增内置模型价格必须写入 `setting/billing_setting/builtin_billing.go` 的自包含 billing expression，使用真实 USD/百万 tokens 价格；不得向旧 `model/completion/cache ratio` 表增加新的内置价格。保留管理员显式定价覆盖，旧价格仅在明确要求时迁移，并核验公开价格来源、适用的 context length threshold 和 cache category。
 - 用户或上游控制的计费乘数必须在校验边界限制；复用 `dto.MaxImageN`、`relaycommon.MaxTaskDurationSeconds`、`maxTokensLimit` 等既有上限。
 - 检查 passthrough、metadata、multipart、媒体元数据等绕过标准 DTO 的路径；无符号字段同样必须有上限。
@@ -152,6 +155,8 @@ Commit 使用 Conventional Commits：`<type>(<scope>): <中文说明>`。类型�
 3. 里程碑或当前状态明显变化时更新 `docs/CURRENT_STATE.md`；有意义的执行结果追加 `WORKLOG.md`。
 4. 仅在产生重要架构、产品或技术决策时更新 `docs/DECISIONS.md`，不为形式同时修改所有文档。
 5. 最终总结修改文件、验证证据、未验证项、假设和剩余风险；不得把本地绿测描述为 CI、部署或生产验证。
+
+- 未经用户明确要求，不在 `plugins/` 下创建或生成文档文件，包括 `plugins/tasks/<plugin>/` 及其子目录中的 README、changelog、usage guide 或其他格式的文档。
 
 ## 项目知识入口
 

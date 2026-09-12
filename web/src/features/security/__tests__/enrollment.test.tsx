@@ -19,12 +19,14 @@ For commercial licensing, please contact support@quantumnous.com
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
 import { toast } from 'sonner'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { OAUTH_POPUP_CALLBACK_MESSAGE } from '@/features/auth/constants'
 import type { UserProfile } from '@/features/profile/types'
 import { api } from '@/lib/api'
+import { STATUS_QUERY_KEY } from '@/lib/status-query'
 
 import { AccountBindings } from '../components/account-bindings'
 import { PasskeyCard } from '../components/passkey-card'
@@ -47,6 +49,17 @@ const credential = {
     userHandle: null,
   },
   getClientExtensionResults: () => ({}),
+}
+
+function renderWithQueryClient(ui: ReactNode) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  client.setQueryData(STATUS_QUERY_KEY, {
+    passkey_rp_ids: [],
+    passkey_origins: '',
+  })
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
 }
 
 beforeEach(() => {
@@ -96,7 +109,7 @@ it.each(['2fa', 'passkey'] as const)(
     }))
     const post = vi.spyOn(api, 'post')
     const user = userEvent.setup()
-    render(
+    renderWithQueryClient(
       factor === '2fa' ? (
         <TwoFACard loading={false} />
       ) : (
@@ -249,7 +262,7 @@ it('shows a retry when the 2FA status query fails instead of offering enrollment
     .spyOn(api, 'get')
     .mockRejectedValue(new Error('Status unavailable'))
   const user = userEvent.setup()
-  render(<TwoFACard loading={false} />)
+  renderWithQueryClient(<TwoFACard loading={false} />)
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Status unavailable'
   )
@@ -341,7 +354,7 @@ it('consumes Passkey authorization at setup and activates using only the dedicat
   })
   const success = vi.spyOn(toast, 'success')
   const user = userEvent.setup()
-  render(<TwoFACard loading={false} />)
+  renderWithQueryClient(<TwoFACard loading={false} />)
   await user.click(await screen.findByRole('button', { name: 'Enable' }))
   await screen.findByText(
     'We will prompt your device to confirm using biometrics or your hardware key.'
@@ -442,7 +455,7 @@ it('reports registration failure without treating a successful password check as
   const success = vi.spyOn(toast, 'success')
   const failure = vi.spyOn(toast, 'error')
   const user = userEvent.setup()
-  render(<PasskeyCard loading={false} />)
+  renderWithQueryClient(<PasskeyCard loading={false} />)
   const enable = await screen.findByRole('button', { name: 'Enable Passkey' })
   await waitFor(() => expect(enable).toBeEnabled())
   await user.click(enable)
@@ -542,7 +555,7 @@ it.each(['proof', 'setup'] as const)(
     const user = userEvent.setup()
     const info = vi.spyOn(toast, 'info')
     const success = vi.spyOn(toast, 'success')
-    render(<TwoFACard loading={false} />)
+    renderWithQueryClient(<TwoFACard loading={false} />)
     await user.click(await screen.findByRole('button', { name: 'Enable' }))
     await user.type(
       await screen.findByLabelText('Password', { selector: 'input' }),
@@ -666,7 +679,7 @@ it.each(['wrong code', 'response lost'] as const)(
       throw new Error(`Unexpected POST ${url}`)
     })
     const user = userEvent.setup()
-    render(<TwoFACard loading={false} />)
+    renderWithQueryClient(<TwoFACard loading={false} />)
     await user.click(await screen.findByRole('button', { name: 'Enable' }))
     await user.type(
       await screen.findByLabelText('Password', { selector: 'input' }),
