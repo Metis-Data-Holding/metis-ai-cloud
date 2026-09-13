@@ -263,7 +263,7 @@ export function VideoComposer(props: VideoComposerProps) {
               onContentChange={props.onInputContentChange}
               onExpandedChange={setReferenceTrayExpanded}
               onValidityChange={props.onInputValidityChange}
-              disabled={props.disabled}
+              disabled={props.disabled || props.modelValue === ''}
               strictKeyframeFormats={props.isH3}
               strictReferenceFormats={props.isH3 && props.mode === 'reference'}
               maxReferenceImages={props.isH3 ? 2 : undefined}
