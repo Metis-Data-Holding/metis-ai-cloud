@@ -39,7 +39,12 @@ func resetBuiltInRolePolicies(db *gorm.DB) error {
 	for _, spec := range builtInRoles {
 		subjects = append(subjects, RoleSubject(spec.Key))
 	}
-	return db.Where("ptype = ? AND v0 IN ?", "p", subjects).Delete(&model.CasbinRule{}).Error
+	// Unsupported scoped legacy rules must survive baseline reseeding so the
+	// adapter can retain their restrictions as deny. Empty and "all" scopes are
+	// global grants and must be rebuilt from the current built-in role baseline.
+	return db.Where("ptype = ? AND v0 IN ?", "p", subjects).
+		Where("(v4 IN ? OR v4 IS NULL) AND (v5 = ? OR v5 IS NULL)", []string{"", "all"}, "").
+		Delete(&model.CasbinRule{}).Error
 }
 
 func seedDefaultPolicies() error {

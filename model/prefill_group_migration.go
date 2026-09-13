@@ -236,9 +236,10 @@ WHERE index_namespace.nspname = COALESCE(
 	return prefillGroupNameIndexState{exists: state.Exists, valid: state.Valid}, nil
 }
 
-// migratePrefillGroupUniqueness replaces the known global PostgreSQL unique
-// object left by older GORM versions before AutoMigrate inspects the column.
-// Unknown conflicting objects are reported without being modified.
+// migratePrefillGroupUniqueness replaces global PostgreSQL uniqueness on name
+// before AutoMigrate inspects the column. Match the definition rather than the
+// object name, which can change across older schemas and database imports.
+// Composite, expression and partial indexes retain their separate semantics.
 func migratePrefillGroupUniqueness(db *gorm.DB) error {
 	if db == nil {
 		return fmt.Errorf("migrate prefill group uniqueness: database is nil")
@@ -269,7 +270,6 @@ func migratePrefillGroupUniqueness(db *gorm.DB) error {
 	if err := conflicts.validateAutomaticMigrationScope(); err != nil {
 		return err
 	}
-
 	return db.Transaction(func(tx *gorm.DB) error {
 		migrator := tx.Migrator()
 		if !migrator.HasTable(&PrefillGroup{}) {
@@ -300,7 +300,6 @@ func migratePrefillGroupUniqueness(db *gorm.DB) error {
 		if err := conflicts.validateAutomaticMigrationScope(); err != nil {
 			return err
 		}
-
 		if !migrator.HasColumn(&PrefillGroup{}, "DeletedAt") {
 			if err := migrator.AddColumn(&PrefillGroup{}, "DeletedAt"); err != nil {
 				return fmt.Errorf("add prefill groups deleted_at column: %w", err)

@@ -24,10 +24,11 @@ import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useDebounce } from '@/hooks'
+import { useDebounce, useMediaQuery } from '@/hooks'
 import { cn } from '@/lib/utils'
 
 import { DataTableFacetedFilter } from './faceted-filter'
+import { DataTableMobileFilterPanel } from './mobile-filter-panel'
 import { DataTableViewOptions } from './view-options'
 
 type FilterDef = {
@@ -78,6 +79,10 @@ export type DataTableToolbarProps<TData> = {
    * search input and filter chips.
    */
   additionalSearch?: ReactNode
+  /**
+   * Collapse the complete filter panel on mobile while keeping actions visible.
+   */
+  collapsibleOnMobile?: boolean
   /**
    * Whether non-table filters (e.g. `additionalSearch` or `expandable`
    * inputs) are currently active. Controls Reset button visibility
@@ -155,13 +160,15 @@ export function DataTableToolbar<TData>(props: DataTableToolbarProps<TData>) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
   const [isSearchComposing, setIsSearchComposing] = useState(false)
+  const isMobile = useMediaQuery('(max-width: 640px)')
 
   const filters = props.filters ?? []
   const hasExpandable = props.expandable != null
   const hasSearch = props.onSearch != null
 
+  const columnFilters = props.table.getState().columnFilters
   const isFiltered =
-    props.table.getState().columnFilters.length > 0 ||
+    columnFilters.length > 0 ||
     !!props.table.getState().globalFilter ||
     !!props.hasAdditionalFilters
 
@@ -263,6 +270,7 @@ export function DataTableToolbar<TData>(props: DataTableToolbarProps<TData>) {
           <DataTableFacetedFilter
             key={filter.columnId}
             column={column}
+            filterValue={column.getFilterValue() as string[] | undefined}
             title={filter.title}
             options={filter.options}
             singleSelect={filter.singleSelect}
@@ -270,7 +278,7 @@ export function DataTableToolbar<TData>(props: DataTableToolbarProps<TData>) {
         )
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [props.filters, props.table]
+    [props.filters, props.table, columnFilters]
   )
 
   const handleReset = () => {
@@ -340,6 +348,33 @@ export function DataTableToolbar<TData>(props: DataTableToolbarProps<TData>) {
   ) : null
 
   const hasLeftActions = props.leftActions != null
+
+  if (isMobile && props.collapsibleOnMobile) {
+    return (
+      <DataTableMobileFilterPanel
+        compact
+        className={props.className}
+        actions={
+          <>
+            {props.leftActions}
+            {props.preActions}
+            {resetButton}
+            {searchButton}
+            {viewToggleNode}
+            {viewOptionsNode}
+          </>
+        }
+      >
+        <div className='flex min-w-0 flex-wrap items-center gap-2'>
+          {props.customSearch !== undefined ? props.customSearch : searchInput}
+          {props.additionalSearch}
+          {filterChips}
+          {expanded && hasExpandable && props.expandable}
+          {expandToggle}
+        </div>
+      </DataTableMobileFilterPanel>
+    )
+  }
 
   if (hasLeftActions) {
     return (

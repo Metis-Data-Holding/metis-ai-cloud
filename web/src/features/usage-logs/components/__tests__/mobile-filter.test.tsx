@@ -241,7 +241,7 @@ it('collapses only date and statistics while keeping the right-hand quick action
     'false'
   )
   expect(screen.queryByRole('button', { name: date })).not.toBeInTheDocument()
-  expect(screen.queryByText('Usage')).not.toBeInTheDocument()
+  expect(screen.getByText('Usage')).not.toBeVisible()
   const actions = screen.getByRole('group', { name: 'Actions' })
   for (const name of ['Hide', 'Filter', 'Search', 'View']) {
     expect(within(actions).getByRole('button', { name })).toBeVisible()

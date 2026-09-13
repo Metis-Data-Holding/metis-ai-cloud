@@ -42,6 +42,7 @@ import { cn } from '@/lib/utils'
 
 type DataTableFacetedFilterProps<TData, TValue> = {
   column?: Column<TData, TValue>
+  filterValue?: string[]
   title?: string
   options: {
     label: string
@@ -56,14 +57,16 @@ type DataTableFacetedFilterProps<TData, TValue> = {
 
 function DataTableFacetedFilterInner<TData, TValue>({
   column,
+  filterValue,
   title,
   options,
   singleSelect = false,
 }: DataTableFacetedFilterProps<TData, TValue>) {
   const { t } = useTranslation()
   const facets = column?.getFacetedUniqueValues()
-  const filterValue = column?.getFilterValue() as string[] | undefined
-  const selectedValues = new Set(filterValue)
+  const selectedValues = new Set(
+    filterValue ?? (column?.getFilterValue() as string[] | undefined)
+  )
 
   const handleOptionSelect = (optionValue: string) => {
     const nextSelectedValues = getNextSelectedValues(
