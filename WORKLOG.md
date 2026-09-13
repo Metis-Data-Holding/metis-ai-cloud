@@ -225,3 +225,16 @@
 - 用户通过公网 Playground 分别完成参考图、参考视频及二者混合的真实生成，任务均成功完成，视频制品可正常播放和下载。
 - 数据库只读汇总确认近 14 天 H3 成功任务均存在对应消费日志，任务结算额度与消费日志额度一致；最近 3 个参考内容任务各记录 `50,000 quota`，与 5 秒有声任务的管理员计费表达式一致。
 - 参考视频原始音频仍不作为模型参考输入，失败退款与远端 ComfyUI 参考视频 TTL 清理尚待单独验证；不将本次成功任务对账扩大描述为失败路径已验收。
+
+## 2026-09-13
+
+### Seedance 2.0 内部视频超分
+
+- 按模型新增后台开关，开启后可选择 480P / 720P 原始生成分辨率及是否保留原片；1080P / 4K 请求在同一任务中完成低分辨率生成、BytePlus VOD Fast 工作流、成片下载与交付。复用既有任务轮询、Option 存储、签名及 MP4 探测库，未增加依赖、数据库表或独立计费入口。
+- 原片、VOD 标识和内部失败详情仅保存在私有任务状态；公开接口只返回最终视频。原片下载要求后台管理员会话，普通用户和 PAT 均不能访问。后台日志展示阶段、清理状态、输出参数及 Fast 处理成本估算；该估算不含存储、CDN 和失败重试费用，客户计费规则未调整。
+- 上传调用前事务认领；不确定上传不自动重放。工作流启动使用固定 ClientToken，依赖 BytePlus 官方 StartWorkflow 幂等契约。阶段与清理状态采用 CAS，成片交付与 VOD 删除确认分开处理；无有效成片时整单失败并沿用一次性退款。
+- 使用 ponytail 简化范围、Matt Pocock codebase-design / tdd 做边界和行为测试；SubAgent 分别完成契约核对、隔离前端实现、数据库/权限测试及独立审查。
+- 验证通过：`make test`；根模块及 `relaykit` 的 `GOWORK=off go vet ./...` / `go build ./...`；`make build-web`；前端 `bun run typecheck`、`lint`（既有 warning）、`format:check`、`test`（146 文件 / 1569 项）。补充 4K 与权限断言后 `go test ./service ./controller -run SuperResolution -count=1` 通过，`go test -race ./service -run SuperResolution -count=1` 通过。
+- 模型层在真实 SQLite、MySQL 8.0.46、PostgreSQL 15.19 上运行 `go test ./model -run SuperResolution -count=1 -v`：5 组 / 15 子测试、0 skip；覆盖私有 JSON 往返、重复迁移无新增 DDL、并发认领、清理调度与陈旧阶段拒绝。此次复用现有字段，无新 schema migration；这不是完整业务的三库端到端验收。
+- 本地模拟覆盖 1080P / 4K MP4 真实探测、保留/不保留原片、清理确认、上传恢复失败退款及权限边界。尚未部署、未调用付费 BytePlus 接口、未完成真实账户账单对账。启用前按 `.env.example` 配置 VOD AK/SK、Johor 空间、Fast H.264 MP4 工作流、HTTPS 播放域名和持久存储；不在仓库记录凭据。
+- 外部契约来源：BytePlus 官方 Go SDK 的 VOD 请求配置，以及 https://docs.byteplus.com/en/docs/byteplus-vod/reference-startworkflow 。

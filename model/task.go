@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -132,6 +134,36 @@ type TaskPrivateData struct {
 	PluginState json.RawMessage `json:"plugin_state,omitempty"`
 	// PollFailures counts consecutive unrecognized or transient poll outcomes.
 	PollFailures int `json:"poll_failures,omitempty"`
+	// SuperResolution 仅保存内部生成与超分流程状态。
+	SuperResolution *TaskSuperResolutionState `json:"super_resolution,omitempty"`
+}
+
+// TaskSuperResolutionState 中的原片链接、服务商标识和文件路径不进入公开响应。
+type TaskSuperResolutionState struct {
+	LastError                  string         `json:"last_error,omitempty"`
+	Phase                      string         `json:"phase,omitempty"`
+	SourceResolution           string         `json:"source_resolution,omitempty"`
+	TargetResolution           string         `json:"target_resolution,omitempty"`
+	PreserveOriginal           bool           `json:"preserve_original,omitempty"`
+	WorkflowID                 string         `json:"workflow_id,omitempty"`
+	OriginalURL                string         `json:"original_url,omitempty"`
+	UploadJobID                string         `json:"upload_job_id,omitempty"`
+	VID                        string         `json:"vid,omitempty"`
+	RunID                      string         `json:"run_id,omitempty"`
+	SourceFileID               string         `json:"source_file_id,omitempty"`
+	OutputURL                  string         `json:"output_url,omitempty"`
+	OriginalPath               string         `json:"original_path,omitempty"`
+	OutputPath                 string         `json:"output_path,omitempty"`
+	OutputFile                 string         `json:"output_file,omitempty"`
+	CleanupStatus              string         `json:"cleanup_status,omitempty"`
+	OutputDuration             float64        `json:"output_duration,omitempty"`
+	OutputWidth                int            `json:"output_width,omitempty"`
+	OutputHeight               int            `json:"output_height,omitempty"`
+	OutputFPS                  float64        `json:"output_fps,omitempty"`
+	EstimateUSD                float64        `json:"estimate_usd,omitempty"`
+	UsageFacts                 map[string]any `json:"usage_facts,omitempty"`
+	GenerationCompletionTokens int            `json:"generation_completion_tokens,omitempty"`
+	GenerationTotalTokens      int            `json:"generation_total_tokens,omitempty"`
 }
 
 type TaskExecutionSnapshot struct {
@@ -203,7 +235,8 @@ func (p TaskPrivateData) Value() (driver.Value, error) {
 	if p.Key == "" && p.UpstreamTaskID == "" && p.ResultURL == "" &&
 		p.Execution == nil && p.BillingSource == "" && p.SubscriptionId == 0 &&
 		p.TokenId == 0 && p.NodeName == "" && p.BillingContext == nil &&
-		!p.ResponsesBackground && len(p.PluginState) == 0 && p.PollFailures == 0 {
+		!p.ResponsesBackground && len(p.PluginState) == 0 && p.PollFailures == 0 &&
+		p.SuperResolution == nil {
 		return nil, nil
 	}
 	// 同 Properties.Value:string 避免 PG simple protocol 的 bytea 编码。
@@ -376,7 +409,7 @@ func GetAllUnFinishSyncTasks(limit int) []*Task {
 // HasUnfinishedSyncTasks reports whether at least one async (Suno/video) task is
 // still in progress. It is a cheap existence check (LIMIT 1) used to decide
 // whether the async_task_poll system task needs to run; when no task is pending
-// the scheduler skips creating a row entirely.
+// the scheduler skips creating a row entirely. 已完成视频仍有待清理 VOD 资源时继续调度。
 func HasUnfinishedSyncTasks() bool {
 	var id int64
 	err := DB.Model(&Task{}).
@@ -385,7 +418,11 @@ func HasUnfinishedSyncTasks() bool {
 		Where("status != ?", TaskStatusSuccess).
 		Limit(1).
 		Pluck("id", &id).Error
-	return err == nil && id != 0
+	if err == nil && id != 0 {
+		return true
+	}
+	cleanup, cleanupErr := GetSuperResolutionCleanupTasks(1)
+	return cleanupErr == nil && len(cleanup) > 0
 }
 
 func GetByOnlyTaskId(taskId string) (*Task, bool, error) {
@@ -476,15 +513,16 @@ func (Task *Task) InsertWithContext(ctx context.Context) error {
 }
 
 type taskSnapshot struct {
-	Status       TaskStatus
-	Progress     string
-	StartTime    int64
-	FinishTime   int64
-	FailReason   string
-	ResultURL    string
-	Data         json.RawMessage
-	PluginState  json.RawMessage
-	PollFailures int
+	Status          TaskStatus
+	Progress        string
+	StartTime       int64
+	FinishTime      int64
+	FailReason      string
+	ResultURL       string
+	Data            json.RawMessage
+	PluginState     json.RawMessage
+	PollFailures    int
+	SuperResolution json.RawMessage
 }
 
 func (s taskSnapshot) Equal(other taskSnapshot) bool {
@@ -496,21 +534,31 @@ func (s taskSnapshot) Equal(other taskSnapshot) bool {
 		s.ResultURL == other.ResultURL &&
 		bytes.Equal(s.Data, other.Data) &&
 		bytes.Equal(s.PluginState, other.PluginState) &&
-		s.PollFailures == other.PollFailures
+		s.PollFailures == other.PollFailures &&
+		bytes.Equal(s.SuperResolution, other.SuperResolution)
 }
 
 func (t *Task) Snapshot() taskSnapshot {
 	return taskSnapshot{
-		Status:       t.Status,
-		Progress:     t.Progress,
-		StartTime:    t.StartTime,
-		FinishTime:   t.FinishTime,
-		FailReason:   t.FailReason,
-		ResultURL:    t.PrivateData.ResultURL,
-		Data:         t.Data,
-		PluginState:  t.PrivateData.PluginState,
-		PollFailures: t.PrivateData.PollFailures,
+		Status:          t.Status,
+		Progress:        t.Progress,
+		StartTime:       t.StartTime,
+		FinishTime:      t.FinishTime,
+		FailReason:      t.FailReason,
+		ResultURL:       t.PrivateData.ResultURL,
+		Data:            t.Data,
+		PluginState:     t.PrivateData.PluginState,
+		PollFailures:    t.PrivateData.PollFailures,
+		SuperResolution: taskSuperResolutionBytes(t.PrivateData.SuperResolution),
 	}
+}
+
+func taskSuperResolutionBytes(state *TaskSuperResolutionState) []byte {
+	if state == nil {
+		return nil
+	}
+	b, _ := common.Marshal(state)
+	return b
 }
 
 func (Task *Task) Update() error {
@@ -538,6 +586,36 @@ func (t *Task) UpdateWithStatus(fromStatus TaskStatus) (bool, error) {
 		return false, result.Error
 	}
 	return result.RowsAffected > 0, nil
+}
+
+// ClaimSuperResolutionUpload 在网络提交前认领不可安全重放的上传；事务中不调用外部服务。
+func (t *Task) ClaimSuperResolutionUpload() (bool, error) {
+	claimed := false
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var current Task
+		if err := lockForUpdate(tx).First(&current, t.ID).Error; err != nil {
+			return err
+		}
+		state := current.PrivateData.SuperResolution
+		if current.Status != TaskStatusInProgress || state == nil || state.Phase != "upload_pending" {
+			return nil
+		}
+		state.Phase = "upload_submitting"
+		if err := tx.Model(&current).Update("private_data", current.PrivateData).Error; err != nil {
+			return err
+		}
+		*t = current
+		claimed = true
+		return nil
+	})
+	return claimed, err
+}
+
+// GetSuperResolutionCleanupTasks 对三种数据库使用各自 JSON 提取语法，不新增表或字段。
+func GetSuperResolutionCleanupTasks(limit int) ([]*Task, error) {
+	var tasks []*Task
+	err := DB.Where("status IN ?", []TaskStatus{TaskStatusSuccess, TaskStatusFailure}).Where(superResolutionJSONField("cleanup_status")+" IN ?", []string{"pending", "requested"}).Order("updated_at ASC, id ASC").Limit(limit).Find(&tasks).Error
+	return tasks, err
 }
 
 // TaskBulkUpdateByID performs an unconditional bulk UPDATE by primary key IDs.
@@ -634,4 +712,25 @@ func (t *Task) ToOpenAIVideo() *dto.OpenAIVideo {
 		}
 	}
 	return openAIVideo
+}
+
+// superResolutionJSONField 的字段名仅由本模块常量调用点提供。
+func superResolutionJSONField(field string) string {
+	switch DB.Dialector.Name() {
+	case "mysql":
+		return "JSON_UNQUOTE(JSON_EXTRACT(private_data, '$.super_resolution." + field + "'))"
+	case "postgres":
+		return "private_data->'super_resolution'->>'" + field + "'"
+	default:
+		return "json_extract(private_data, '$.super_resolution." + field + "')"
+	}
+}
+
+// UpdateSuperResolutionState 阻止相同任务状态下的陈旧阶段/清理结果覆盖较新的进度。
+func (t *Task) UpdateSuperResolutionState(fromStatus TaskStatus, before TaskSuperResolutionState) (bool, error) {
+	result := DB.Model(t).Where("status = ?", fromStatus).
+		Where("COALESCE("+superResolutionJSONField("phase")+", '') = ?", before.Phase).
+		Where("COALESCE("+superResolutionJSONField("cleanup_status")+", '') = ?", before.CleanupStatus).
+		Select("*").Updates(t)
+	return result.RowsAffected > 0, result.Error
 }

@@ -83,6 +83,10 @@ func VideoProxy(c *gin.Context) {
 		return
 	}
 
+	if task.PrivateData.SuperResolution != nil {
+		serveVideoSuperResolutionFile(c, task, false)
+		return
+	}
 	var descriptor *relaychannel.TaskContentRequest
 	if taskHasPluginExecution(task) {
 		artifacts, projectionErr := projectTaskArtifacts(task)

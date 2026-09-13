@@ -29,6 +29,13 @@ type volcSignRequest struct {
 	Timestamp int64             `json:"timestamp"`
 }
 
+// VolcSignRequest 复用已有 V4 签名输入；凭据仅由调用者提供，不在此持久化。
+type VolcSignRequest = volcSignRequest
+
+func SignVolcV4(request VolcSignRequest) (map[string]string, error) {
+	return signVolcV4(request, time.Now)
+}
+
 func injectGlobals(runtime *sobek.Runtime, identity func() string, now func() time.Time, logOutput func(string)) error {
 	utils := map[string]any{
 		"hasCapability": HasCapability,

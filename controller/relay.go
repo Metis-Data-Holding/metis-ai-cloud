@@ -624,6 +624,7 @@ func executeTaskSubmissionWith(
 	}
 
 	for ; retryParam.GetRetry() <= common.RetryTimes; retryParam.IncreaseRetry() {
+		service.ClearVideoSuperResolutionSnapshot(c)
 		stage = "select_channel"
 		if requestErr := c.Request.Context().Err(); requestErr != nil {
 			diagnostics.cancelled("before_attempt", retryParam.GetRetry()+1)
@@ -747,13 +748,29 @@ func executeTaskSubmissionWith(
 		PerCallBilling:  common.StringsContains(constant.TaskPricePatches, relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice,
 		TieredSnapshot:  relayInfo.TieredBillingSnapshot,
 	}
+	if snapshot, enabled := service.GetVideoSuperResolutionSnapshot(c); enabled {
+		state := &model.TaskSuperResolutionState{
+			Phase:            "generation",
+			SourceResolution: snapshot.SourceResolution,
+			TargetResolution: snapshot.TargetResolution,
+			PreserveOriginal: snapshot.PreserveOriginal,
+		}
+		if runtime, configured := service.GetVideoSuperResolutionRuntimeConfig(c); configured {
+			state.WorkflowID = runtime.WorkflowID
+		}
+		task.PrivateData.SuperResolution = state
+	}
 	task.Quota = result.Quota
 	task.Data = result.TaskData
+	if task.PrivateData.SuperResolution != nil {
+		// 低分辨率响应和临时链接只能进入内部任务状态。
+		task.SetData(map[string]any{"status": "processing"})
+	}
 	if len(result.PluginState) > 0 {
 		task.PrivateData.PluginState = result.PluginState
 	}
 	task.Action = relayInfo.Action
-	if immediate := result.Immediate; immediate != nil {
+	if immediate := result.Immediate; immediate != nil && task.PrivateData.SuperResolution == nil {
 		task.Status = model.TaskStatus(immediate.Status)
 		task.Progress = immediate.Progress
 		if immediate.Status == model.TaskStatusSuccess || immediate.Status == model.TaskStatusFailure {
@@ -766,6 +783,23 @@ func executeTaskSubmissionWith(
 			task.PrivateData.ResultURL = immediate.Url
 		} else if immediate.Status == model.TaskStatusSuccess {
 			task.PrivateData.ResultURL = taskcommon.BuildProxyURL(task.TaskID)
+		}
+	}
+	if state := task.PrivateData.SuperResolution; state != nil && result.Immediate != nil {
+		immediate := result.Immediate
+		task.Status = model.TaskStatusInProgress
+		task.Progress = "20%"
+		task.FinishTime = 0
+		task.PrivateData.ResultURL = ""
+		if immediate.Status == model.TaskStatusSuccess {
+			state.Phase = "upload_pending"
+			state.OriginalURL = immediate.Url
+			state.UsageFacts = immediate.UsageFacts
+			state.GenerationCompletionTokens = immediate.CompletionTokens
+			state.GenerationTotalTokens = immediate.TotalTokens
+			task.Progress = "45%"
+		} else if immediate.Status == model.TaskStatusFailure {
+			state.Phase = "generation_failed"
 		}
 	}
 	diagnostics.insertStart(task)

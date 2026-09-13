@@ -393,6 +393,8 @@ func TestGetVideoSuperResolutionOriginalRequiresAdminSessionAndSupportsCrossUser
 		wantStatus  int
 	}{
 		{name: "owner without session", role: common.RoleCommonUser, userID: task.UserId, wantStatus: http.StatusForbidden},
+		{name: "owner session", role: common.RoleCommonUser, userID: task.UserId, session: true, wantStatus: http.StatusForbidden},
+		{name: "admin PAT", role: common.RoleAdminUser, userID: 99, accessToken: true, wantStatus: http.StatusForbidden},
 		{name: "owner PAT", role: common.RoleCommonUser, userID: task.UserId, accessToken: true, wantStatus: http.StatusForbidden},
 		{name: "admin without session", role: common.RoleAdminUser, userID: 99, wantStatus: http.StatusForbidden},
 		{name: "admin session", role: common.RoleAdminUser, userID: 99, session: true, wantStatus: http.StatusOK},

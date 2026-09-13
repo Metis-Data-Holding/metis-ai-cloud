@@ -137,6 +137,9 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 	if _, err := a.buildSubmit(c, info); err != nil {
 		return service.TaskErrorWrapperLocal(err, "plugin_request_invalid", http.StatusBadRequest)
 	}
+	if err := service.ApplyVideoSuperResolution(c, a.plugin.Meta.Key, info.OriginModelName, info.UpstreamModelName, a.submit.Body); err != nil {
+		return service.TaskErrorWrapperLocal(err, "video_super_resolution_not_configured", http.StatusBadRequest)
+	}
 	// The descriptor may rewrite the model. Validate profiled requests against
 	// that final model before any quota calculation or upstream submission.
 	if hasRequest && hasUsageProfiles {

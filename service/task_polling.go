@@ -85,6 +85,13 @@ func sweepTimedOutTasks(ctx context.Context) {
 		isLegacy := task.SubmitTime > 0 && task.SubmitTime < model.TaskRefundLegacyCutoff
 
 		oldStatus := task.Status
+		var srBefore model.TaskSuperResolutionState
+		if state := task.PrivateData.SuperResolution; state != nil {
+			srBefore = *state
+			state.CleanupStatus = "pending"
+			task.PrivateData.ResultURL = ""
+			task.SetData(map[string]any{"status": "failed"})
+		}
 		task.Status = model.TaskStatusFailure
 		task.Progress = "100%"
 		task.FinishTime = now
@@ -97,7 +104,13 @@ func sweepTimedOutTasks(ctx context.Context) {
 			task.FailReason = reason
 		}
 
-		won, err := task.UpdateWithStatus(oldStatus)
+		var won bool
+		var err error
+		if task.PrivateData.SuperResolution != nil {
+			won, err = task.UpdateSuperResolutionState(oldStatus, srBefore)
+		} else {
+			won, err = task.UpdateWithStatus(oldStatus)
+		}
 		if err != nil {
 			logger.LogError(ctx, fmt.Sprintf("sweepTimedOutTasks CAS update error for task %s: %v", task.TaskID, err))
 			continue
@@ -141,10 +154,26 @@ func RunTaskPollingOnce(ctx context.Context, report func(processed, total int)) 
 
 	common.SysLog("任务进度轮询开始")
 	sweepTimedOutTasks(ctx)
+	var srWork sync.WaitGroup
+	srSlots := make(chan struct{}, 4)
 	allTasks := model.GetAllUnFinishSyncTasks(constant.TaskQueryLimit)
 	summary.UnfinishedTasks = len(allTasks)
 	platformTask := make(map[constant.TaskPlatform][]*model.Task)
 	for _, t := range allTasks {
+		if shouldPollVideoSuperResolution(t) {
+			srWork.Go(func() {
+				select {
+				case srSlots <- struct{}{}:
+				case <-ctx.Done():
+					return
+				}
+				defer func() { <-srSlots }()
+				if err := updateVideoSuperResolutionTask(ctx, nil, t); err != nil && ctx.Err() == nil {
+					_ = recordPollFailure(ctx, nil, t, t.Status, pollClassTransient, 0, "")
+				}
+			})
+			continue
+		}
 		platformTask[t.Platform] = append(platformTask[t.Platform], t)
 	}
 
@@ -193,6 +222,10 @@ func RunTaskPollingOnce(ctx context.Context, report func(processed, total int)) 
 
 		DispatchPlatformUpdate(ctx, platform, taskChannelM, taskM)
 	}
+	srWork.Wait()
+	cleanupCtx, cancelCleanup := context.WithTimeout(ctx, 20*time.Second)
+	sweepVideoSuperResolutionCleanup(cleanupCtx)
+	cancelCleanup()
 	if report != nil && ctx.Err() == nil {
 		report(totalPlatforms, totalPlatforms)
 	}
@@ -485,6 +518,9 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		logger.LogError(ctx, fmt.Sprintf("Task %s not found in taskM", taskId))
 		return fmt.Errorf("task %s not found", taskId)
 	}
+	if shouldPollVideoSuperResolution(task) {
+		return updateVideoSuperResolutionTask(ctx, adaptor, task)
+	}
 	key := ch.Key
 
 	privateData := task.PrivateData
@@ -502,7 +538,9 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		return recordPollFailure(ctx, adaptor, task, snap.Status, pollClassTransport, resp.StatusCode, err.Error())
 	}
 
-	logger.LogDebug(ctx, "updateVideoSingleTask response: %s", responseBody)
+	if !isVideoSuperResolutionPipelineTask(task) {
+		logger.LogDebug(ctx, "updateVideoSingleTask response: %s", responseBody)
+	}
 
 	switch classifyPollHTTP(resp.StatusCode) {
 	case pollClassNotFound:
@@ -518,7 +556,9 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	// try parse as New API response format
 	var responseItems taskdto.TaskResponse[model.Task]
 	if err = common.Unmarshal(responseBody, &responseItems); err == nil && responseItems.IsSuccess() {
-		logger.LogDebug(ctx, "updateVideoSingleTask parsed as new api response format: %+v", responseItems)
+		if !isVideoSuperResolutionPipelineTask(task) {
+			logger.LogDebug(ctx, "updateVideoSingleTask parsed as new api response format: %+v", responseItems)
+		}
 		t := responseItems.Data
 		taskResult.TaskID = t.TaskID
 		taskResult.Status = string(t.Status)
@@ -530,7 +570,9 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		return recordPollFailure(ctx, adaptor, task, snap.Status, pollClassHookError, resp.StatusCode, err.Error())
 	}
 
-	logger.LogDebug(ctx, "updateVideoSingleTask taskResult: %+v", taskResult)
+	if !isVideoSuperResolutionPipelineTask(task) {
+		logger.LogDebug(ctx, "updateVideoSingleTask taskResult: %+v", taskResult)
+	}
 
 	parsedStatus := model.TaskStatus(taskResult.Status)
 	if parsedStatus == model.TaskStatusUnknown || parsedStatus == "" || !knownPollStatus(parsedStatus) {
@@ -540,6 +582,9 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		return recordPollFailure(ctx, adaptor, task, snap.Status, pollClassUnrecognized, resp.StatusCode, unrecognizedPollDetail(taskResult.Reason, responseBody))
 	}
 
+	if isVideoSuperResolutionPipelineTask(task) {
+		return captureVideoSuperResolutionGeneration(ctx, adaptor, task, taskResult, snap.Status)
+	}
 	task.Data = redactVideoResponseBody(responseBody)
 	if len(taskResult.PluginState) > 0 {
 		task.PrivateData.PluginState = taskResult.PluginState
@@ -687,9 +732,11 @@ func settleTaskBillingOnComplete(ctx context.Context, adaptor TaskPollingAdaptor
 		return false
 	}
 	// 优先让 adaptor 决定最终额度。
-	if actualQuota := adaptor.AdjustBillingOnComplete(task, taskResult); actualQuota > 0 {
-		RecalculateTaskQuota(ctx, task, actualQuota, "adaptor计费调整")
-		return true
+	if adaptor != nil {
+		if actualQuota := adaptor.AdjustBillingOnComplete(task, taskResult); actualQuota > 0 {
+			RecalculateTaskQuota(ctx, task, actualQuota, "adaptor计费调整")
+			return true
+		}
 	}
 	// 回退到 token 重算。
 	tokens := taskResult.TotalTokens
@@ -763,6 +810,10 @@ func unrecognizedPollDetail(reason string, body []byte) string {
 }
 
 func recordPollFailure(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task, fromStatus model.TaskStatus, class string, statusCode int, detail string) error {
+	if isVideoSuperResolutionPipelineTask(task) {
+		detail = ""
+		task.SetData(map[string]any{"status": "processing"})
+	}
 	task.PrivateData.PollFailures++
 	if class == pollClassUnrecognized || class == pollClassHookError {
 		// The redacted body is intentionally not persisted to Task.Data on these
@@ -774,6 +825,10 @@ func recordPollFailure(ctx context.Context, adaptor TaskPollingAdaptor, task *mo
 	// TASK_TIMEOUT_MINUTES semantics; the 24h sweep remains the only backstop.
 	if constant.TaskPollMaxFailures > 0 && task.PrivateData.PollFailures >= constant.TaskPollMaxFailures {
 		return failTaskFromPoll(ctx, adaptor, task, fromStatus, pollFailureReason(class, statusCode, detail))
+	}
+	if state := task.PrivateData.SuperResolution; state != nil {
+		_, err := task.UpdateSuperResolutionState(fromStatus, *state)
+		return err
 	}
 	if _, err := task.UpdateWithStatus(fromStatus); err != nil {
 		return err
@@ -795,6 +850,10 @@ func recordPollFailureForTasks(ctx context.Context, adaptor TaskPollingAdaptor, 
 }
 
 func failTaskFromPoll(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task, fromStatus model.TaskStatus, reason string) error {
+	if isVideoSuperResolutionPipelineTask(task) {
+		task.Status = fromStatus
+		return failVideoSuperResolutionTask(ctx, adaptor, task, "视频处理失败")
+	}
 	now := time.Now().Unix()
 	task.Status = model.TaskStatusFailure
 	task.Progress = taskcommon.ProgressComplete

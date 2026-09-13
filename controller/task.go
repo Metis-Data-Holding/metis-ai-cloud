@@ -127,6 +127,12 @@ func writeTaskArtifacts(c *gin.Context, task *model.Task, dashboard bool) {
 }
 
 func projectTaskArtifacts(task *model.Task) ([]relaychannel.TaskArtifact, error) {
+	if task != nil && task.PrivateData.SuperResolution != nil {
+		if task.Status != model.TaskStatusSuccess {
+			return []relaychannel.TaskArtifact{}, nil
+		}
+		return []relaychannel.TaskArtifact{{Key: "video", Type: "video", MimeType: "video/mp4"}}, nil
+	}
 	if task == nil || task.Status != model.TaskStatusSuccess || !taskHasPluginExecution(task) {
 		return []relaychannel.TaskArtifact{}, nil
 	}
@@ -295,6 +301,14 @@ func TaskArtifactContent(c *gin.Context) {
 		writeTaskArtifactError(c, http.StatusConflict, "artifact_not_ready", "Task artifacts are not ready")
 		return
 	}
+	if task.PrivateData.SuperResolution != nil {
+		if artifactKey != "video" {
+			writeTaskArtifactError(c, http.StatusNotFound, "artifact_not_found", "Task or artifact not found")
+			return
+		}
+		serveVideoSuperResolutionFile(c, task, false)
+		return
+	}
 	if !taskHasPluginExecution(task) {
 		if artifactKey != "video" || !legacyVideoAvailable(task) {
 			writeTaskArtifactError(c, http.StatusNotFound, "artifact_not_found", "Task or artifact not found")
@@ -443,7 +457,18 @@ func tasksToDto(tasks []*model.Task, fillUser bool, viewerRole int) []*dto.TaskD
 					}
 				}
 			}
-			if adminInfo.RequestID != "" || adminInfo.RequestPath != "" || adminInfo.TaskPlugin != nil {
+			if state := task.PrivateData.SuperResolution; state != nil {
+				info := &dto.TaskSuperResolutionInfo{Error: state.LastError, Phase: state.Phase, SourceResolution: state.SourceResolution, TargetResolution: state.TargetResolution, PreserveOriginal: state.PreserveOriginal, CleanupStatus: state.CleanupStatus, OutputDuration: state.OutputDuration, OutputWidth: state.OutputWidth, OutputHeight: state.OutputHeight, OutputFPS: state.OutputFPS}
+				if state.EstimateUSD > 0 {
+					info.EstimateUSD = &state.EstimateUSD
+				}
+				if file, err := service.OpenVideoSuperResolutionFile(task, true); err == nil {
+					info.OriginalAvailable = true
+					file.Close()
+				}
+				adminInfo.SuperResolution = info
+			}
+			if adminInfo.RequestID != "" || adminInfo.RequestPath != "" || adminInfo.TaskPlugin != nil || adminInfo.SuperResolution != nil {
 				item.AdminInfo = adminInfo
 			}
 		}

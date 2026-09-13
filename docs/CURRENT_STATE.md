@@ -1,8 +1,8 @@
 # Metis AI Cloud 当前状态
 
-> 最后更新：2026-09-10
-> 当前 Milestone：Singapore MiniMax H3 视频能力产品化
-> 当前目标：完成 H3 视频能力主线收口，继续补验失败退款与参考素材清理
+> 最后更新：2026-09-13
+> 当前 Milestone：Seedance 2.0 内部视频超分
+> 当前目标：完成内部超分开发验证，配置 BytePlus VOD 后进行真实联调和成本评估
 
 本文档是项目当前状态的单一快照，采用覆盖式维护。长期背景见 [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)，执行历史与重要决策分别见 [`../WORKLOG.md`](../WORKLOG.md) 和 [`DECISIONS.md`](DECISIONS.md)。
 
@@ -10,6 +10,7 @@
 
 - 项目：`metis-ai-cloud`，来源于 New API fork。
 - Step 0：已完成 AI 开发协作与上下文基础设施。
+- 内部视频超分（2026-09-13）：后台模型开关、480P / 720P 源分辨率、原片保留、1080P / 4K Fast 工作流与私有交付已完成代码和本地模拟验证；后端/前端测试、构建及模型层三数据库回归通过。尚未部署或真实调用 BytePlus VOD，启用前仍需账户配置与真实成本对账；既有公网验收记录不代表本功能已上线。
 - 当前阶段：BytePlus ECS 公网部署、Cloudflare HTTPS、持久化、自动发布 / 回滚、Singapore Local Model Provider 和 Usage / Billing 闭环均已完成真实验收。
 - Git 基线：H3 文生、首帧、首尾帧与参考内容生视频均已完成验收，相关代码已同步至 `main` 与 `develop`。当前 ECS release 为 `de6d2992eb6115f477b0c71e3efc11652aa6b3f3`；后续 upstream 合并提交尚未部署。
 - Local Model Provider、普通用户 API、Streaming、Usage / Billing 与 Serving Benchmark 均已形成真实验证证据。

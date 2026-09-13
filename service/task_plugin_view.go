@@ -23,8 +23,8 @@ func BuildTaskPluginView(task *model.Task) (dto.TaskView, error) {
 		UpdatedAt:  task.UpdatedAt,
 		FinishedAt: task.FinishTime,
 	}
-	if len(task.Data) > 0 {
-		if err := common.Unmarshal(task.Data, &view.Data); err != nil {
+	if data := VideoSuperResolutionPublicData(task); len(data) > 0 {
+		if err := common.Unmarshal(data, &view.Data); err != nil {
 			return dto.TaskView{}, err
 		}
 		view.Data = replacePrivateTaskID(view.Data, task.PrivateData.UpstreamTaskID, task.TaskID)

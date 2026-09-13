@@ -77,9 +77,10 @@ type TaskPluginRuntimeInfo struct {
 }
 
 type TaskAdminInfo struct {
-	RequestID   string          `json:"request_id,omitempty"`
-	RequestPath string          `json:"request_path,omitempty"`
-	TaskPlugin  *TaskPluginInfo `json:"task_plugin,omitempty"`
+	SuperResolution *TaskSuperResolutionInfo `json:"super_resolution,omitempty"`
+	RequestID       string                   `json:"request_id,omitempty"`
+	RequestPath     string                   `json:"request_path,omitempty"`
+	TaskPlugin      *TaskPluginInfo          `json:"task_plugin,omitempty"`
 }
 
 type TaskRootInfo struct {
@@ -90,4 +91,19 @@ type TaskRootInfo struct {
 
 type FetchReq struct {
 	IDs []string `json:"ids"`
+}
+
+type TaskSuperResolutionInfo struct {
+	Error             string   `json:"error,omitempty"`
+	Phase             string   `json:"phase"`
+	SourceResolution  string   `json:"source_resolution"`
+	TargetResolution  string   `json:"target_resolution"`
+	PreserveOriginal  bool     `json:"preserve_original"`
+	OriginalAvailable bool     `json:"original_available"`
+	OutputDuration    float64  `json:"output_duration,omitempty"`
+	OutputWidth       int      `json:"output_width,omitempty"`
+	OutputHeight      int      `json:"output_height,omitempty"`
+	OutputFPS         float64  `json:"output_fps,omitempty"`
+	EstimateUSD       *float64 `json:"estimate_usd,omitempty"`
+	CleanupStatus     string   `json:"cleanup_status,omitempty"`
 }

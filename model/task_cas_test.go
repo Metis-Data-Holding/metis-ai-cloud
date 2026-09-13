@@ -566,3 +566,41 @@ func TestHasUnfinishedSyncTasksIncludesPendingSuperResolutionCleanup(t *testing.
 		assert.False(t, HasUnfinishedSyncTasks(), "confirmed cleanup must not keep the scheduler active")
 	})
 }
+
+func TestSuperResolutionPhaseCASRejectsStaleProgressAcrossDatabases(t *testing.T) {
+	forEachSuperResolutionTestDatabase(t, func(t *testing.T, db *gorm.DB, _ common.DatabaseType) {
+		task := &Task{TaskID: "sr_phase_cas", Status: TaskStatusInProgress, PrivateData: TaskPrivateData{SuperResolution: &TaskSuperResolutionState{Phase: "workflow_pending"}}}
+		require.NoError(t, db.Create(task).Error)
+		var stale Task
+		require.NoError(t, db.First(&stale, task.ID).Error)
+		before := *task.PrivateData.SuperResolution
+		task.PrivateData.SuperResolution.Phase = "workflow_processing"
+		won, err := task.UpdateSuperResolutionState(TaskStatusInProgress, before)
+		require.NoError(t, err)
+		require.True(t, won)
+		stale.PrivateData.SuperResolution.Phase = "workflow_processing"
+		stale.Progress = "10%"
+		won, err = stale.UpdateSuperResolutionState(TaskStatusInProgress, before)
+		require.NoError(t, err)
+		assert.False(t, won)
+		require.NoError(t, db.First(task, task.ID).Error)
+		assert.Equal(t, "workflow_processing", task.PrivateData.SuperResolution.Phase)
+		assert.NotEqual(t, "10%", task.Progress)
+		before = *task.PrivateData.SuperResolution
+		task.Status = TaskStatusSuccess
+		task.PrivateData.SuperResolution.Phase = "complete"
+		task.PrivateData.SuperResolution.CleanupStatus = "requested"
+		won, err = task.UpdateSuperResolutionState(TaskStatusInProgress, before)
+		require.NoError(t, err)
+		require.True(t, won)
+		require.NoError(t, db.First(&stale, task.ID).Error)
+		before = *task.PrivateData.SuperResolution
+		task.PrivateData.SuperResolution.CleanupStatus = "confirmed"
+		won, err = task.UpdateSuperResolutionState(TaskStatusSuccess, before)
+		require.NoError(t, err)
+		require.True(t, won)
+		won, err = stale.UpdateSuperResolutionState(TaskStatusSuccess, before)
+		require.NoError(t, err)
+		assert.False(t, won)
+	})
+}
