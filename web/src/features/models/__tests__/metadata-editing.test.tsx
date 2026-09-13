@@ -69,6 +69,83 @@ function renderModelActions(currentModel: Model = model, role = 100) {
 }
 
 describe('model pricing entry', () => {
+  it('saves super-resolution settings independently from model metadata', async () => {
+    useAuthStore.getState().auth.setUser({ id: 1, username: 'root', role: 100 })
+    const get = vi.spyOn(api, 'get').mockImplementation(async (url) => {
+      if (url === '/api/models/7') {
+        return { data: { success: true, data: model } }
+      }
+      if (url === '/api/models/super-resolution') {
+        return {
+          data: {
+            success: true,
+            data: {
+              enabled: false,
+              source_resolution: '720p',
+              preserve_original: true,
+              supported: true,
+            },
+          },
+        }
+      }
+      if (url === '/api/vendors/') {
+        return { data: { success: true, data: { items: [] } } }
+      }
+      return { data: { success: true, data: { items: [] } } }
+    })
+    const put = vi.spyOn(api, 'put').mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          enabled: true,
+          source_resolution: '480p',
+          preserve_original: false,
+          supported: true,
+        },
+      },
+    })
+    const client = renderModelActions()
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(
+      await screen.findByRole('tab', { name: 'Super-resolution' })
+    ).toBeVisible()
+    await user.click(screen.getByRole('tab', { name: 'Super-resolution' }))
+    const enable = screen.getByRole('switch', {
+      name: 'Enable super-resolution',
+    })
+    expect(enable).not.toBeChecked()
+    await user.click(enable)
+    await user.click(screen.getByRole('radio', { name: '480P' }))
+    const preserve = screen.getByRole('switch', { name: 'Keep original video' })
+    expect(preserve).toBeChecked()
+    await user.click(preserve)
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+
+    await waitFor(() =>
+      expect(put).toHaveBeenCalledWith(
+        '/api/models/super-resolution',
+        {
+          model: 'example-model',
+          enabled: true,
+          source_resolution: '480p',
+          preserve_original: false,
+        },
+        { skipBusinessError: true, skipErrorHandler: true }
+      )
+    )
+    expect(put).not.toHaveBeenCalledWith(
+      '/api/models/',
+      expect.anything(),
+      expect.anything()
+    )
+    expect(
+      get.mock.calls.some(([url]) => url === '/api/models/super-resolution')
+    ).toBe(true)
+    client.clear()
+  })
+
   it('saves pricing and opens connections for a channel model without creating metadata', async () => {
     const channelModel = { ...model, id: 0, model_name: 'channel-only' }
     let storedPrice = 1.5

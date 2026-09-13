@@ -70,7 +70,13 @@ import {
   getServerErrorMessage,
 } from '@/lib/server-error-message'
 
-import { createModel, updateModel, getModel, getVendors } from '../../api'
+import {
+  createModel,
+  getModel,
+  getSuperResolutionConfig,
+  getVendors,
+  updateModel,
+} from '../../api'
 import { getNameRuleOptions, ENDPOINT_TEMPLATES } from '../../constants'
 import { modelsQueryKeys, vendorsQueryKeys } from '../../lib'
 import {
@@ -81,12 +87,13 @@ import {
 } from '../../lib/model-form'
 import type { Model } from '../../types'
 import { ModelConnections } from '../model-connections'
+import { SuperResolutionPanel } from './super-resolution-panel'
 
 export function ModelMutateDrawer(props: {
   open: boolean
   onOpenChange: (open: boolean) => void
   currentRow?: Model | null
-  initialSection?: 'metadata' | 'pricing'
+  initialSection?: 'metadata' | 'pricing' | 'super-resolution'
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -108,6 +115,7 @@ export function ModelMutateDrawer(props: {
     props.initialSection === 'pricing'
   )
   const [pricingDirty, setPricingDirty] = useState(false)
+  const [superResolutionDirty, setSuperResolutionDirty] = useState(false)
   const [pendingPricingName, setPendingPricingName] = useState<string | null>(
     null
   )
@@ -145,6 +153,43 @@ export function ModelMutateDrawer(props: {
     enabled: props.open && isEditing,
   })
   const savedModel = modelQuery.data ?? currentRow
+  const superResolutionModelName =
+    savedModel?.name_rule === 0 ? savedModel.model_name : ''
+  const superResolutionQuery = useQuery({
+    queryKey: modelsQueryKeys.superResolution(superResolutionModelName),
+    queryFn: async () => {
+      if (!superResolutionModelName) throw new Error(t('Model ID is required'))
+      const response = await getSuperResolutionConfig(superResolutionModelName)
+      if (!response.success && response.data?.supported !== false) {
+        throw createServerError(
+          response,
+          t('Failed to load super-resolution settings')
+        )
+      }
+      if (
+        !response.data ||
+        typeof response.data.enabled !== 'boolean' ||
+        (response.data.source_resolution !== '480p' &&
+          response.data.source_resolution !== '720p') ||
+        typeof response.data.preserve_original !== 'boolean'
+      ) {
+        return {
+          enabled: false,
+          source_resolution: '720p' as const,
+          preserve_original: true,
+          supported: false,
+        }
+      }
+      return response.data
+    },
+    enabled: props.open && isEditing && Boolean(superResolutionModelName),
+    retry: false,
+  })
+  const superResolutionSupported =
+    Boolean(superResolutionModelName) &&
+    !superResolutionQuery.isPending &&
+    !superResolutionQuery.isError &&
+    superResolutionQuery.data?.supported !== false
 
   useEffect(() => {
     if (!props.open) return
@@ -152,6 +197,7 @@ export function ModelMutateDrawer(props: {
     setPricingVisited(props.initialSection === 'pricing')
     setPricingName('')
     setPricingDirty(false)
+    setSuperResolutionDirty(false)
     setPendingPricingName(null)
     setCloseConfirm(false)
   }, [
@@ -190,7 +236,10 @@ export function ModelMutateDrawer(props: {
     meta: { errorToast: false },
     onMutate: () => form.clearErrors('root.server'),
     mutationFn: async (values: ModelFormValues) => {
-      if (pricingDirty && values.model_name !== currentRow?.model_name) {
+      if (
+        (pricingDirty || superResolutionDirty) &&
+        values.model_name !== currentRow?.model_name
+      ) {
         throw new Error(
           t('Save or discard pricing changes before renaming metadata.')
         )
@@ -221,7 +270,7 @@ export function ModelMutateDrawer(props: {
         queryClient.invalidateQueries({ queryKey: vendorsQueryKeys.all }),
       ])
       toast.success(t('Model metadata saved'))
-      if (!pricingDirty) props.onOpenChange(false)
+      if (!pricingDirty && !superResolutionDirty) props.onOpenChange(false)
     },
     onError: (error) => {
       form.setError('root.server', {
@@ -241,7 +290,7 @@ export function ModelMutateDrawer(props: {
   const metadataDirty = form.formState.isDirty
   const close = (open: boolean) => {
     if (!open && isSubmitting) return
-    if (!open && (metadataDirty || pricingDirty)) {
+    if (!open && (metadataDirty || pricingDirty || superResolutionDirty)) {
       setCloseConfirm(true)
       return
     }
@@ -272,7 +321,9 @@ export function ModelMutateDrawer(props: {
             }}
             className='shrink-0 px-4'
           >
-            <TabsList className='grid w-full grid-cols-3 group-data-horizontal/tabs:h-auto'>
+            <TabsList
+              className={`grid w-full ${superResolutionSupported ? 'grid-cols-4' : 'grid-cols-3'} group-data-horizontal/tabs:h-auto`}
+            >
               <TabsTrigger
                 value='metadata'
                 className='h-auto min-w-0 whitespace-normal'
@@ -293,6 +344,14 @@ export function ModelMutateDrawer(props: {
               >
                 {t('Channels and groups')}
               </TabsTrigger>
+              {superResolutionSupported ? (
+                <TabsTrigger
+                  value='super-resolution'
+                  className='h-auto min-w-0 whitespace-normal'
+                >
+                  {t('Super-resolution')}
+                </TabsTrigger>
+              ) : null}
             </TabsList>
           </Tabs>
           {props.open && section === 'metadata' && (
@@ -701,6 +760,16 @@ export function ModelMutateDrawer(props: {
           {props.open && section === 'connections' && savedModel && (
             <ModelConnections model={savedModel} />
           )}
+          {props.open &&
+            section === 'super-resolution' &&
+            superResolutionSupported &&
+            superResolutionQuery.data && (
+              <SuperResolutionPanel
+                modelName={superResolutionModelName}
+                config={superResolutionQuery.data}
+                onDirtyChange={setSuperResolutionDirty}
+              />
+            )}
         </SheetContent>
       </Sheet>
       <ConfirmDialog

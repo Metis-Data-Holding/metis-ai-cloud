@@ -16,16 +16,25 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Shield01Icon, Wrench01Icon } from '@hugeicons/core-free-icons'
+import {
+  Download01Icon,
+  Shield01Icon,
+  Wrench01Icon,
+} from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
 import { StatusBadge } from '@/components/status-badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
+import { getServerErrorMessage } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
+import { getTaskOriginal } from '../../api'
 import { taskActionMapper, taskStatusMapper } from '../../lib/mappers'
 import { resolveTaskDetailAccess } from '../../lib/task-details'
 import type { TaskLog } from '../../types'
@@ -83,10 +92,36 @@ interface TaskDetailsDialogProps {
 
 export function TaskDetailsDialog(props: TaskDetailsDialogProps) {
   const { t } = useTranslation()
+  const [originalDownloadPending, setOriginalDownloadPending] = useState(false)
+  const [originalDownloadError, setOriginalDownloadError] = useState<
+    string | null
+  >(null)
   const access = resolveTaskDetailAccess(props.log, props.isAdmin, props.isRoot)
   const plugin = access.plugin
   const runtime = access.runtime
   const properties = props.log.properties
+  const superResolution = access.superResolution
+  const downloadOriginal = async () => {
+    setOriginalDownloadPending(true)
+    setOriginalDownloadError(null)
+    try {
+      const blob = await getTaskOriginal(props.log.task_id)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `original-${props.log.task_id.replaceAll(/[^A-Za-z0-9._-]/g, '_')}.mp4`
+      document.body.append(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      setOriginalDownloadError(
+        getServerErrorMessage(error, t('Failed to download original video'))
+      )
+    } finally {
+      setOriginalDownloadPending(false)
+    }
+  }
 
   return (
     <Dialog
@@ -225,6 +260,98 @@ export function TaskDetailsDialog(props: TaskDetailsDialogProps) {
                   />
                 ) : null}
               </>
+            ) : null}
+          </DetailSection>
+        ) : null}
+
+        {superResolution ? (
+          <DetailSection label={t('Super-resolution')}>
+            {superResolution.phase ? (
+              <DetailRow
+                label={t('Phase')}
+                value={superResolution.phase}
+                mono
+              />
+            ) : null}
+            {superResolution.source_resolution ? (
+              <DetailRow
+                label={t('Source resolution')}
+                value={superResolution.source_resolution}
+                mono
+              />
+            ) : null}
+            {superResolution.target_resolution ? (
+              <DetailRow
+                label={t('Target resolution')}
+                value={superResolution.target_resolution}
+                mono
+              />
+            ) : null}
+            {superResolution.preserve_original !== undefined ? (
+              <DetailRow
+                label={t('Keep original video')}
+                value={superResolution.preserve_original ? t('Yes') : t('No')}
+              />
+            ) : null}
+            {superResolution.output_duration !== undefined ? (
+              <DetailRow
+                label={t('Output duration')}
+                value={`${superResolution.output_duration}s`}
+                mono
+              />
+            ) : null}
+            {superResolution.output_width && superResolution.output_height ? (
+              <DetailRow
+                label={t('Output dimensions')}
+                value={`${superResolution.output_width} × ${superResolution.output_height}`}
+                mono
+              />
+            ) : null}
+            {superResolution.output_fps !== undefined ? (
+              <DetailRow
+                label={t('Output frame rate')}
+                value={`${superResolution.output_fps} fps`}
+                mono
+              />
+            ) : null}
+            {superResolution.estimate_usd !== undefined ? (
+              <DetailRow
+                label={t('Estimated cost')}
+                value={`${superResolution.estimate_usd} USD (${t('Estimate only; not an invoice')})`}
+                mono
+              />
+            ) : null}
+            {superResolution.cleanup_status ? (
+              <DetailRow
+                label={t('Cleanup status')}
+                value={superResolution.cleanup_status}
+                mono
+              />
+            ) : null}
+            {superResolution.original_available === true ? (
+              <div className='flex flex-col items-start gap-2 pt-1'>
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  disabled={originalDownloadPending}
+                  onClick={() => void downloadOriginal()}
+                >
+                  <HugeiconsIcon
+                    icon={Download01Icon}
+                    strokeWidth={2}
+                    data-icon='inline-start'
+                  />
+                  {originalDownloadPending
+                    ? t('Downloading...')
+                    : t('Download original video')}
+                </Button>
+                {originalDownloadError ? (
+                  <Alert variant='destructive'>
+                    <AlertDescription>{originalDownloadError}</AlertDescription>
+                  </Alert>
+                ) : null}
+              </div>
             ) : null}
           </DetailSection>
         ) : null}

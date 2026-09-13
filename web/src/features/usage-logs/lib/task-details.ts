@@ -16,10 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { TaskLog, TaskPluginInfo, TaskPluginRuntimeInfo } from '../types'
+import type {
+  SuperResolutionTaskInfo,
+  TaskLog,
+  TaskPluginInfo,
+  TaskPluginRuntimeInfo,
+} from '../types'
 
 export interface TaskDetailAccess {
   plugin?: TaskPluginInfo
+  superResolution?: SuperResolutionTaskInfo
   runtime?: TaskPluginRuntimeInfo
   upstreamTaskId?: string
   nodeName?: string
@@ -34,6 +40,9 @@ export function resolveTaskDetailAccess(
 
   const access: TaskDetailAccess = {
     plugin: log.admin_info?.task_plugin,
+  }
+  if (log.admin_info?.super_resolution) {
+    access.superResolution = log.admin_info.super_resolution
   }
   if (!isRoot) return access
 

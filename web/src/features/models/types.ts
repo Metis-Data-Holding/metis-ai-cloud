@@ -142,6 +142,21 @@ export interface GetModelResponse {
   data?: Model
 }
 
+export type SuperResolutionSourceResolution = '480p' | '720p'
+
+export interface SuperResolutionConfig {
+  enabled: boolean
+  source_resolution: SuperResolutionSourceResolution
+  preserve_original: boolean
+  supported?: boolean
+}
+
+export interface SuperResolutionConfigResponse {
+  success: boolean
+  message?: string
+  data?: SuperResolutionConfig
+}
+
 /**
  * Get vendors response
  */

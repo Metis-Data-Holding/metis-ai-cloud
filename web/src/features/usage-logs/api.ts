@@ -125,3 +125,15 @@ export async function getTaskArtifacts(taskId: string) {
   )
   return parseTaskArtifactsResponse(response.data)
 }
+
+export async function getTaskOriginal(taskId: string): Promise<Blob> {
+  const response = await api.get<Blob>(
+    `/api/task/${encodeURIComponent(taskId)}/original`,
+    {
+      responseType: 'blob',
+      skipBusinessError: true,
+      skipErrorHandler: true,
+    }
+  )
+  return response.data
+}

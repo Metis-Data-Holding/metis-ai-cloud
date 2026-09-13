@@ -36,6 +36,8 @@ import type {
   MetadataSyncRequest,
   DeploymentSettingsResponse,
   ListDeploymentsResponse,
+  SuperResolutionConfig,
+  SuperResolutionConfigResponse,
 } from './types'
 
 // ============================================================================
@@ -67,6 +69,27 @@ export async function searchModels(
  */
 export async function getModel(id: number): Promise<GetModelResponse> {
   const res = await api.get(`/api/models/${id}`)
+  return res.data
+}
+
+export async function getSuperResolutionConfig(
+  model: string
+): Promise<SuperResolutionConfigResponse> {
+  const res = await api.get('/api/models/super-resolution', {
+    params: { model },
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  })
+  return res.data
+}
+
+export async function updateSuperResolutionConfig(
+  config: SuperResolutionConfig & { model: string }
+): Promise<SuperResolutionConfigResponse> {
+  const res = await api.put('/api/models/super-resolution', config, {
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  })
   return res.data
 }
 

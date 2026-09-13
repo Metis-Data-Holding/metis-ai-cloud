@@ -330,6 +330,7 @@ export interface TaskLog {
     request_id?: string
     request_path?: string
     task_plugin?: TaskPluginInfo
+    super_resolution?: SuperResolutionTaskInfo
   }
   root_info?: {
     task_plugin?: TaskPluginRuntimeInfo
@@ -338,6 +339,20 @@ export interface TaskLog {
   }
   created_at?: number
   updated_at?: number
+}
+
+export interface SuperResolutionTaskInfo {
+  phase?: string
+  source_resolution?: string
+  target_resolution?: string
+  preserve_original?: boolean
+  original_available?: boolean
+  output_duration?: number
+  output_width?: number
+  output_height?: number
+  output_fps?: number
+  estimate_usd?: number
+  cleanup_status?: string
 }
 
 export interface TaskPluginInfo {
