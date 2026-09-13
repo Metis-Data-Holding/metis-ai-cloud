@@ -2,10 +2,15 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -335,6 +340,159 @@ func TestDisabledArtifactStorePreservesPluginUpstreamContent(t *testing.T) {
 	assert.Equal(t, "artifact-bytes", recorder.Body.String())
 	assert.Equal(t, "video/mp4", recorder.Header().Get("Content-Type"))
 	assert.Equal(t, "bytes 0-13/14", recorder.Header().Get("Content-Range"))
+}
+
+func setupSuperResolutionFileTask(t *testing.T, preserveOriginal bool) *model.Task {
+	t.Helper()
+	task := setupGenericTaskTest(t)
+	task.PrivateData = model.TaskPrivateData{
+		ResultURL: "https://gateway.example/v1/videos/" + task.TaskID + "/content",
+		SuperResolution: &model.TaskSuperResolutionState{
+			Phase:            "complete",
+			SourceResolution: "720p",
+			TargetResolution: "4k",
+			PreserveOriginal: preserveOriginal,
+			OriginalURL:      "https://provider.invalid/private/original.mp4?signature=secret",
+			VID:              "vod-secret-id",
+			RunID:            "workflow-secret-id",
+			OriginalPath:     "stored-original",
+			OutputPath:       "stored-output",
+			CleanupStatus:    "pending",
+		},
+	}
+	require.NoError(t, model.DB.Save(task).Error)
+
+	storage := t.TempDir()
+	t.Setenv("VIDEO_SR_STORAGE_PATH", storage)
+	digest := sha256.Sum256([]byte(fmt.Sprintf("%d:%d:%s", task.ID, task.UserId, task.TaskID)))
+	baseName := hex.EncodeToString(digest[:])
+	require.NoError(t, os.WriteFile(filepath.Join(storage, baseName+".output.mp4"), []byte("final-video"), 0o600))
+	if preserveOriginal {
+		require.NoError(t, os.WriteFile(filepath.Join(storage, baseName+".original.mp4"), []byte("source-video"), 0o600))
+	}
+	return task
+}
+
+func superResolutionRequest(method, path string, taskID string) (*gin.Context, *httptest.ResponseRecorder) {
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Params = gin.Params{{Key: "task_id", Value: taskID}}
+	c.Request = httptest.NewRequest(method, path, nil)
+	return c, recorder
+}
+
+func TestGetVideoSuperResolutionOriginalRequiresAdminSessionAndSupportsCrossUserAdminDownload(t *testing.T) {
+	task := setupSuperResolutionFileTask(t, true)
+
+	tests := []struct {
+		name        string
+		role        int
+		userID      int
+		session     bool
+		accessToken bool
+		wantStatus  int
+	}{
+		{name: "owner without session", role: common.RoleCommonUser, userID: task.UserId, wantStatus: http.StatusForbidden},
+		{name: "owner PAT", role: common.RoleCommonUser, userID: task.UserId, accessToken: true, wantStatus: http.StatusForbidden},
+		{name: "admin without session", role: common.RoleAdminUser, userID: 99, wantStatus: http.StatusForbidden},
+		{name: "admin session", role: common.RoleAdminUser, userID: 99, session: true, wantStatus: http.StatusOK},
+		{name: "root session", role: common.RoleRootUser, userID: 100, session: true, wantStatus: http.StatusOK},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			c, recorder := superResolutionRequest(http.MethodGet, "/api/task/"+task.TaskID+"/original", task.TaskID)
+			c.Set("id", testCase.userID)
+			c.Set("role", testCase.role)
+			if testCase.accessToken {
+				c.Set("token_id", 123)
+			}
+			if testCase.session {
+				c.Set("session_id", "dashboard-session")
+				c.Set("auth_version", int64(1))
+				c.Set("session_version", int64(1))
+			}
+
+			GetVideoSuperResolutionOriginal(c)
+			assert.Equal(t, testCase.wantStatus, recorder.Code)
+			if testCase.wantStatus == http.StatusOK {
+				assert.Equal(t, "source-video", recorder.Body.String())
+				assert.Equal(t, `attachment; filename="original.mp4"`, recorder.Header().Get("Content-Disposition"))
+				assert.Equal(t, "video/mp4", recorder.Header().Get("Content-Type"))
+			}
+		})
+	}
+
+	task.PrivateData.SuperResolution.PreserveOriginal = false
+	require.NoError(t, model.DB.Save(task).Error)
+	c, recorder := superResolutionRequest(http.MethodGet, "/api/task/"+task.TaskID+"/original", task.TaskID)
+	c.Set("id", 99)
+	c.Set("role", common.RoleAdminUser)
+	c.Set("session_id", "dashboard-session")
+	c.Set("auth_version", int64(1))
+	c.Set("session_version", int64(1))
+	GetVideoSuperResolutionOriginal(c)
+	assert.Equal(t, http.StatusNotFound, recorder.Code, "disabled preservation must not expose an original file")
+}
+
+func TestTaskArtifactContentAndVideoProxyExposeOnlyFinalSuperResolutionVideo(t *testing.T) {
+	task := setupSuperResolutionFileTask(t, true)
+	task.PrivateData.Execution = &model.TaskExecutionSnapshot{TaskPlugin: &model.TaskPluginSnapshot{Key: "missing-plugin"}}
+	require.NoError(t, model.DB.Save(task).Error)
+
+	for _, artifactKey := range []string{"original", "last_frame"} {
+		c, recorder := superResolutionRequest(http.MethodGet, "/v1/tasks/"+task.TaskID+"/artifacts/"+artifactKey+"/content", task.TaskID)
+		c.Set(middleware.TaskArtifactAccessContextKey, true)
+		c.Params = gin.Params{
+			{Key: "key", Value: task.TaskID},
+			{Key: "artifact_key", Value: artifactKey},
+		}
+		TaskArtifactContent(c)
+		assert.Equal(t, http.StatusNotFound, recorder.Code, artifactKey+" must not be a public artifact")
+	}
+
+	c, recorder := superResolutionRequest(http.MethodGet, "/v1/tasks/"+task.TaskID+"/artifacts/video/content", task.TaskID)
+	c.Set(middleware.TaskArtifactAccessContextKey, true)
+	c.Params = gin.Params{
+		{Key: "key", Value: task.TaskID},
+		{Key: "artifact_key", Value: "video"},
+	}
+	c.Request.Header.Set("Range", "bytes=0-4")
+	TaskArtifactContent(c)
+	assert.Equal(t, http.StatusPartialContent, recorder.Code)
+	assert.Equal(t, "final", recorder.Body.String())
+	assert.Equal(t, "bytes 0-4/11", recorder.Header().Get("Content-Range"))
+
+	c, recorder = superResolutionRequest(http.MethodGet, "/v1/videos/"+task.TaskID+"/content", task.TaskID)
+	c.Set(middleware.TaskArtifactAccessContextKey, true)
+	c.Request.Header.Set("Range", "bytes=6-10")
+	VideoProxy(c)
+	assert.Equal(t, http.StatusPartialContent, recorder.Code)
+	assert.Equal(t, "video", recorder.Body.String())
+	assert.Equal(t, "bytes 6-10/11", recorder.Header().Get("Content-Range"))
+	assert.NotContains(t, recorder.Body.String(), "provider")
+}
+
+func TestSuperResolutionTaskDTOsDoNotExposePrivateProviderData(t *testing.T) {
+	task := setupSuperResolutionFileTask(t, true)
+	publicDTO := tasksToDto([]*model.Task{task}, false, common.RoleCommonUser)
+	adminDTO := tasksToDto([]*model.Task{task}, false, common.RoleAdminUser)
+
+	publicBytes, err := common.Marshal(publicDTO)
+	require.NoError(t, err)
+	adminBytes, err := common.Marshal(adminDTO)
+	require.NoError(t, err)
+	for _, encoded := range []string{string(publicBytes), string(adminBytes)} {
+		assert.NotContains(t, encoded, "provider.invalid")
+		assert.NotContains(t, encoded, "signature=secret")
+		assert.NotContains(t, encoded, "vod-secret-id")
+		assert.NotContains(t, encoded, "workflow-secret-id")
+		assert.NotContains(t, encoded, "stored-original")
+		assert.NotContains(t, encoded, "stored-output")
+	}
+	require.NotNil(t, adminDTO[0].AdminInfo)
+	require.NotNil(t, adminDTO[0].AdminInfo.SuperResolution)
+	assert.Equal(t, "complete", adminDTO[0].AdminInfo.SuperResolution.Phase)
+	assert.True(t, adminDTO[0].AdminInfo.SuperResolution.OriginalAvailable)
 }
 
 func TestProjectedTaskArtifactValidationRejectsAmbiguousIdentity(t *testing.T) {
