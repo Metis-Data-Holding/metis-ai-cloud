@@ -76,12 +76,74 @@ func TestMigratePrefillGroupUniquenessPostgreSQL(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
 
+	for _, existingTable := range []bool{false, true} {
+		name := "fresh_schema"
+		if existingTable {
+			name = "existing_prefill_groups"
+		}
+		t.Run("target_name_on_other_table_"+name, func(t *testing.T) {
+			tx := db.Begin()
+			require.NoError(t, tx.Error)
+			t.Cleanup(func() { _ = tx.Rollback().Error })
+
+			schemaName := fmt.Sprintf("prefill_group_collision_%d", time.Now().UnixNano())
+			require.NoError(t, tx.Exec("CREATE SCHEMA ?", clause.Table{Name: schemaName}).Error)
+			require.NoError(t, tx.Exec("SET LOCAL search_path TO ?", clause.Table{Name: schemaName}).Error)
+			if existingTable {
+				require.NoError(t, tx.AutoMigrate(&PrefillGroup{}))
+				require.NoError(t, tx.Migrator().DropIndex(&PrefillGroup{}, prefillGroupNameIndex))
+			}
+			require.NoError(t, tx.Exec("CREATE TABLE other_groups (name varchar(64))").Error)
+			require.NoError(t, tx.Exec(
+				"CREATE INDEX ? ON other_groups (name)",
+				clause.Column{Name: prefillGroupNameIndex},
+			).Error)
+
+			err := migratePrefillGroupUniqueness(tx)
+			require.ErrorContains(t, err, "unexpected definition")
+			var indexCount int64
+			require.NoError(t, tx.Raw(`
+SELECT count(*) FROM pg_catalog.pg_indexes
+WHERE schemaname = current_schema() AND tablename = 'other_groups' AND indexname = ?`, prefillGroupNameIndex).Scan(&indexCount).Error)
+			assert.EqualValues(t, 1, indexCount)
+		})
+	}
+
+	t.Run("target_index_uses_resolved_table_schema", func(t *testing.T) {
+		tx := db.Begin()
+		require.NoError(t, tx.Error)
+		t.Cleanup(func() { _ = tx.Rollback().Error })
+
+		require.NoError(t, tx.Exec("SET LOCAL search_path TO public").Error)
+		require.NoError(t, tx.AutoMigrate(&PrefillGroup{}))
+		require.NoError(t, tx.Migrator().DropIndex(&PrefillGroup{}, prefillGroupNameIndex))
+		require.NoError(t, tx.Exec(
+			"CREATE INDEX ? ON ? (?)",
+			clause.Column{Name: prefillGroupNameIndex},
+			clause.Table{Name: "prefill_groups"},
+			clause.Column{Name: "name"},
+		).Error)
+
+		shadowSchema := fmt.Sprintf("prefill_group_shadow_%d", time.Now().UnixNano())
+		require.NoError(t, tx.Exec("CREATE SCHEMA ?", clause.Table{Name: shadowSchema}).Error)
+		require.NoError(t, tx.Exec("SELECT set_config('search_path', ?, true)", shadowSchema+", public").Error)
+
+		err := migratePrefillGroupUniqueness(tx)
+		require.ErrorContains(t, err, "unexpected definition")
+		var indexCount int64
+		require.NoError(t, tx.Raw(`
+SELECT count(*) FROM pg_catalog.pg_indexes
+WHERE schemaname = 'public' AND tablename = 'prefill_groups' AND indexname = ?`, prefillGroupNameIndex).Scan(&indexCount).Error)
+		assert.EqualValues(t, 1, indexCount)
+	})
+
 	tests := []struct {
 		name               string
 		prepareOld         func(*testing.T, *gorm.DB)
 		blockedConstraints []string
 		blockedIndexes     []string
 		preservedIndexes   []string
+		wantError          string
 	}{
 		{name: "fresh"},
 		{
@@ -110,40 +172,178 @@ func TestMigratePrefillGroupUniquenessPostgreSQL(t *testing.T) {
 			},
 		},
 		{
-			name: "arbitrary_constraint_name",
+			name: "known_renamed_constraint",
 			prepareOld: func(t *testing.T, tx *gorm.DB) {
 				t.Helper()
-				for _, constraintName := range []string{
-					legacyPrefillGroupNameUnique,
-					"prefill_groups_name_key",
-				} {
-					require.NoError(t, tx.Exec(
-						"ALTER TABLE ? ADD CONSTRAINT ? UNIQUE (?)",
-						clause.Table{Name: "prefill_groups"},
-						clause.Column{Name: constraintName},
-						clause.Column{Name: "name"},
-					).Error)
-				}
+				require.NoError(t, tx.Exec(
+					"ALTER TABLE ? ADD CONSTRAINT ? UNIQUE (?)",
+					clause.Table{Name: "prefill_groups"},
+					clause.Column{Name: "prefill_groups_name_key"},
+					clause.Column{Name: "name"},
+				).Error)
 			},
-			blockedConstraints: []string{legacyPrefillGroupNameUnique, "prefill_groups_name_key"},
 		},
 		{
-			name: "arbitrary_index_name",
+			name: "known_renamed_index",
 			prepareOld: func(t *testing.T, tx *gorm.DB) {
 				t.Helper()
-				for _, indexName := range []string{
-					legacyPrefillGroupNameUnique,
-					"prefill_groups_name_key",
-				} {
-					require.NoError(t, tx.Exec(
-						"CREATE UNIQUE INDEX ? ON ? (?)",
-						clause.Column{Name: indexName},
-						clause.Table{Name: "prefill_groups"},
-						clause.Column{Name: "name"},
-					).Error)
-				}
+				require.NoError(t, tx.Exec(
+					"CREATE UNIQUE INDEX ? ON ? (?)",
+					clause.Column{Name: "idx_37606_uk_prefill_name"},
+					clause.Table{Name: "prefill_groups"},
+					clause.Column{Name: "name"},
+				).Error)
 			},
-			blockedIndexes: []string{legacyPrefillGroupNameUnique, "prefill_groups_name_key"},
+		},
+		{
+			name: "similar_unconfirmed_index_name_is_rejected",
+			prepareOld: func(t *testing.T, tx *gorm.DB) {
+				t.Helper()
+				require.NoError(t, tx.Exec(
+					"CREATE UNIQUE INDEX ? ON ? (?)",
+					clause.Column{Name: "idx_99999_uk_prefill_name"},
+					clause.Table{Name: "prefill_groups"},
+					clause.Column{Name: "name"},
+				).Error)
+			},
+			blockedIndexes: []string{"idx_99999_uk_prefill_name"},
+			wantError:      "unsupported global unique",
+		},
+		{
+			name: "target_name_collision",
+			prepareOld: func(t *testing.T, tx *gorm.DB) {
+				t.Helper()
+				require.NoError(t, tx.Migrator().DropIndex(&PrefillGroup{}, prefillGroupNameIndex))
+				require.NoError(t, tx.Exec(
+					"CREATE UNIQUE INDEX ? ON ? (?)",
+					clause.Column{Name: prefillGroupNameIndex},
+					clause.Table{Name: "prefill_groups"},
+					clause.Column{Name: "name"},
+				).Error)
+			},
+		},
+		{
+			name: "target_constraint_name_collision",
+			prepareOld: func(t *testing.T, tx *gorm.DB) {
+				t.Helper()
+				require.NoError(t, tx.Migrator().DropIndex(&PrefillGroup{}, prefillGroupNameIndex))
+				require.NoError(t, tx.Exec(
+					"ALTER TABLE ? ADD CONSTRAINT ? UNIQUE (?)",
+					clause.Table{Name: "prefill_groups"},
+					clause.Column{Name: prefillGroupNameIndex},
+					clause.Column{Name: "name"},
+				).Error)
+			},
+		},
+		{
+			name: "deferrable_constraint_is_rejected",
+			prepareOld: func(t *testing.T, tx *gorm.DB) {
+				t.Helper()
+				require.NoError(t, tx.Exec(
+					"ALTER TABLE ? ADD CONSTRAINT ? UNIQUE (?) DEFERRABLE INITIALLY DEFERRED",
+					clause.Table{Name: "prefill_groups"},
+					clause.Column{Name: "prefill_groups_name_key"},
+					clause.Column{Name: "name"},
+				).Error)
+			},
+			blockedConstraints: []string{"prefill_groups_name_key"},
+			wantError:          "unsupported global unique",
+		},
+		{
+			name: "nulls_not_distinct_constraint_is_rejected",
+			prepareOld: func(t *testing.T, tx *gorm.DB) {
+				t.Helper()
+				var version int
+				require.NoError(t, tx.Raw("SHOW server_version_num").Scan(&version).Error)
+				if version < 150000 {
+					t.Skip("NULLS NOT DISTINCT requires PostgreSQL 15+")
+				}
+				require.NoError(t, tx.Exec(
+					"ALTER TABLE ? ADD CONSTRAINT ? UNIQUE NULLS NOT DISTINCT (?)",
+					clause.Table{Name: "prefill_groups"},
+					clause.Column{Name: "prefill_groups_name_key"},
+					clause.Column{Name: "name"},
+				).Error)
+			},
+			blockedConstraints: []string{"prefill_groups_name_key"},
+			wantError:          "unsupported global unique",
+		},
+		{
+			name: "non_default_order_is_rejected",
+			prepareOld: func(t *testing.T, tx *gorm.DB) {
+				t.Helper()
+				require.NoError(t, tx.Exec(
+					"CREATE UNIQUE INDEX ? ON ? (? DESC)",
+					clause.Column{Name: "prefill_groups_name_key"},
+					clause.Table{Name: "prefill_groups"},
+					clause.Column{Name: "name"},
+				).Error)
+			},
+			blockedIndexes: []string{"prefill_groups_name_key"},
+			wantError:      "unsupported global unique",
+		},
+		{
+			name: "non_default_opclass_is_rejected",
+			prepareOld: func(t *testing.T, tx *gorm.DB) {
+				t.Helper()
+				require.NoError(t, tx.Exec(
+					"CREATE UNIQUE INDEX ? ON ? (? text_pattern_ops)",
+					clause.Column{Name: "prefill_groups_name_key"},
+					clause.Table{Name: "prefill_groups"},
+					clause.Column{Name: "name"},
+				).Error)
+			},
+			blockedIndexes: []string{"prefill_groups_name_key"},
+			wantError:      "unsupported global unique",
+		},
+		{
+			name: "non_default_collation_is_rejected",
+			prepareOld: func(t *testing.T, tx *gorm.DB) {
+				t.Helper()
+				require.NoError(t, tx.Exec(
+					"CREATE UNIQUE INDEX ? ON ? (? COLLATE \"C\")",
+					clause.Column{Name: "prefill_groups_name_key"},
+					clause.Table{Name: "prefill_groups"},
+					clause.Column{Name: "name"},
+				).Error)
+			},
+			blockedIndexes: []string{"prefill_groups_name_key"},
+			wantError:      "unsupported global unique",
+		},
+		{
+			name: "included_column_is_rejected",
+			prepareOld: func(t *testing.T, tx *gorm.DB) {
+				t.Helper()
+				var version int
+				require.NoError(t, tx.Raw("SHOW server_version_num").Scan(&version).Error)
+				if version < 110000 {
+					t.Skip("included columns require PostgreSQL 11+")
+				}
+				require.NoError(t, tx.Exec(
+					"CREATE UNIQUE INDEX ? ON ? (?) INCLUDE (?)",
+					clause.Column{Name: "prefill_groups_name_key"},
+					clause.Table{Name: "prefill_groups"},
+					clause.Column{Name: "name"},
+					clause.Column{Name: "type"},
+				).Error)
+			},
+			blockedIndexes: []string{"prefill_groups_name_key"},
+			wantError:      "unsupported global unique",
+		},
+		{
+			name: "foreign_key_dependency_is_rejected",
+			prepareOld: func(t *testing.T, tx *gorm.DB) {
+				t.Helper()
+				require.NoError(t, tx.Exec(
+					"ALTER TABLE ? ADD CONSTRAINT ? UNIQUE (?)",
+					clause.Table{Name: "prefill_groups"},
+					clause.Column{Name: "prefill_groups_name_key"},
+					clause.Column{Name: "name"},
+				).Error)
+				require.NoError(t, tx.Exec("CREATE TABLE referenced_groups (name varchar(64) REFERENCES prefill_groups(name))").Error)
+			},
+			blockedConstraints: []string{"prefill_groups_name_key"},
+			wantError:          "unsupported global unique",
 		},
 		{
 			name: "non_conflicting_indexes_are_preserved",
@@ -211,10 +411,9 @@ func TestMigratePrefillGroupUniquenessPostgreSQL(t *testing.T) {
 			if test.prepareOld != nil {
 				test.prepareOld(t, tx)
 			}
-			if len(test.blockedConstraints) > 0 || len(test.blockedIndexes) > 0 {
+			if test.wantError != "" {
 				err := migratePrefillGroupUniqueness(tx)
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), "prefill_groups_name_key")
+				require.ErrorContains(t, err, test.wantError)
 				for _, constraintName := range test.blockedConstraints {
 					assert.True(t, tx.Migrator().HasConstraint(&PrefillGroup{}, constraintName))
 				}
