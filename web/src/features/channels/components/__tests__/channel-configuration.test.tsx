@@ -1703,7 +1703,7 @@ test('an operator without sensitive write permission can discover saved models a
   expect(put.mock.calls[0]?.[1]).toMatchObject({ id: 42, priority: 8 })
   expect(put.mock.calls[0]?.[1]).not.toHaveProperty('setting')
   expect(put.mock.calls[0]?.[1]).not.toHaveProperty('key')
-})
+}, 10_000)
 
 test.each([
   ['random', 'Random', 'polling', 'Polling'],

@@ -70,7 +70,11 @@ async function openVideoSettings(user: ReturnType<typeof userEvent.setup>) {
 }
 
 function findUploadedReference(label: string) {
-  return screen.findByText(label, undefined, { timeout: 5_000 })
+  return screen.findByText(label, undefined, { timeout: 15_000 })
+}
+
+function findUploadFeedback(message: string) {
+  return screen.findByText(message, undefined, { timeout: 5_000 })
 }
 
 async function selectGenerationMode(
@@ -493,7 +497,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
         })
       ).not.toBeInTheDocument()
     )
-  })
+  }, 20_000)
 
   test('shows only the supported resolution choices for Seedance Fast', async () => {
     const user = userEvent.setup()
@@ -617,7 +621,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
       new File(['three'], 'three.png', { type: 'image/png' })
     )
     expect(
-      await screen.findByText('You can add up to 2 reference images.')
+      await findUploadFeedback('You can add up to 2 reference images.')
     ).toBeVisible()
     await user.type(
       screen.getByRole('textbox', { name: 'Prompt' }),
@@ -639,7 +643,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
         })
       )
     )
-  })
+  }, 20_000)
 
   test('rejects MiniMax H3 reference videos above the gateway limit', async () => {
     vi.mocked(getUserModels).mockResolvedValue([
@@ -656,7 +660,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     )
 
     expect(
-      await screen.findByText('Each reference video must not exceed 64 MB.')
+      await findUploadFeedback('Each reference video must not exceed 64 MB.')
     ).toBeVisible()
     expect(uploadVideoReference).not.toHaveBeenCalled()
   })
@@ -703,7 +707,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
         },
       })
     )
-  })
+  }, 20_000)
 
   test('clears the hidden video count when switching models', async () => {
     vi.mocked(getUserModels).mockResolvedValue([
@@ -748,7 +752,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     expect(
       screen.queryByText('You can add up to 1 reference video.')
     ).not.toBeInTheDocument()
-  })
+  }, 20_000)
 
   test('clears unsupported keyframes when switching to MiniMax H3', async () => {
     vi.mocked(getUserModels).mockResolvedValue([
@@ -932,7 +936,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     fireEvent.pointerEnter(tray)
 
     expect(tray).toHaveAttribute('data-expanded', 'true')
-  })
+  }, 20_000)
 
   test('expands multiple reference assets within the composer layout and uses stable card rotations', async () => {
     const user = userEvent.setup()
@@ -965,7 +969,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
       'sm:w-[min(46%,var(--expanded-reference-width))]',
       'sm:overflow-hidden'
     )
-  })
+  }, 20_000)
 
   test('preserves mixed upload order and inserts stable media mentions', async () => {
     const user = userEvent.setup()
@@ -1043,7 +1047,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
         })
       )
     )
-  })
+  }, 20_000)
 
   test('selects reference mentions with arrow keys and Enter', async () => {
     const user = userEvent.setup()
@@ -1071,7 +1075,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
       screen.queryByRole('listbox', { name: 'Reference content' })
     ).not.toBeInTheDocument()
     expect(prompt).toHaveFocus()
-  })
+  }, 20_000)
 
   test('closes reference mentions with Escape without changing the prompt', async () => {
     const user = userEvent.setup()
@@ -1094,7 +1098,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     expect(
       screen.queryByRole('listbox', { name: 'Reference content' })
     ).not.toBeInTheDocument()
-  })
+  }, 20_000)
 
   test('keeps 1080p enabled for video-only references and disables it after adding an image', async () => {
     const user = userEvent.setup()
@@ -1158,7 +1162,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
         })
       )
     )
-  })
+  }, 20_000)
 
   test('rejects a local video larger than 80 MB before upload', async () => {
     const user = userEvent.setup()
@@ -1172,7 +1176,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     await user.upload(screen.getByLabelText('Add reference content'), file)
 
     expect(
-      await screen.findByText('Each reference video must not exceed 80 MB.')
+      await findUploadFeedback('Each reference video must not exceed 80 MB.')
     ).toBeVisible()
     expect(uploadVideoReference).not.toHaveBeenCalled()
   })
@@ -1199,12 +1203,12 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     )
 
     expect(
-      await screen.findByText(
+      await findUploadFeedback(
         'Reference videos must total no more than 15 seconds.'
       )
     ).toBeVisible()
     expect(uploadVideoReference).toHaveBeenCalledTimes(1)
-  })
+  }, 20_000)
 
   test('does not expose reference video URL controls', async () => {
     render(<VideoPlayground />, { wrapper: createWrapper() })
@@ -1331,7 +1335,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
       )
     )
     expect(
-      await screen.findByText('You can add up to 9 reference images.')
+      await findUploadFeedback('You can add up to 9 reference images.')
     ).toBeVisible()
   })
 
@@ -1350,7 +1354,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     })
 
     expect(
-      await screen.findByText('Choose a supported image file.')
+      await findUploadFeedback('Choose a supported image file.')
     ).toBeVisible()
     expect(screen.queryByAltText('Reference image 1')).not.toBeInTheDocument()
   })

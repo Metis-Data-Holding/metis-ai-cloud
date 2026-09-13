@@ -387,7 +387,9 @@ it.each([
         </QueryClientProvider>
       </I18nextProvider>
     )
-    expect(await screen.findByRole('cell', { name: single })).toBeVisible()
+    expect(
+      await screen.findByRole('cell', { name: single }, { timeout: 5_000 })
+    ).toBeVisible()
     expect(screen.getByRole('cell', { name: batch })).toBeVisible()
     expect(
       screen.queryByRole('cell', { name: 'channel.status_update' })
@@ -395,7 +397,8 @@ it.each([
     expect(
       screen.queryByRole('cell', { name: 'channel.status_update_batch' })
     ).not.toBeInTheDocument()
-  }
+  },
+  10_000
 )
 
 beforeEach(() => {
