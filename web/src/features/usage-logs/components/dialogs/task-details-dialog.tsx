@@ -273,6 +273,9 @@ export function TaskDetailsDialog(props: TaskDetailsDialogProps) {
                 mono
               />
             ) : null}
+            {superResolution.error ? (
+              <DetailRow label={t('Error')} value={superResolution.error} />
+            ) : null}
             {superResolution.source_resolution ? (
               <DetailRow
                 label={t('Source resolution')}

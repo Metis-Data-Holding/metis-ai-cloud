@@ -343,6 +343,7 @@ export interface TaskLog {
 
 export interface SuperResolutionTaskInfo {
   phase?: string
+  error?: string
   source_resolution?: string
   target_resolution?: string
   preserve_original?: boolean
