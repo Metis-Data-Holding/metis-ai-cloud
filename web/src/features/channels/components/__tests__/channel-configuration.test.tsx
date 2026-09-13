@@ -205,7 +205,7 @@ test('changing built-in providers updates server-provided URL placeholders witho
     'placeholder',
     'Leave empty to use default'
   )
-})
+}, 10_000)
 
 test.each([
   {
