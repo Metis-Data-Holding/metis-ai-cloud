@@ -254,3 +254,5 @@
 - 提交低清生成前增加只读 `ListDomain` 默认播放域名检查，检查失败对客户返回通用错误。VOD action、HTTP 状态与安全错误码只用于后台诊断，不保存响应体、凭据或签名 URL；终态清理保留已有诊断，公共失败投影包含固定错误提示。该预检不代表 DNS 或 HTTPS 已可用。
 - 按用户确认创建专用 BytePlus 播放域名，并在 Cloudflare 添加 DNS only CNAME，公网解析已确认；HTTPS 证书与默认域名启用尚待完成，未再次提交付费生成任务。
 - 修复经独立审查通过；`go test ./service ./controller ./relay/...` 通过，最终调整后 `go test ./service ./controller ./relay/channel/task/jsplugin` 与 SR 数据库持久化回归通过，根模块 `go vet ./...` / `go build ./...` 通过。所有 VOD 调用测试为模拟响应，未将其描述为真实成片验收。
+- 当前修复提交 `f166e170a` 补验模型层：带临时 DSN 运行 `GOWORK=off go test ./model -run SuperResolution -count=1 -v`，SQLite、MySQL 8.0.46、PostgreSQL 15.19 共 15 个子测试全部通过、0 skip，覆盖私有 JSON 与阶段 CAS；隔离测试容器已清理。
+- 修复已合入并推送 `develop`。首次 Run `34797921400` 因传入短 SHA 被 checkout 当作分支名而失败，未发布；改用完整 SHA 后 Run `34798127592` 成功。现场确认 ECS current 为 `f166e170adc9c787b5585d75ef4cb89b977bfb48`，app / PostgreSQL / Redis healthy，公网 `/api/status` 成功。BytePlus 证书申请仍需用户完成联系人资料和条款确认；DNS 生效不等于 HTTPS 或完整交付链路已可用。
