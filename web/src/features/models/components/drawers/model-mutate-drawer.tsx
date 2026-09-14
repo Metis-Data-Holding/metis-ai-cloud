@@ -180,7 +180,15 @@ export function ModelMutateDrawer(props: {
           supported: false,
         }
       }
-      return response.data
+      return {
+        ...response.data,
+        source_resolutions: response.data.source_resolutions ?? {},
+        supported_target_resolutions:
+          response.data.supported_target_resolutions ??
+          (superResolutionModelName.toLowerCase().includes('fast')
+            ? []
+            : ['1080p', '4k']),
+      }
     },
     enabled: props.open && isEditing && Boolean(superResolutionModelName),
     retry: false,

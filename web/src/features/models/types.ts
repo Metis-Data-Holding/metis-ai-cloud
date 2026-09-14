@@ -143,12 +143,15 @@ export interface GetModelResponse {
 }
 
 export type SuperResolutionSourceResolution = '480p' | '720p'
+export type SuperResolutionTargetResolution = '1080p' | '2k' | '4k'
 
 export interface SuperResolutionConfig {
   enabled: boolean
   source_resolution: SuperResolutionSourceResolution
   preserve_original: boolean
   supported?: boolean
+  source_resolutions?: Record<string, SuperResolutionSourceResolution>
+  supported_target_resolutions?: string[]
 }
 
 export interface SuperResolutionConfigResponse {

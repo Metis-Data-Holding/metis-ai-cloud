@@ -99,6 +99,8 @@ describe('model pricing entry', () => {
         data: {
           enabled: true,
           source_resolution: '480p',
+          source_resolutions: { '1080p': '480p', '4k': '720p' },
+          supported_target_resolutions: ['1080p', '4k'],
           preserve_original: false,
           supported: true,
         },
@@ -117,7 +119,7 @@ describe('model pricing entry', () => {
     })
     expect(enable).not.toBeChecked()
     await user.click(enable)
-    await user.click(screen.getByRole('radio', { name: '480P' }))
+    await user.click(screen.getAllByRole('radio', { name: '480P' })[0])
     const preserve = screen.getByRole('switch', { name: 'Keep original video' })
     expect(preserve).toBeChecked()
     await user.click(preserve)
@@ -130,6 +132,7 @@ describe('model pricing entry', () => {
           model: 'example-model',
           enabled: true,
           source_resolution: '480p',
+          source_resolutions: { '1080p': '480p', '4k': '720p' },
           preserve_original: false,
         },
         { skipBusinessError: true, skipErrorHandler: true }
@@ -143,6 +146,54 @@ describe('model pricing entry', () => {
     expect(
       get.mock.calls.some(([url]) => url === '/api/models/super-resolution')
     ).toBe(true)
+    client.clear()
+  })
+
+  it('disables super-resolution for Seedance Fast when no target is supported', async () => {
+    useAuthStore.getState().auth.setUser({ id: 1, username: 'root', role: 100 })
+    const fastModel = {
+      ...model,
+      model_name: 'dreamina-seedance-2-0-fast-260128',
+    }
+    vi.spyOn(api, 'get').mockImplementation(async (url) => {
+      if (url === '/api/models/7') {
+        return { data: { success: true, data: fastModel } }
+      }
+      if (url === '/api/models/super-resolution') {
+        return {
+          data: {
+            success: true,
+            data: {
+              enabled: false,
+              source_resolution: '720p',
+              source_resolutions: {},
+              supported_target_resolutions: [],
+              preserve_original: true,
+              supported: true,
+            },
+          },
+        }
+      }
+      return { data: { success: true, data: { items: [] } } }
+    })
+    const client = renderModelActions(fastModel)
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    await user.click(
+      await screen.findByRole('tab', { name: 'Super-resolution' })
+    )
+    expect(
+      screen.getByText(
+        'This model has no supported high-resolution output for super-resolution.'
+      )
+    ).toBeVisible()
+    expect(
+      screen.getByRole('switch', { name: 'Enable super-resolution' })
+    ).toHaveAttribute('aria-disabled', 'true')
+    expect(
+      screen.queryByRole('radio', { name: '480P' })
+    ).not.toBeInTheDocument()
     client.clear()
   })
 
