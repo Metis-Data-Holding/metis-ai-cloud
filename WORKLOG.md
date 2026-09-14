@@ -238,3 +238,11 @@
 - 模型层在真实 SQLite、MySQL 8.0.46、PostgreSQL 15.19 上运行 `go test ./model -run SuperResolution -count=1 -v`：5 组 / 15 子测试、0 skip；覆盖私有 JSON 往返、重复迁移无新增 DDL、并发认领、清理调度与陈旧阶段拒绝。此次复用现有字段，无新 schema migration；这不是完整业务的三库端到端验收。
 - 本地模拟覆盖 1080P / 4K MP4 真实探测、保留/不保留原片、清理确认、上传恢复失败退款及权限边界。尚未部署、未调用付费 BytePlus 接口、未完成真实账户账单对账。启用前按 `.env.example` 配置 VOD AK/SK、Johor 空间、Fast H.264 MP4 工作流、HTTPS 播放域名和持久存储；不在仓库记录凭据。
 - 外部契约来源：BytePlus 官方 Go SDK 的 VOD 请求配置，以及 https://docs.byteplus.com/en/docs/byteplus-vod/reference-startworkflow 。
+
+## 2026-09-14
+
+### 修复 develop 部署的插件错误态可见性测试
+
+- 部署 Run `34792742531` 在前端验证阶段失败：`channel-configuration.test.tsx` 通过 `findByText` 找到错误提示后立即断言可见，抽屉过渡尚未完成时发生失败。后端验证已通过，未进入服务器发布，旧 release 保持 healthy。
+- 两处同类断言改为 `waitFor` 等待最终可见；保留原有可见性与重试行为断言，不跳过测试、不扩大全局超时、不修改运行时代码。
+- 独立审查通过；本地对应测试文件 59 项、全量前端 146 文件 / 1569 项、TypeScript、受影响文件 lint 和格式检查通过。服务器配置内容与付费视频任务不属于此次测试修复范围。
