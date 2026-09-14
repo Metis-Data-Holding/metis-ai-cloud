@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/gin-gonic/gin"
 )
@@ -19,7 +21,18 @@ const videoSuperResolutionContextKey = "video_super_resolution.snapshot"
 var (
 	ErrVideoSuperResolutionUnsupportedModel = errors.New("video super-resolution supports Seedance 2.0 models only")
 	ErrVideoSuperResolutionNotConfigured    = errors.New("video super-resolution is not configured")
+	ErrVideoSuperResolutionPreflightFailed  = errors.New("video generation is temporarily unavailable")
 )
+
+func videoSuperResolutionPreflightFailure(c *gin.Context, cause error) error {
+	diagnostic := videoSuperResolutionErrorDiagnostic(cause)
+	requestContext := context.Background()
+	if c != nil && c.Request != nil {
+		requestContext = c.Request.Context()
+	}
+	logger.LogWarn(requestContext, fmt.Sprintf("video super-resolution preflight failed: %s", diagnostic))
+	return ErrVideoSuperResolutionPreflightFailed
+}
 
 type VideoSuperResolutionConfig struct {
 	Enabled          bool   `json:"enabled"`
@@ -197,6 +210,18 @@ func ApplyVideoSuperResolution(c *gin.Context, pluginKey, originModelName, upstr
 	}
 	if runtime.WorkflowID == "" {
 		return ErrVideoSuperResolutionNotConfigured
+	}
+	client := NewVideoSuperResolutionVODClient(runtime)
+	requestContext := context.Background()
+	if c.Request != nil {
+		requestContext = c.Request.Context()
+	}
+	domain, err := client.ListDomain(requestContext, runtime.SpaceName)
+	if err != nil {
+		return videoSuperResolutionPreflightFailure(c, err)
+	}
+	if strings.TrimSpace(domain.DefaultPlayDomain) == "" {
+		return videoSuperResolutionPreflightFailure(c, newVideoSuperResolutionVODError("ListDomain", 200, "missing_default_play_domain"))
 	}
 	body["resolution"] = config.SourceResolution
 	c.Set(videoSuperResolutionContextKey, VideoSuperResolutionSnapshot{

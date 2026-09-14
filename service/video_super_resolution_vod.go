@@ -26,6 +26,57 @@ type VideoSuperResolutionVODClient struct {
 	Runtime    VideoSuperResolutionRuntimeConfig
 }
 
+// VideoSuperResolutionVODError 只保留可供管理员排查的安全诊断，不保存响应体、URL、凭据或签名头。
+type VideoSuperResolutionVODError struct {
+	Action     string
+	HTTPStatus int
+	Code       string
+}
+
+func (e *VideoSuperResolutionVODError) Error() string {
+	if e == nil {
+		return "BytePlus VOD request failed"
+	}
+	action := sanitizeVideoSuperResolutionVODCode(e.Action)
+	if action == "" {
+		action = "unknown"
+	}
+	code := sanitizeVideoSuperResolutionVODCode(e.Code)
+	if code == "" {
+		code = "provider_error"
+	}
+	if e.HTTPStatus >= 100 && e.HTTPStatus <= 599 {
+		return fmt.Sprintf("BytePlus VOD action %s failed (HTTP %d, code %s)", action, e.HTTPStatus, code)
+	}
+	return fmt.Sprintf("BytePlus VOD action %s failed (code %s)", action, code)
+}
+
+func newVideoSuperResolutionVODError(action string, status int, code string) error {
+	if status < 100 || status > 599 {
+		status = 0
+	}
+	return &VideoSuperResolutionVODError{
+		Action:     sanitizeVideoSuperResolutionVODCode(action),
+		HTTPStatus: status,
+		Code:       sanitizeVideoSuperResolutionVODCode(code),
+	}
+}
+
+func sanitizeVideoSuperResolutionVODCode(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) > 64 {
+		return "provider_error"
+	}
+	for _, char := range value {
+		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') || char == '_' || char == '-' || char == '.' || char == ':' {
+			continue
+		}
+		return "provider_error"
+	}
+	return value
+}
+
 // DeleteMedia 异步执行，只有查询确认 Vid 不存在才能标记清理完成。
 var ErrVideoSuperResolutionMediaNotFound = errors.New("BytePlus VOD media not found")
 
@@ -62,11 +113,11 @@ func NewVideoSuperResolutionVODClient(runtime VideoSuperResolutionRuntimeConfig)
 
 func (client *VideoSuperResolutionVODClient) call(ctx context.Context, action, method string, queryValues url.Values, formEncoded bool, payload map[string]any) (map[string]any, error) {
 	if client == nil || client.HTTPClient == nil {
-		return nil, errors.New("video super-resolution VOD client is not initialized")
+		return nil, newVideoSuperResolutionVODError(action, 0, "client_not_initialized")
 	}
 	endpoint, err := url.Parse(client.Endpoint)
 	if err != nil || endpoint.Scheme != "https" || endpoint.Host == "" {
-		return nil, errors.New("video super-resolution VOD endpoint is invalid")
+		return nil, newVideoSuperResolutionVODError(action, 0, "invalid_endpoint")
 	}
 	query := endpoint.Query()
 	query.Set("Action", action)
@@ -83,7 +134,7 @@ func (client *VideoSuperResolutionVODClient) call(ctx context.Context, action, m
 	if formEncoded {
 		values, err := bytePlusVODQuery(payload)
 		if err != nil {
-			return nil, err
+			return nil, newVideoSuperResolutionVODError(action, 0, "request_encode_error")
 		}
 		body = []byte(values.Encode())
 		requestBody = bytes.NewReader(body)
@@ -105,11 +156,11 @@ func (client *VideoSuperResolutionVODClient) call(ctx context.Context, action, m
 		Service:   "vod",
 	})
 	if err != nil {
-		return nil, err
+		return nil, newVideoSuperResolutionVODError(action, 0, "sign_error")
 	}
 	req, err := http.NewRequestWithContext(ctx, method, endpoint.String(), requestBody)
 	if err != nil {
-		return nil, err
+		return nil, newVideoSuperResolutionVODError(action, 0, "request_error")
 	}
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
@@ -119,23 +170,23 @@ func (client *VideoSuperResolutionVODClient) call(ctx context.Context, action, m
 	}
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, newVideoSuperResolutionVODError(action, 0, "transport_error")
 	}
 	defer resp.Body.Close()
 	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if err != nil {
-		return nil, err
+		return nil, newVideoSuperResolutionVODError(action, resp.StatusCode, "response_read_error")
 	}
 	var response map[string]any
 	if err := common.Unmarshal(responseBody, &response); err != nil {
-		return nil, fmt.Errorf("invalid BytePlus VOD response: %w", err)
+		return nil, newVideoSuperResolutionVODError(action, resp.StatusCode, "invalid_response")
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, bytePlusVODResponseError(resp.StatusCode, response)
+		return nil, bytePlusVODResponseError(action, resp.StatusCode, response)
 	}
 	if metadata, _ := response["ResponseMetadata"].(map[string]any); metadata != nil {
 		if errInfo, _ := metadata["Error"].(map[string]any); errInfo != nil {
-			return nil, fmt.Errorf("BytePlus VOD %s: %s", stringValue(errInfo["Code"]), "request rejected")
+			return nil, newVideoSuperResolutionVODError(action, resp.StatusCode, stringValue(errInfo["Code"]))
 		}
 	}
 	return response, nil
@@ -167,22 +218,37 @@ func bytePlusVODQuery(payload map[string]any) (url.Values, error) {
 func (client *VideoSuperResolutionVODClient) callQuery(ctx context.Context, action string, payload map[string]any) (map[string]any, error) {
 	query, err := bytePlusVODQuery(payload)
 	if err != nil {
-		return nil, err
+		return nil, newVideoSuperResolutionVODError(action, 0, "request_encode_error")
 	}
 	return client.call(ctx, action, http.MethodGet, query, false, nil)
 }
 
-func bytePlusVODResponseError(status int, response map[string]any) error {
+type VideoSuperResolutionDomainInfo struct {
+	DefaultPlayDomain string
+}
+
+// ListDomain 只读检查空间是否有默认播放域名；工作流成功也不代表没有域名时可以播放成片。
+func (client *VideoSuperResolutionVODClient) ListDomain(ctx context.Context, spaceName string) (VideoSuperResolutionDomainInfo, error) {
+	response, err := client.callQuery(ctx, "ListDomain", map[string]any{
+		"SpaceName":         spaceName,
+		"DomainType":        "play",
+		"SourceStationType": "1",
+	})
+	if err != nil {
+		return VideoSuperResolutionDomainInfo{}, err
+	}
+	result := nestedMap(response, "Result")
+	return VideoSuperResolutionDomainInfo{DefaultPlayDomain: stringValue(result["DefaultPlayDomain"])}, nil
+}
+
+func bytePlusVODResponseError(action string, status int, response map[string]any) error {
 	metadata, _ := response["ResponseMetadata"].(map[string]any)
 	errInfo, _ := metadata["Error"].(map[string]any)
-	code, message := stringValue(errInfo["Code"]), "request rejected"
+	code := stringValue(errInfo["Code"])
 	if code == "" {
 		code = "http_error"
 	}
-	if message == "" {
-		message = http.StatusText(status)
-	}
-	return fmt.Errorf("BytePlus VOD %s: %s", code, message)
+	return newVideoSuperResolutionVODError(action, status, code)
 }
 
 func (client *VideoSuperResolutionVODClient) UploadMediaByURL(ctx context.Context, sourceURL string) (VideoSuperResolutionUpload, error) {
@@ -200,12 +266,12 @@ func (client *VideoSuperResolutionVODClient) UploadMediaByURL(ctx context.Contex
 		data = anySlice(result["Data"])
 	}
 	if len(data) == 0 {
-		return VideoSuperResolutionUpload{}, errors.New("BytePlus VOD upload returned no job")
+		return VideoSuperResolutionUpload{}, newVideoSuperResolutionVODError("UploadMediaByUrl", http.StatusOK, "missing_job")
 	}
 	item, _ := data[0].(map[string]any)
 	jobID := stringValue(item["JobId"])
 	if jobID == "" {
-		return VideoSuperResolutionUpload{}, errors.New("BytePlus VOD upload returned no job id")
+		return VideoSuperResolutionUpload{}, newVideoSuperResolutionVODError("UploadMediaByUrl", http.StatusOK, "missing_job_id")
 	}
 	return VideoSuperResolutionUpload{JobID: jobID}, nil
 }
@@ -229,7 +295,7 @@ func (client *VideoSuperResolutionVODClient) QueryUploadTaskInfo(ctx context.Con
 			return VideoSuperResolutionUploadTask{}, ErrVideoSuperResolutionMediaNotFound
 		}
 	}
-	return VideoSuperResolutionUploadTask{}, errors.New("BytePlus VOD upload status returned no matching job")
+	return VideoSuperResolutionUploadTask{}, newVideoSuperResolutionVODError("QueryUploadTaskInfo", http.StatusOK, "missing_job")
 }
 
 func (client *VideoSuperResolutionVODClient) StartWorkflow(ctx context.Context, vid, clientToken string) (VideoSuperResolutionWorkflow, error) {
@@ -247,7 +313,7 @@ func (client *VideoSuperResolutionVODClient) StartWorkflow(ctx context.Context, 
 	}
 	runID := stringValue(nestedMap(response, "Result")["RunId"])
 	if runID == "" {
-		return VideoSuperResolutionWorkflow{}, errors.New("BytePlus VOD workflow returned no run id")
+		return VideoSuperResolutionWorkflow{}, newVideoSuperResolutionVODError("StartWorkflow", http.StatusOK, "missing_run_id")
 	}
 	return VideoSuperResolutionWorkflow{RunID: runID}, nil
 }
@@ -275,7 +341,7 @@ func (client *VideoSuperResolutionVODClient) GetMediaInfos(ctx context.Context, 
 	}
 	items := anySlice(result["MediaInfoList"])
 	if len(items) == 0 {
-		return nil, errors.New("BytePlus VOD media response is empty")
+		return nil, newVideoSuperResolutionVODError("GetMediaInfos", http.StatusOK, "missing_media")
 	}
 	media := make([]VideoSuperResolutionMedia, 0, len(items))
 	for _, raw := range items {

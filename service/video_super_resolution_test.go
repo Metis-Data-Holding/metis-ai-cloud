@@ -195,9 +195,13 @@ func TestSuperResolutionPipelineDeliversAndCleansWithoutGenerationChannel(t *tes
 			assert.InDelta(t, scenario.estimate, task.PrivateData.SuperResolution.EstimateUSD, 0.000000000001)
 			require.True(t, model.HasUnfinishedSyncTasks(), "清理完成前保持调度")
 			assert.Equal(t, "requested", task.PrivateData.SuperResolution.CleanupStatus)
+			cleanupDiagnostic := "BytePlus VOD action GetPlayInfo failed (HTTP 403, code ResourceNotFound.NoAvailableDomain)"
+			task.PrivateData.SuperResolution.LastError = cleanupDiagnostic
+			require.NoError(t, model.DB.Save(task).Error)
 			RunTaskPollingOnce(context.Background(), nil)
 			require.NoError(t, model.DB.First(task, task.ID).Error)
 			assert.Equal(t, "confirmed", task.PrivateData.SuperResolution.CleanupStatus)
+			assert.Equal(t, cleanupDiagnostic, task.PrivateData.SuperResolution.LastError)
 			assert.Empty(t, task.PrivateData.SuperResolution.OriginalURL)
 			assert.EqualValues(t, model.TaskStatusSuccess, task.Status)
 			assert.False(t, model.HasUnfinishedSyncTasks())
@@ -230,6 +234,39 @@ func TestSuperResolutionUnknownUploadDoesNotResubmitAndRefundsOnce(t *testing.T)
 	assert.Equal(t, "unknown", task.PrivateData.SuperResolution.CleanupStatus)
 }
 
+func TestSuperResolutionUploadVODErrorPersistsPrivateDiagnostic(t *testing.T) {
+	truncate(t)
+	configureSRTest(t)
+	task := makeTask(510, 999999, 0, 0, BillingSourceWallet, 0)
+	task.TaskID = "task_sr_upload_error"
+	task.Progress = "45%"
+	task.PrivateData.SuperResolution = &model.TaskSuperResolutionState{
+		Phase:            "upload_pending",
+		SourceResolution: "720p",
+		TargetResolution: "1080p",
+		WorkflowID:       "workflow-fast-1080",
+		OriginalURL:      "https://8.8.8.8/source.mp4",
+	}
+	require.NoError(t, model.DB.Create(task).Error)
+	oldVOD := videoSuperResolutionHTTPClient
+	t.Cleanup(func() { videoSuperResolutionHTTPClient = oldVOD })
+	videoSuperResolutionHTTPClient = &http.Client{Transport: srTransport(func(r *http.Request) (*http.Response, error) {
+		assert.Equal(t, "UploadMediaByUrl", r.URL.Query().Get("Action"))
+		return &http.Response{StatusCode: http.StatusForbidden, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"ResponseMetadata":{"Error":{"Code":"ResourceNotFound.NoAvailableDomain","Message":"https://secret.example/token=abc"}}}`))}, nil
+	})}
+	RunTaskPollingOnce(context.Background(), nil)
+	require.NoError(t, model.DB.First(task, task.ID).Error)
+	assert.EqualValues(t, model.TaskStatusFailure, task.Status)
+	assert.Contains(t, task.PrivateData.SuperResolution.LastError, "UploadMediaByUrl")
+	assert.Contains(t, task.PrivateData.SuperResolution.LastError, "HTTP 403")
+	assert.Contains(t, task.PrivateData.SuperResolution.LastError, "ResourceNotFound.NoAvailableDomain")
+	assert.NotContains(t, task.PrivateData.SuperResolution.LastError, "secret.example")
+	publicData := VideoSuperResolutionPublicData(task)
+	assert.Contains(t, string(publicData), `"code":"video_processing_failed"`)
+	assert.NotContains(t, string(publicData), "ResourceNotFound")
+	assert.NotContains(t, string(publicData), "UploadMediaByUrl")
+}
+
 func TestSuperResolutionConfigChangesProviderResolutionOnlyAndClearsRetry(t *testing.T) {
 	configureSRTest(t)
 	key := VideoSuperResolutionOptionKeyPrefix + "dreamina-seedance-2-0-260128"
@@ -249,6 +286,15 @@ func TestSuperResolutionConfigChangesProviderResolutionOnlyAndClearsRetry(t *tes
 			delete(common.OptionMap, key)
 		}
 	})
+	oldVOD := videoSuperResolutionHTTPClient
+	videoSuperResolutionHTTPClient = &http.Client{Transport: srTransport(func(r *http.Request) (*http.Response, error) {
+		assert.Equal(t, "ListDomain", r.URL.Query().Get("Action"))
+		assert.Equal(t, "test-space", r.URL.Query().Get("SpaceName"))
+		assert.Equal(t, "play", r.URL.Query().Get("DomainType"))
+		assert.Equal(t, "1", r.URL.Query().Get("SourceStationType"))
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"Result":{"DefaultPlayDomain":"play.example.com"}}`))}, nil
+	})}
+	t.Cleanup(func() { videoSuperResolutionHTTPClient = oldVOD })
 	c := &gin.Context{}
 	body := map[string]any{"model": "dreamina-seedance-2-0-260128", "resolution": "1080p"}
 	require.NoError(t, ApplyVideoSuperResolution(c, "doubao", "dreamina-seedance-2-0-260128", "dreamina-seedance-2-0-260128", body))
@@ -264,4 +310,101 @@ func TestSuperResolutionConfigChangesProviderResolutionOnlyAndClearsRetry(t *tes
 	body["resolution"] = "1080p"
 	require.ErrorIs(t, ApplyVideoSuperResolution(c, "doubao", "dreamina-seedance-2-0-260128", "dreamina-seedance-2-0-260128", body), ErrVideoSuperResolutionNotConfigured)
 	assert.Equal(t, "1080p", body["resolution"])
+}
+
+func TestApplyVideoSuperResolutionFailsBeforeGenerationWithoutPlayDomain(t *testing.T) {
+	configureSRTest(t)
+	key := VideoSuperResolutionOptionKeyPrefix + "dreamina-seedance-2-0-260128"
+	common.OptionMapRWMutex.Lock()
+	old, exists := common.OptionMap[key]
+	common.OptionMap[key] = `{"enabled":true,"source_resolution":"720p","preserve_original":true}`
+	common.OptionMapRWMutex.Unlock()
+	t.Cleanup(func() {
+		common.OptionMapRWMutex.Lock()
+		defer common.OptionMapRWMutex.Unlock()
+		if exists {
+			common.OptionMap[key] = old
+		} else {
+			delete(common.OptionMap, key)
+		}
+	})
+	status := http.StatusOK
+	responseBody := `{"Result":{"SpaceName":"test-space"}}`
+	oldVOD := videoSuperResolutionHTTPClient
+	videoSuperResolutionHTTPClient = &http.Client{Transport: srTransport(func(r *http.Request) (*http.Response, error) {
+		assert.Equal(t, "ListDomain", r.URL.Query().Get("Action"))
+		assert.Equal(t, "test-space", r.URL.Query().Get("SpaceName"))
+		assert.Equal(t, "play", r.URL.Query().Get("DomainType"))
+		assert.Equal(t, "1", r.URL.Query().Get("SourceStationType"))
+		return &http.Response{StatusCode: status, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(responseBody))}, nil
+	})}
+	t.Cleanup(func() { videoSuperResolutionHTTPClient = oldVOD })
+	c := &gin.Context{}
+	body := map[string]any{"model": "dreamina-seedance-2-0-260128", "resolution": "1080p"}
+	err := ApplyVideoSuperResolution(c, "doubao", "dreamina-seedance-2-0-260128", "dreamina-seedance-2-0-260128", body)
+	assert.ErrorIs(t, err, ErrVideoSuperResolutionPreflightFailed)
+	assert.Equal(t, "1080p", body["resolution"], "预检失败时不得改写付费生成请求")
+	_, ok := GetVideoSuperResolutionSnapshot(c)
+	assert.False(t, ok)
+	status = http.StatusForbidden
+	responseBody = `{"ResponseMetadata":{"Error":{"Code":"ResourceNotFound.NoAvailableDomain","Message":"https://secret.example/token=abc"}}}`
+	body["resolution"] = "1080p"
+	err = ApplyVideoSuperResolution(c, "doubao", "dreamina-seedance-2-0-260128", "dreamina-seedance-2-0-260128", body)
+	assert.ErrorIs(t, err, ErrVideoSuperResolutionPreflightFailed)
+	assert.NotContains(t, err.Error(), "BytePlus")
+	assert.NotContains(t, err.Error(), "ListDomain")
+	assert.NotContains(t, err.Error(), "HTTP")
+	assert.NotContains(t, err.Error(), "ResourceNotFound")
+}
+
+func TestVideoSuperResolutionVODErrorIsSafeAndActionScoped(t *testing.T) {
+	client := &VideoSuperResolutionVODClient{
+		HTTPClient: &http.Client{Transport: srTransport(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusForbidden, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"ResponseMetadata":{"Error":{"Code":"ResourceNotFound.NoAvailableDomain","Message":"https://secret.example/token=abc"}}}`))}, nil
+		})},
+		Endpoint: "https://vod.byteplusapi.com",
+		Runtime:  VideoSuperResolutionRuntimeConfig{AccessKey: "secret-ak", SecretKey: "secret-sk", Region: "ap-southeast-1"},
+	}
+	_, err := client.ListDomain(context.Background(), "test-space")
+	var providerErr *VideoSuperResolutionVODError
+	require.ErrorAs(t, err, &providerErr)
+	assert.Equal(t, "ListDomain", providerErr.Action)
+	assert.Equal(t, http.StatusForbidden, providerErr.HTTPStatus)
+	assert.Equal(t, "ResourceNotFound.NoAvailableDomain", providerErr.Code)
+	assert.Contains(t, err.Error(), "ListDomain")
+	assert.Contains(t, err.Error(), "HTTP 403")
+	assert.NotContains(t, err.Error(), "secret")
+	assert.NotContains(t, err.Error(), "token")
+	assert.NotContains(t, err.Error(), "secret.example")
+}
+
+func TestVideoSuperResolutionPublicFailureDataIsGeneric(t *testing.T) {
+	task := makeTask(510, 510, 0, 0, BillingSourceWallet, 0)
+	task.TaskID = "task_sr_public_failure"
+	task.Status = model.TaskStatusFailure
+	task.PrivateData.SuperResolution = &model.TaskSuperResolutionState{
+		Phase:     "play_info",
+		LastError: "BytePlus VOD action GetPlayInfo failed (HTTP 403, code ResourceNotFound.NoAvailableDomain)",
+	}
+	data := VideoSuperResolutionPublicData(task)
+	assert.Contains(t, string(data), `"code":"video_processing_failed"`)
+	assert.Contains(t, string(data), "视频处理失败，请稍后重试")
+	assert.NotContains(t, string(data), "ResourceNotFound")
+	assert.NotContains(t, string(data), "GetPlayInfo")
+}
+
+func TestVideoSuperResolutionPollErrorKeepsPrivateDiagnostic(t *testing.T) {
+	truncate(t)
+	task := makeTask(510, 510, 0, 0, BillingSourceWallet, 0)
+	task.TaskID = "task_sr_private_error"
+	task.Status = model.TaskStatusInProgress
+	task.PrivateData.SuperResolution = &model.TaskSuperResolutionState{Phase: "play_info"}
+	require.NoError(t, model.DB.Create(task).Error)
+	err := newVideoSuperResolutionVODError("GetPlayInfo", http.StatusForbidden, "ResourceNotFound.NoAvailableDomain")
+	rememberVideoSuperResolutionError(task, err)
+	require.NoError(t, model.DB.First(task, task.ID).Error)
+	assert.Equal(t, err.Error(), task.PrivateData.SuperResolution.LastError)
+	assert.Contains(t, task.PrivateData.SuperResolution.LastError, "HTTP 403")
+	assert.NotContains(t, task.PrivateData.SuperResolution.LastError, "secret")
+	assert.Contains(t, string(task.Data), `"status":"processing"`)
 }

@@ -88,9 +88,12 @@ func sweepTimedOutTasks(ctx context.Context) {
 		var srBefore model.TaskSuperResolutionState
 		if state := task.PrivateData.SuperResolution; state != nil {
 			srBefore = *state
+			if state.LastError == "" {
+				state.LastError = videoSuperResolutionGenericLastError
+			}
 			state.CleanupStatus = "pending"
 			task.PrivateData.ResultURL = ""
-			task.SetData(map[string]any{"status": "failed"})
+			task.SetData(videoSuperResolutionFailureData())
 		}
 		task.Status = model.TaskStatusFailure
 		task.Progress = "100%"

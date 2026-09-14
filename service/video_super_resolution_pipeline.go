@@ -42,6 +42,42 @@ func shouldPollVideoSuperResolution(task *model.Task) bool {
 	return isVideoSuperResolutionPipelineTask(task) && task.PrivateData.SuperResolution.Phase != superResolutionPhaseGeneration
 }
 
+const (
+	videoSuperResolutionPublicFailureCode = "video_processing_failed"
+	videoSuperResolutionGenericLastError  = "video super-resolution processing failed"
+)
+
+func videoSuperResolutionFailureData() map[string]any {
+	return map[string]any{
+		"status": "failed",
+		"error": map[string]any{
+			"code":    videoSuperResolutionPublicFailureCode,
+			"message": "视频处理失败，请稍后重试",
+		},
+	}
+}
+
+func videoSuperResolutionErrorDiagnostic(err error) string {
+	var providerErr *VideoSuperResolutionVODError
+	if errors.As(err, &providerErr) {
+		return providerErr.Error()
+	}
+	return videoSuperResolutionGenericLastError
+}
+
+func rememberVideoSuperResolutionError(task *model.Task, err error) {
+	state := task.PrivateData.SuperResolution
+	if state == nil || err == nil {
+		return
+	}
+	before := *state
+	state.LastError = videoSuperResolutionErrorDiagnostic(err)
+	if task.Status != model.TaskStatusFailure && task.Status != model.TaskStatusSuccess {
+		task.SetData(map[string]any{"status": "processing"})
+	}
+	_, _ = task.UpdateSuperResolutionState(task.Status, before)
+}
+
 func captureVideoSuperResolutionGeneration(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task, result *relaycommon.TaskInfo, fromStatus model.TaskStatus) error {
 	state := task.PrivateData.SuperResolution
 	before := *state
@@ -74,14 +110,20 @@ func captureVideoSuperResolutionGeneration(ctx context.Context, adaptor TaskPoll
 	if task.StartTime == 0 {
 		task.StartTime = time.Now().Unix()
 	}
+	state.LastError = ""
 	return saveVideoSuperResolutionState(task, fromStatus, before)
 }
 
-func updateVideoSuperResolutionTask(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task) error {
+func updateVideoSuperResolutionTask(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task) (err error) {
 	state := task.PrivateData.SuperResolution
 	if state == nil || task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure {
 		return nil
 	}
+	defer func() {
+		if err != nil && ctx.Err() == nil {
+			rememberVideoSuperResolutionError(task, err)
+		}
+	}()
 	runtime, err := videoSuperResolutionRuntimeConfig(state.TargetResolution)
 	if err != nil {
 		return err
@@ -103,6 +145,7 @@ func updateVideoSuperResolutionTask(ctx context.Context, adaptor TaskPollingAdap
 		before = *state
 		upload, err := client.UploadMediaByURL(ctx, state.OriginalURL)
 		if err != nil {
+			state.LastError = videoSuperResolutionErrorDiagnostic(err)
 			return failVideoSuperResolutionTask(ctx, adaptor, task, "原片上传结果不确定，请管理员核对")
 		}
 		state.UploadJobID = upload.JobID
@@ -188,6 +231,7 @@ func updateVideoSuperResolutionTask(ctx context.Context, adaptor TaskPollingAdap
 			return failVideoSuperResolutionTask(ctx, adaptor, task, "超分成片保存或校验失败")
 		}
 		state.Phase = superResolutionPhaseComplete
+		state.LastError = ""
 		state.CleanupStatus = "pending"
 		state.OutputFile = filepath.Base(state.OutputPath)
 		task.Status = model.TaskStatusSuccess
@@ -205,6 +249,8 @@ func updateVideoSuperResolutionTask(ctx context.Context, adaptor TaskPollingAdap
 		return failVideoSuperResolutionTask(ctx, adaptor, task, "内部视频处理状态异常")
 	}
 	task.PrivateData.PollFailures = 0
+	// 当前阶段已成功推进，清掉此前暂态错误；独立清理路径不调用这里。
+	state.LastError = ""
 	return saveVideoSuperResolutionState(task, fromStatus, before)
 }
 
@@ -222,11 +268,16 @@ func failVideoSuperResolutionTask(ctx context.Context, adaptor TaskPollingAdapto
 	task.Status = model.TaskStatusFailure
 	task.Progress = taskcommon.ProgressComplete
 	task.FinishTime = time.Now().Unix()
-	task.PrivateData.SuperResolution.LastError = reason
+	if task.PrivateData.SuperResolution.LastError == "" {
+		task.PrivateData.SuperResolution.LastError = strings.TrimSpace(reason)
+		if task.PrivateData.SuperResolution.LastError == "" {
+			task.PrivateData.SuperResolution.LastError = videoSuperResolutionGenericLastError
+		}
+	}
 	task.FailReason = "视频生成失败，请稍后重试"
 	task.PrivateData.ResultURL = ""
 	task.PrivateData.SuperResolution.CleanupStatus = "pending"
-	task.SetData(map[string]any{"status": "failed", "error": map[string]any{"message": task.FailReason}})
+	task.SetData(videoSuperResolutionFailureData())
 	won, err := task.UpdateSuperResolutionState(fromStatus, before)
 	if err != nil || !won {
 		return err
@@ -574,6 +625,10 @@ func VideoSuperResolutionPublicData(task *model.Task) []byte {
 		data["content"] = map[string]any{"video_url": taskcommon.BuildProxyURL(task.TaskID)}
 	} else if task.Status == model.TaskStatusFailure {
 		data["status"] = "failed"
+		data["error"] = map[string]any{
+			"code":    videoSuperResolutionPublicFailureCode,
+			"message": "视频处理失败，请稍后重试",
+		}
 	}
 	encoded, _ := common.Marshal(data)
 	return encoded

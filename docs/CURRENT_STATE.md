@@ -10,7 +10,7 @@
 
 - 项目：`metis-ai-cloud`，来源于 New API fork。
 - Step 0：已完成 AI 开发协作与上下文基础设施。
-- 内部视频超分（2026-09-13）：后台模型开关、480P / 720P 源分辨率、原片保留、1080P / 4K Fast 工作流与私有交付已完成代码和本地模拟验证；后端/前端测试、构建及模型层三数据库回归通过。2026-09-14 已随提交 `cf6f2e2c1eb2f5a9489fa2ff3e8660edfea32816` 部署至 ECS（Run `34793567949`），容器与公网健康检查通过，VOD 环境变量已注入且持久目录可写。尚未验证真实 VOD 权限、工作流或付费生成链路，2K 配置暂不被代码读取。
+- 内部视频超分（2026-09-13）：后台模型开关、480P / 720P 源分辨率、原片保留、1080P / 4K Fast 工作流与私有交付已完成代码和本地模拟验证；后端/前端测试、构建及模型层三数据库回归通过。2026-09-14 已随提交 `cf6f2e2c1eb2f5a9489fa2ff3e8660edfea32816` 部署至 ECS（Run `34793567949`），容器与公网健康检查通过，VOD 环境变量已注入且持久目录可写。用户真实任务已到达成片播放信息阶段后失败并退款；只读 VOD 查询确认工作流有 4K 增强输出，但空间缺少播放域名。播放域名与 CNAME 已创建，HTTPS 证书及默认域名启用仍待完成；完整交付链路尚未验收，2K 配置暂不被代码读取。
 - 当前阶段：BytePlus ECS 公网部署、Cloudflare HTTPS、持久化、自动发布 / 回滚、Singapore Local Model Provider 和 Usage / Billing 闭环均已完成真实验收。
 - Git 基线：H3 文生、首帧、首尾帧与参考内容生视频均已完成验收，相关代码已同步至 `main` 与 `develop`。2026-09-14 核验 ECS release 为 `cf6f2e2c1eb2f5a9489fa2ff3e8660edfea32816`，对应 develop 内部超分功能及部署测试修复；这不代表所有 upstream 变更已部署。
 - Local Model Provider、普通用户 API、Streaming、Usage / Billing 与 Serving Benchmark 均已形成真实验证证据。
