@@ -271,3 +271,8 @@
 - 2K 内部链路读取 `BYTEPLUS_VOD_SR_WORKFLOW_2K`，校验短边至少 1440 像素，独立持久化、原片保留与清理复用既有流程；Fast 2K 估算采用官方每分钟 USD 0.4132（不超过 30fps），来源：https://docs.byteplus.com/en/docs/byteplus-vod/docs-pay-as-you-go-pricing 。未新增客户独立超分收费，未开放模型 2K 参数。
 - 使用 ponytail / Matt Pocock TDD；只读探索、隔离前端实现、独立审查并行。审查后补充非法尺寸拒绝、旧 Fast 配置关闭和按目标工作流快照断言；修复 `/v1/videos` 顶层 `size` 在转发时丢失的问题，用真实插件 JSON / multipart 解码、构造请求到超分能力校验的 12 个场景验证。2K 使用纳入版本控制的真实小型 MP4 fixture，VOD HTTP 响应均为模拟。
 - 验证：`GOWORK=off go test ./service ./controller ./relay/channel/task/jsplugin ./plugins -count=1`、根模块 `go vet ./...` / `go build ./...`、前端 `bun run typecheck` / `bun run build` / `bun run format:check`、全量 146 文件 / 1570 项测试通过，`bun run lint` 通过（保留既有 warning）；未改数据库 schema 或模型持久化结构。本次未部署、未发起付费 Provider 请求，不将本地测试视为真实超分验收。
+
+### 发布按档位超分版本
+
+- 按用户明确授权，以远端 develop 完整提交 `eca1ceca4798cc5b443104e2d4d36aa1a622f9c1` 触发 Deploy BytePlus ECS。Run `34817181833` 后端验证、前端验证、固定镜像构建与推送、服务器激活及公网 HTTPS 检查全部成功。
+- 独立 SSH 复核 ECS current 为上述提交；app healthy，PostgreSQL / Redis 持续运行约三周且 healthy。本机与公网 `/api/status` 均返回 success=true。此次未读取 Secret、未提交付费视频任务，部署健康不代表新配置的真实生成回归已完成。

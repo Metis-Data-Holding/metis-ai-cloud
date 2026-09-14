@@ -12,9 +12,9 @@
 - Step 0：已完成 AI 开发协作与上下文基础设施。
 - 内部视频超分（2026-09-13）：后台模型开关、480P / 720P 源分辨率、原片保留、1080P / 4K Fast 工作流与私有交付已完成代码和本地模拟验证；后端/前端测试、构建及模型层三数据库回归通过。2026-09-14 已随提交 `f166e170adc9c787b5585d75ef4cb89b977bfb48` 部署至 ECS（Run `34798127592`），包含默认播放域名预检与私有失败诊断修复，容器与公网健康检查通过，VOD 环境变量已注入且持久目录可写。用户真实任务已到达成片播放信息阶段后失败并退款；只读 VOD 查询确认工作流有 4K 增强输出，但空间缺少播放域名。播放域名 `video-play.metisdata.ai` 的 DNS only CNAME、HTTPS 证书绑定、VOD 调度与默认域名已完成；2026-09-14 从 ECS 使用现有历史增强素材验证 `GetPlayInfo` 返回 HTTPS MP4，范围下载返回 206 且 MP4 文件头正确。证书到期日为 2027-03-31。未新增付费任务，完整生成到交付链路尚未重新验收，该部署版本尚不读取 2K 配置。
 - 当前阶段：BytePlus ECS 公网部署、Cloudflare HTTPS、持久化、自动发布 / 回滚、Singapore Local Model Provider 和 Usage / Billing 闭环均已完成真实验收。
-- 超分档位配置迭代（2026-09-14，尚未部署）：标准 Seedance 2.0 按 1080P / 4K 分别选择 480P / 720P 源分辨率，旧单值配置兼容展开。按 BytePlus 官方 ModelArk 档位，标准版公开 480P / 720P / 1080P / 4K，Fast 仅公开 480P / 720P，因此 Fast 无可开启的高分辨率超分目标。2K 专用工作流、1440 像素短边校验、持久化成片和成本估算已补齐为内部能力；两模型均不公开 2K，后台同样不显示该目标。此次未改变 H3、未执行付费生成或远程部署。
+- 超分档位配置迭代（2026-09-14，已部署）：标准 Seedance 2.0 按 1080P / 4K 分别选择 480P / 720P 源分辨率，旧单值配置兼容展开。按 BytePlus 官方 ModelArk 档位，标准版公开 480P / 720P / 1080P / 4K，Fast 仅公开 480P / 720P，因此 Fast 无可开启的高分辨率超分目标。2K 专用工作流、1440 像素短边校验、持久化成片和成本估算已补齐为内部能力；两模型均不公开 2K，后台同样不显示该目标。此次未改变 H3。提交 `eca1ceca4798cc5b443104e2d4d36aa1a622f9c1` 已通过部署 Run `34817181833` 发布；ECS current 与目标 SHA 一致，应用、PostgreSQL、Redis healthy，本机与公网 HTTPS `/api/status` 均成功。未执行付费生成，新配置的真实业务回归尚待验收。
 
-- Git 基线：H3 文生、首帧、首尾帧与参考内容生视频均已完成验收，相关代码已同步至 `main` 与 `develop`。2026-09-14 核验 ECS release 为 `f166e170adc9c787b5585d75ef4cb89b977bfb48`，对应 develop 内部超分及播放域名预检修复；这不代表所有 upstream 变更已部署。
+- Git 基线：H3 文生、首帧、首尾帧与参考内容生视频均已完成验收，相关代码已同步至 `main` 与 `develop`。2026-09-14 最新核验 ECS release 为 `eca1ceca4798cc5b443104e2d4d36aa1a622f9c1`，对应 develop 按档位超分与官方分辨率边界更新；这不代表所有 upstream 变更已部署。
 - Local Model Provider、普通用户 API、Streaming、Usage / Billing 与 Serving Benchmark 均已形成真实验证证据。
 - 当前容量结论：老板现场建议并发 1～2；并发 4 已通过 30 分钟稳定性验证。将 LM Studio 预测槽位放宽至 6 只获得约 9.9% 吞吐增益，同时 TTFT P50 增加约 72.9%。
 - 加权路由 baseline：同一 `google/gemma-4-31b` 入口已验证按权重选择本地 Gemma 或映射到 DeepSeek；20 个短请求实际分布 13 / 7，30 个混合 Streaming 请求零错误。
