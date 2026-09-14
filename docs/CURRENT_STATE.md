@@ -1,8 +1,8 @@
 # Metis AI Cloud 当前状态
 
-> 最后更新：2026-09-13
+> 最后更新：2026-09-14
 > 当前 Milestone：Seedance 2.0 内部视频超分
-> 当前目标：完成内部超分开发验证，配置 BytePlus VOD 后进行真实联调和成本评估
+> 当前目标：内部超分代码已部署，继续进行 BytePlus VOD 真实联调和成本评估
 
 本文档是项目当前状态的单一快照，采用覆盖式维护。长期背景见 [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)，执行历史与重要决策分别见 [`../WORKLOG.md`](../WORKLOG.md) 和 [`DECISIONS.md`](DECISIONS.md)。
 
@@ -10,9 +10,9 @@
 
 - 项目：`metis-ai-cloud`，来源于 New API fork。
 - Step 0：已完成 AI 开发协作与上下文基础设施。
-- 内部视频超分（2026-09-13）：后台模型开关、480P / 720P 源分辨率、原片保留、1080P / 4K Fast 工作流与私有交付已完成代码和本地模拟验证；后端/前端测试、构建及模型层三数据库回归通过。尚未部署或真实调用 BytePlus VOD，启用前仍需账户配置与真实成本对账；既有公网验收记录不代表本功能已上线。
+- 内部视频超分（2026-09-13）：后台模型开关、480P / 720P 源分辨率、原片保留、1080P / 4K Fast 工作流与私有交付已完成代码和本地模拟验证；后端/前端测试、构建及模型层三数据库回归通过。2026-09-14 已随提交 `cf6f2e2c1eb2f5a9489fa2ff3e8660edfea32816` 部署至 ECS（Run `34793567949`），容器与公网健康检查通过，VOD 环境变量已注入且持久目录可写。尚未验证真实 VOD 权限、工作流或付费生成链路，2K 配置暂不被代码读取。
 - 当前阶段：BytePlus ECS 公网部署、Cloudflare HTTPS、持久化、自动发布 / 回滚、Singapore Local Model Provider 和 Usage / Billing 闭环均已完成真实验收。
-- Git 基线：H3 文生、首帧、首尾帧与参考内容生视频均已完成验收，相关代码已同步至 `main` 与 `develop`。当前 ECS release 为 `de6d2992eb6115f477b0c71e3efc11652aa6b3f3`；后续 upstream 合并提交尚未部署。
+- Git 基线：H3 文生、首帧、首尾帧与参考内容生视频均已完成验收，相关代码已同步至 `main` 与 `develop`。2026-09-14 核验 ECS release 为 `cf6f2e2c1eb2f5a9489fa2ff3e8660edfea32816`，对应 develop 内部超分功能及部署测试修复；这不代表所有 upstream 变更已部署。
 - Local Model Provider、普通用户 API、Streaming、Usage / Billing 与 Serving Benchmark 均已形成真实验证证据。
 - 当前容量结论：老板现场建议并发 1～2；并发 4 已通过 30 分钟稳定性验证。将 LM Studio 预测槽位放宽至 6 只获得约 9.9% 吞吐增益，同时 TTFT P50 增加约 72.9%。
 - 加权路由 baseline：同一 `google/gemma-4-31b` 入口已验证按权重选择本地 Gemma 或映射到 DeepSeek；20 个短请求实际分布 13 / 7，30 个混合 Streaming 请求零错误。

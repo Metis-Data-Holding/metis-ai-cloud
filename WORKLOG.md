@@ -246,3 +246,4 @@
 - 部署 Run `34792742531` 在前端验证阶段失败：`channel-configuration.test.tsx` 通过 `findByText` 找到错误提示后立即断言可见，抽屉过渡尚未完成时发生失败。后端验证已通过，未进入服务器发布，旧 release 保持 healthy。
 - 两处同类断言改为 `waitFor` 等待最终可见；保留原有可见性与重试行为断言，不跳过测试、不扩大全局超时、不修改运行时代码。
 - 独立审查通过；本地对应测试文件 59 项、全量前端 146 文件 / 1569 项、TypeScript、受影响文件 lint 和格式检查通过。服务器配置内容与付费视频任务不属于此次测试修复范围。
+- 修复提交 `cf6f2e2c1eb2f5a9489fa2ff3e8660edfea32816` 已合入并推送 `develop`。重试部署 Run `34793567949` 全部成功，现场复核 ECS current 为该提交，app / PostgreSQL / Redis healthy，公网 `/api/status` 返回成功。超分环境变量均非空，`/data/video-sr` 已挂载且可写；未调用付费视频任务，未验证 VOD 凭据权限、工作流内容或真实超分成片，2K 仍未接入代码。
