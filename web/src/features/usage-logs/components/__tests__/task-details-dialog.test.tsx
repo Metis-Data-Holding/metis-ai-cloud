@@ -14,11 +14,8 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
-import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-
-import { api } from '@/lib/api'
 
 import type { TaskLog } from '../../types'
 import { TaskDetailsDialog } from '../dialogs/task-details-dialog'
@@ -69,13 +66,7 @@ function renderDetails(isAdmin: boolean) {
 }
 
 describe('task details super-resolution section', () => {
-  test('shows administrator details and downloads the retained original', async () => {
-    const blob = new Blob(['video'], { type: 'video/mp4' })
-    const get = vi.spyOn(api, 'get').mockResolvedValue({ data: blob })
-    const createObjectURL = vi
-      .spyOn(URL, 'createObjectURL')
-      .mockReturnValue('blob:original')
-    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL')
+  test('shows administrator details without an original download action', () => {
     renderDetails(true)
 
     const dialog = screen.getByRole('dialog')
@@ -83,19 +74,9 @@ describe('task details super-resolution section', () => {
     expect(dialog).toHaveTextContent('720p')
     expect(dialog).toHaveTextContent('4K')
     expect(dialog).toHaveTextContent('0.12 USD')
-
-    await userEvent
-      .setup()
-      .click(screen.getByRole('button', { name: 'Download original video' }))
-    await waitFor(() =>
-      expect(get).toHaveBeenCalledWith('/api/task/task_sr/original', {
-        responseType: 'blob',
-        skipBusinessError: true,
-        skipErrorHandler: true,
-      })
-    )
-    expect(createObjectURL).toHaveBeenCalledWith(blob)
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:original')
+    expect(
+      screen.queryByRole('button', { name: 'Download original video' })
+    ).not.toBeInTheDocument()
   })
 
   test('does not expose administrator details to a regular user', () => {

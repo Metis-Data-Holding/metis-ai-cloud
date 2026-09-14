@@ -27,7 +27,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useQuery } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
@@ -55,15 +55,25 @@ import {
 } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
-import { requireServerSuccess } from '@/lib/server-error-message'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  getServerErrorMessage,
+  requireServerSuccess,
+} from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
-import { getTaskArtifacts } from '../api'
+import { getTaskArtifacts, getTaskOriginal } from '../api'
+import { TASK_STATUS } from '../constants'
 import {
   resolveTaskPreviewMode,
   shouldLoadTaskArtifacts,
 } from '../lib/task-artifacts'
-import type { TaskArtifact, TaskArtifactType, TaskLog } from '../types'
+import type {
+  SuperResolutionTaskInfo,
+  TaskArtifact,
+  TaskArtifactType,
+  TaskLog,
+} from '../types'
 import {
   AudioPreviewDialog,
   type AudioClip,
@@ -302,9 +312,249 @@ function TaskArtifactCard(props: { artifact: TaskArtifact }) {
   )
 }
 
+function ArtifactDownloadButton(props: {
+  contentUrl?: string
+  fileName: string
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <Button
+      variant='outline'
+      size='sm'
+      disabled={!props.contentUrl}
+      nativeButton={false}
+      render={
+        <a
+          href={props.contentUrl}
+          download={props.fileName}
+          target='_blank'
+          rel='noopener noreferrer'
+        />
+      }
+    >
+      <HugeiconsIcon
+        icon={Download01Icon}
+        strokeWidth={2}
+        data-icon='inline-start'
+      />
+      {t('Download video')}
+    </Button>
+  )
+}
+
+function SuperResolutionArtifacts(props: {
+  taskId: string
+  open: boolean
+  finalAvailable: boolean
+  superResolution: SuperResolutionTaskInfo
+  artifacts: TaskArtifact[]
+  artifactsPending: boolean
+  artifactsError: boolean
+  retryArtifacts: () => void
+}) {
+  const { t } = useTranslation()
+  const hasOriginal = props.superResolution.original_available === true
+  const finalVideo = props.artifacts.find(
+    (artifact) => artifact.type === 'video'
+  )
+  const defaultTab = props.finalAvailable ? 'super-resolution' : 'original'
+  const [activeTab, setActiveTab] = useState(defaultTab)
+  const [originalUrl, setOriginalUrl] = useState<string>()
+  const [originalPending, setOriginalPending] = useState(false)
+  const [originalError, setOriginalError] = useState<string>()
+  const [originalRevision, setOriginalRevision] = useState(0)
+  const [finalMediaFailed, setFinalMediaFailed] = useState(false)
+  const [finalMediaRevision, setFinalMediaRevision] = useState(0)
+
+  useEffect(() => {
+    setActiveTab(defaultTab)
+  }, [defaultTab, props.taskId])
+
+  useEffect(() => {
+    let cancelled = false
+    let objectUrl: string | undefined
+
+    setOriginalUrl(undefined)
+    setOriginalError(undefined)
+    setOriginalPending(false)
+    if (!props.open || activeTab !== 'original' || !hasOriginal) {
+      return undefined
+    }
+
+    setOriginalPending(true)
+    void getTaskOriginal(props.taskId)
+      .then((blob) => {
+        const url = URL.createObjectURL(blob)
+        if (cancelled) {
+          URL.revokeObjectURL(url)
+          return
+        }
+        objectUrl = url
+        setOriginalUrl(url)
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        setOriginalError(
+          getServerErrorMessage(error, t('Failed to load original video'))
+        )
+      })
+      .finally(() => {
+        if (!cancelled) setOriginalPending(false)
+      })
+
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [activeTab, hasOriginal, originalRevision, props.open, props.taskId, t])
+
+  const originalArtifact: TaskArtifact = {
+    key: `original-${props.taskId}`,
+    type: 'video',
+    mime_type: 'video/mp4',
+    content_url: originalUrl || '',
+  }
+
+  let originalContent: React.ReactNode
+  if (!hasOriginal) {
+    originalContent = (
+      <EmptyTaskArtifacts description={t('Original video is unavailable')} />
+    )
+  } else if (originalPending) {
+    originalContent = (
+      <div aria-label={t('Loading...')}>
+        <Skeleton className='aspect-video min-h-48 w-full rounded-xl' />
+      </div>
+    )
+  } else if (originalError) {
+    originalContent = (
+      <Alert variant='destructive'>
+        <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} aria-hidden='true' />
+        <AlertTitle>{t('Failed to load original video')}</AlertTitle>
+        <AlertDescription>{originalError}</AlertDescription>
+        <AlertAction>
+          <Button
+            type='button'
+            variant='outline'
+            size='xs'
+            onClick={() => {
+              setOriginalError(undefined)
+              setOriginalUrl(undefined)
+              setOriginalRevision((revision) => revision + 1)
+            }}
+          >
+            <HugeiconsIcon
+              icon={RefreshIcon}
+              strokeWidth={2}
+              data-icon='inline-start'
+            />
+            {t('Retry')}
+          </Button>
+        </AlertAction>
+      </Alert>
+    )
+  } else if (originalUrl) {
+    originalContent = (
+      <ArtifactMedia
+        artifact={originalArtifact}
+        mediaUrl={originalUrl}
+        onError={() =>
+          setOriginalError(t('Media preview failed. Please try again.'))
+        }
+      />
+    )
+  } else {
+    originalContent = <EmptyTaskArtifacts />
+  }
+
+  let finalContent: React.ReactNode
+  if (props.artifactsPending) {
+    finalContent = (
+      <div aria-label={t('Loading...')}>
+        <Skeleton className='aspect-video min-h-48 w-full rounded-xl' />
+      </div>
+    )
+  } else if (props.artifactsError) {
+    finalContent = (
+      <Alert variant='destructive'>
+        <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} aria-hidden='true' />
+        <AlertTitle>{t('Failed to load artifacts')}</AlertTitle>
+        <AlertDescription>{t('Preview unavailable')}</AlertDescription>
+        <AlertAction>
+          <Button
+            type='button'
+            variant='outline'
+            size='xs'
+            onClick={props.retryArtifacts}
+          >
+            <HugeiconsIcon
+              icon={RefreshIcon}
+              strokeWidth={2}
+              data-icon='inline-start'
+            />
+            {t('Retry')}
+          </Button>
+        </AlertAction>
+      </Alert>
+    )
+  } else if (finalVideo) {
+    finalContent = finalMediaFailed ? (
+      <MediaFailure
+        onRetry={() => {
+          setFinalMediaFailed(false)
+          setFinalMediaRevision((revision) => revision + 1)
+        }}
+      />
+    ) : (
+      <ArtifactMedia
+        key={finalMediaRevision}
+        artifact={finalVideo}
+        mediaUrl={finalVideo.content_url}
+        onError={() => setFinalMediaFailed(true)}
+      />
+    )
+  } else {
+    finalContent = <EmptyTaskArtifacts />
+  }
+
+  return (
+    <Tabs value={activeTab} onValueChange={setActiveTab} className='w-full'>
+      <TabsList aria-label={t('Video versions')}>
+        <TabsTrigger value='original' disabled={!hasOriginal}>
+          {t('Original video')}
+        </TabsTrigger>
+        <TabsTrigger value='super-resolution' disabled={!props.finalAvailable}>
+          {t('Super-resolution video')}
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value='original' className='space-y-3 pt-2'>
+        {originalContent}
+      </TabsContent>
+      <TabsContent value='super-resolution' className='space-y-3 pt-2'>
+        {finalContent}
+      </TabsContent>
+      <ArtifactDownloadButton
+        contentUrl={
+          activeTab === 'original' ? originalUrl : finalVideo?.content_url
+        }
+        fileName={
+          activeTab === 'original'
+            ? `original-${props.taskId.replaceAll(/[^A-Za-z0-9._-]/g, '_')}.mp4`
+            : `${finalVideo?.key || 'video'}.mp4`
+        }
+      />
+    </Tabs>
+  )
+}
+
 interface TaskArtifactsProps {
   taskId: string
+  open: boolean
   enabled: boolean
+  isAdmin: boolean
+  finalAvailable?: boolean
+  superResolution?: SuperResolutionTaskInfo
   emptyContent?: (legacyContentUrl?: string) => React.ReactNode
 }
 
@@ -318,6 +568,22 @@ function TaskArtifacts(props: TaskArtifactsProps) {
     retry: false,
     staleTime: 30_000,
   })
+
+  if (props.superResolution && props.isAdmin) {
+    return (
+      <SuperResolutionArtifacts
+        key={props.taskId}
+        taskId={props.taskId}
+        open={props.open}
+        finalAvailable={props.finalAvailable === true}
+        superResolution={props.superResolution}
+        artifacts={artifactsQuery.data?.artifacts ?? []}
+        artifactsPending={artifactsQuery.isPending && props.enabled}
+        artifactsError={artifactsQuery.isError}
+        retryArtifacts={() => void artifactsQuery.refetch()}
+      />
+    )
+  }
 
   if (!props.enabled) return null
 
@@ -381,7 +647,7 @@ function TaskArtifacts(props: TaskArtifactsProps) {
   )
 }
 
-function EmptyTaskArtifacts() {
+function EmptyTaskArtifacts(props: { description?: string } = {}) {
   const { t } = useTranslation()
   return (
     <Empty>
@@ -390,7 +656,7 @@ function EmptyTaskArtifacts() {
           <HugeiconsIcon icon={File01Icon} strokeWidth={2} aria-hidden='true' />
         </EmptyMedia>
         <EmptyTitle>{t('Artifacts')}</EmptyTitle>
-        <EmptyDescription>{t('None')}</EmptyDescription>
+        <EmptyDescription>{props.description ?? t('None')}</EmptyDescription>
       </EmptyHeader>
     </Empty>
   )
@@ -403,21 +669,27 @@ function LegacyTaskArtifacts(props: { legacyContentUrl?: string }) {
   return <EmptyTaskArtifacts />
 }
 
-export function TaskArtifactsCell(props: { log: TaskLog }) {
+export function TaskArtifactsCell(props: { log: TaskLog; isAdmin: boolean }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const previewMode = resolveTaskPreviewMode(props.log)
+  const superResolution = props.isAdmin
+    ? props.log.admin_info?.super_resolution
+    : undefined
+  const isSuperResolutionTask = superResolution !== undefined
+  const canOpenRetainedOriginal =
+    isSuperResolutionTask && superResolution.original_available === true
 
-  if (!shouldLoadTaskArtifacts(props.log, true)) {
+  if (!shouldLoadTaskArtifacts(props.log, true) && !canOpenRetainedOriginal) {
     return <span className='text-muted-foreground/60 text-xs'>-</span>
   }
-  if (previewMode === 'legacy-suno') {
+  if (previewMode === 'legacy-suno' && !isSuperResolutionTask) {
     return <LegacyAudioPreview data={props.log.data} />
   }
 
   return (
     <>
-      {previewMode === 'legacy-video' ? (
+      {previewMode === 'legacy-video' && !isSuperResolutionTask ? (
         <button
           type='button'
           className='text-foreground text-xs hover:underline'
@@ -466,7 +738,11 @@ export function TaskArtifactsCell(props: { log: TaskLog }) {
       >
         <TaskArtifacts
           taskId={props.log.task_id}
+          open={open}
           enabled={shouldLoadTaskArtifacts(props.log, open)}
+          isAdmin={props.isAdmin}
+          finalAvailable={props.log.status === TASK_STATUS.SUCCESS}
+          superResolution={superResolution}
           emptyContent={(legacyContentUrl) => (
             <LegacyTaskArtifacts legacyContentUrl={legacyContentUrl} />
           )}
