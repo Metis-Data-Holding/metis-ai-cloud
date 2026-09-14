@@ -256,3 +256,10 @@
 - 修复经独立审查通过；`go test ./service ./controller ./relay/...` 通过，最终调整后 `go test ./service ./controller ./relay/channel/task/jsplugin` 与 SR 数据库持久化回归通过，根模块 `go vet ./...` / `go build ./...` 通过。所有 VOD 调用测试为模拟响应，未将其描述为真实成片验收。
 - 当前修复提交 `f166e170a` 补验模型层：带临时 DSN 运行 `GOWORK=off go test ./model -run SuperResolution -count=1 -v`，SQLite、MySQL 8.0.46、PostgreSQL 15.19 共 15 个子测试全部通过、0 skip，覆盖私有 JSON 与阶段 CAS；隔离测试容器已清理。
 - 修复已合入并推送 `develop`。首次 Run `34797921400` 因传入短 SHA 被 checkout 当作分支名而失败，未发布；改用完整 SHA 后 Run `34798127592` 成功。现场确认 ECS current 为 `f166e170adc9c787b5585d75ef4cb89b977bfb48`，app / PostgreSQL / Redis healthy，公网 `/api/status` 成功。BytePlus 证书申请仍需用户完成联系人资料和条款确认；DNS 生效不等于 HTTPS 或完整交付链路已可用。
+
+### 播放域名 HTTPS 与实际成片访问验证
+
+- 用户完成免费证书申请，并明确接受 `ServiceRoleForVod` 标准跨服务角色授权范围后，完成授权及 `video-play.metisdata.ai` 证书绑定。控制台显示 Authorized、Certificate running fine；证书到期日为 2027-03-31，未下载或记录私钥。
+- Cloudflare DNS only CNAME 与证书 DNS 验证生效；通过 `AddDomainToScheduler` 启用 VOD 调度，`UpdateDomainPlayRule` 设置默认域名。`ListDomain` 与控制台均确认默认域名、调度和配置启用。
+- 配置刚提交时历史素材 `GetPlayInfo` 暂仍返回 `ResourceNotFound.NoAvailableDomain`；随后复核成功。使用与生产代码一致的 `Definition=oe`、MP4、H.264、SSL 参数，现有历史增强素材返回 3844×2160 HTTPS 视频；ECS 正常证书校验下范围下载返回 HTTP 206、video/mp4，读取 1024 字节确认 MP4 文件头。未记录签名地址，未重新生成或超分视频。
+- 本次为云端配置及已有素材访问验证，无应用代码变更，无需重新部署；完整的新任务生成、超分、持久化交付及最终计费仍待端到端验收。
