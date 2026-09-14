@@ -365,10 +365,24 @@ func videoSuperResolutionClientToken(taskID, workflowID string) string {
 	return hex.EncodeToString(digest[:])
 }
 
+// 2K 在本内部流程中指短边 1440 像素，横屏为 2560×1440。
+func videoSuperResolutionMinEdge(target string) int {
+	switch target {
+	case "1080p":
+		return 1080
+	case "2k":
+		return 1440
+	case "4k":
+		return 2160
+	default:
+		return 0
+	}
+}
+
 func selectVideoSuperResolutionPlayInfo(items []VideoSuperResolutionPlayInfo, state *model.TaskSuperResolutionState) (VideoSuperResolutionPlayInfo, error) {
-	minEdge := 1080
-	if state.TargetResolution == "4k" {
-		minEdge = 2160
+	minEdge := videoSuperResolutionMinEdge(state.TargetResolution)
+	if minEdge == 0 {
+		return VideoSuperResolutionPlayInfo{}, errors.New("unsupported super-resolution target")
 	}
 	var selected VideoSuperResolutionPlayInfo
 	count := 0
@@ -406,11 +420,8 @@ func downloadVideoSuperResolutionFiles(ctx context.Context, task *model.Task, ru
 	if err != nil {
 		return err
 	}
-	minEdge := 1080
-	if state.TargetResolution == "4k" {
-		minEdge = 2160
-	}
-	if min(meta.Width, meta.Height) < minEdge || max(meta.Width, meta.Height) > 8192 || !isFinitePositive(meta.Duration) || meta.FPS <= 0 || meta.FPS > 120 {
+	minEdge := videoSuperResolutionMinEdge(state.TargetResolution)
+	if minEdge == 0 || min(meta.Width, meta.Height) < minEdge || max(meta.Width, meta.Height) > 8192 || !isFinitePositive(meta.Duration) || meta.FPS <= 0 || meta.FPS > 120 {
 		_ = os.Remove(outputPath)
 		return errors.New("video super-resolution output metadata is invalid")
 	}
@@ -546,9 +557,16 @@ func videoSuperResolutionEstimateUSD(target string, duration, fps float64) float
 		return 0
 	}
 	// BytePlus Fast 公开单价，USD/分钟；仅供成本估算，不写入客户账单。
-	price := 0.2066
-	if target == "4k" {
+	var price float64
+	switch target {
+	case "1080p":
+		price = 0.2066
+	case "2k":
+		price = 0.4132
+	case "4k":
 		price = 0.8264
+	default:
+		return 0
 	}
 	if fps > 30 && fps <= 60 {
 		price *= 2

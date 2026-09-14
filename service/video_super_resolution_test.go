@@ -78,6 +78,7 @@ func TestSuperResolutionPipelineDeliversAndCleansWithoutGenerationChannel(t *tes
 		{"1080p without original", "1080p", false, 1920, 1080, 0.000286944444444},
 		{"1080p with original", "1080p", true, 1920, 1080, 0.000286944444444},
 		{"4k with original", "4k", true, 3840, 2160, 0.001147777777778},
+		{"2k with original", "2k", true, 2560, 1440, 0.000573888888889},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			preserve := scenario.preserve
@@ -88,7 +89,7 @@ func TestSuperResolutionPipelineDeliversAndCleansWithoutGenerationChannel(t *tes
 			task := makeTask(510, 999999, 0, 0, BillingSourceWallet, 0)
 			task.TaskID = "task_sr_pipeline"
 			task.Progress = "45%"
-			task.PrivateData.SuperResolution = &model.TaskSuperResolutionState{Phase: "upload_pending", SourceResolution: "720p", TargetResolution: scenario.target, PreserveOriginal: preserve, WorkflowID: "workflow-fast-1080", OriginalURL: "https://8.8.8.8/source.mp4"}
+			task.PrivateData.SuperResolution = &model.TaskSuperResolutionState{Phase: "upload_pending", SourceResolution: "720p", TargetResolution: scenario.target, PreserveOriginal: preserve, WorkflowID: "workflow-fast-" + scenario.target, OriginalURL: "https://8.8.8.8/source.mp4"}
 			require.NoError(t, model.DB.Create(task).Error)
 			counts := map[string]int{}
 			deleted := false
@@ -120,7 +121,7 @@ func TestSuperResolutionPipelineDeliversAndCleansWithoutGenerationChannel(t *tes
 					result = `{"Data":{"MediaInfoList":[{"JobId":"upload-job","State":"success","Vid":"video-id","SourceInfo":{"FileId":"source-file"}}]}}`
 				case "StartWorkflow":
 					assert.Equal(t, "POST", r.Method)
-					assert.Equal(t, "workflow-fast-1080", r.URL.Query().Get("TemplateId"))
+					assert.Equal(t, "workflow-fast-"+scenario.target, r.URL.Query().Get("TemplateId"))
 					assert.NotEmpty(t, r.URL.Query().Get("ClientToken"))
 					assert.Zero(t, r.ContentLength)
 					result = `{"RunId":"workflow-run"}`
@@ -407,4 +408,132 @@ func TestVideoSuperResolutionPollErrorKeepsPrivateDiagnostic(t *testing.T) {
 	assert.Contains(t, task.PrivateData.SuperResolution.LastError, "HTTP 403")
 	assert.NotContains(t, task.PrivateData.SuperResolution.LastError, "secret")
 	assert.Contains(t, string(task.Data), `"status":"processing"`)
+}
+
+func TestSuperResolutionPerTargetSourcesAndOfficialLimits(t *testing.T) {
+	configureSRTest(t)
+	t.Setenv("BYTEPLUS_VOD_SR_WORKFLOW_4K", "workflow-fast-4k")
+	name := "dreamina-seedance-2-0-260128"
+	key := VideoSuperResolutionOptionKeyPrefix + name
+	common.OptionMapRWMutex.Lock()
+	if common.OptionMap == nil {
+		common.OptionMap = make(map[string]string)
+	}
+	old, exists := common.OptionMap[key]
+	common.OptionMap[key] = `{"enabled":true,"source_resolution":"720p","source_resolutions":{"1080p":"480p","4k":"720p"},"preserve_original":true}`
+	common.OptionMapRWMutex.Unlock()
+	t.Cleanup(func() {
+		common.OptionMapRWMutex.Lock()
+		defer common.OptionMapRWMutex.Unlock()
+		if exists {
+			common.OptionMap[key] = old
+		} else {
+			delete(common.OptionMap, key)
+		}
+	})
+	oldVOD := videoSuperResolutionHTTPClient
+	calls := 0
+	videoSuperResolutionHTTPClient = &http.Client{Transport: srTransport(func(*http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"Result":{"DefaultPlayDomain":"play.example.com"}}`))}, nil
+	})}
+	t.Cleanup(func() { videoSuperResolutionHTTPClient = oldVOD })
+	for _, tc := range []struct{ target, source, workflow string }{{"1080p", "480p", "workflow-fast-1080"}, {"4k", "720p", "workflow-fast-4k"}} {
+		c := &gin.Context{}
+		body := map[string]any{"model": name, "resolution": tc.target}
+		require.NoError(t, ApplyVideoSuperResolution(c, "doubao", name, name, body))
+		assert.Equal(t, tc.source, body["resolution"])
+		snapshot, ok := GetVideoSuperResolutionSnapshot(c)
+		require.True(t, ok)
+		assert.Equal(t, tc.source, snapshot.SourceResolution)
+		assert.Equal(t, tc.target, snapshot.TargetResolution)
+		runtime, ok := GetVideoSuperResolutionRuntimeConfig(c)
+		require.True(t, ok)
+		assert.Equal(t, tc.workflow, runtime.WorkflowID)
+	}
+	assert.Equal(t, 2, calls)
+	for _, target := range []string{"1080p", "4k", "2k", "1440p", "2560x1440"} {
+		c := &gin.Context{}
+		body := map[string]any{"model": "dreamina-seedance-2-0-fast-260128", "resolution": target}
+		require.Error(t, ApplyVideoSuperResolution(c, "doubao", "dreamina-seedance-2-0-fast-260128", "dreamina-seedance-2-0-fast-260128", body), target)
+		assert.Equal(t, target, body["resolution"])
+	}
+	c := &gin.Context{}
+	for _, invalid := range []string{"2k", "3840x1", "1920*1", "2560x1440"} {
+		require.Error(t, ApplyVideoSuperResolution(c, "doubao", name, name, map[string]any{"model": name, "resolution": invalid}))
+	}
+	assert.Equal(t, 2, calls, "不支持档位必须在 VOD 请求之前拒绝")
+}
+
+func TestSuperResolution2KWorkflowAndOutputValidation(t *testing.T) {
+	configureSRTest(t)
+	t.Setenv("BYTEPLUS_VOD_SR_WORKFLOW_2K", "workflow-fast-2k")
+	runtime, err := videoSuperResolutionRuntimeConfig("2k")
+	require.NoError(t, err)
+	assert.Equal(t, "workflow-fast-2k", runtime.WorkflowID)
+	state := &model.TaskSuperResolutionState{TargetResolution: "2k"}
+	items := []VideoSuperResolutionPlayInfo{{FileID: "enhanced", MainPlayURL: "https://8.8.8.8/video.mp4", Format: "mp4", Width: 1920, Height: 1080}}
+	_, err = selectVideoSuperResolutionPlayInfo(items, state)
+	require.Error(t, err, "1080P 不可当作 2K 成片")
+	items[0].Width, items[0].Height = 2560, 1440
+	_, err = selectVideoSuperResolutionPlayInfo(items, state)
+	require.NoError(t, err)
+	assert.InDelta(t, 0.4132, videoSuperResolutionEstimateUSD("2k", 60, 24), 1e-8)
+	_, err = videoSuperResolutionRuntimeConfig("8k")
+	require.Error(t, err, "未知目标不得回退到1080P工作流")
+}
+
+func TestSuperResolutionConfigCompatibilityAndValidation(t *testing.T) {
+	name := "dreamina-seedance-2-0-260128"
+	key := VideoSuperResolutionOptionKeyPrefix + name
+	common.OptionMapRWMutex.Lock()
+	if common.OptionMap == nil {
+		common.OptionMap = make(map[string]string)
+	}
+	old, exists := common.OptionMap[key]
+	common.OptionMap[key] = `{"enabled":true,"source_resolution":"480p","preserve_original":true}`
+	common.OptionMapRWMutex.Unlock()
+	t.Cleanup(func() {
+		common.OptionMapRWMutex.Lock()
+		defer common.OptionMapRWMutex.Unlock()
+		if exists {
+			common.OptionMap[key] = old
+		} else {
+			delete(common.OptionMap, key)
+		}
+	})
+	config := GetVideoSuperResolutionConfig(name)
+	assert.Equal(t, map[string]string{"1080p": "480p", "4k": "480p"}, config.SourceResolutions)
+	assert.Equal(t, []string{"1080p", "4k"}, VideoSuperResolutionTargets(name))
+	assert.Empty(t, VideoSuperResolutionTargets("dreamina-seedance-2-0-fast-260128"))
+	config.SourceResolutions = map[string]string{"2k": "480p"}
+	require.Error(t, SaveVideoSuperResolutionConfig(name, config), "禁止保存未公开的模型目标")
+	config.SourceResolutions = map[string]string{"1080p": "1080p"}
+	require.Error(t, SaveVideoSuperResolutionConfig(name, config), "源档位必须为480/720")
+	config.SourceResolutions = nil
+	require.Error(t, SaveVideoSuperResolutionConfig("dreamina-seedance-2-0-fast-260128", config), "Fast 无官方高分辨率档位")
+	assert.Equal(t, map[string]string{"1080p": "480p", "4k": "480p"}, GetVideoSuperResolutionConfig(name).SourceResolutions, "无效配置不得覆盖旧值")
+}
+
+func TestSuperResolutionLegacyFastIsEffectivelyDisabled(t *testing.T) {
+	key := VideoSuperResolutionOptionKeyPrefix + "dreamina-seedance-2-0-fast-260128"
+	common.OptionMapRWMutex.Lock()
+	if common.OptionMap == nil {
+		common.OptionMap = make(map[string]string)
+	}
+	old, exists := common.OptionMap[key]
+	common.OptionMap[key] = `{"enabled":true,"source_resolution":"720p"}`
+	common.OptionMapRWMutex.Unlock()
+	t.Cleanup(func() {
+		common.OptionMapRWMutex.Lock()
+		defer common.OptionMapRWMutex.Unlock()
+		if exists {
+			common.OptionMap[key] = old
+		} else {
+			delete(common.OptionMap, key)
+		}
+	})
+	config := GetVideoSuperResolutionConfig("dreamina-seedance-2-0-fast-260128")
+	assert.False(t, config.Enabled)
+	assert.Empty(t, config.SourceResolutions)
 }

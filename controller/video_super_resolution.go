@@ -19,19 +19,22 @@ func GetVideoSuperResolutionConfig(c *gin.Context) {
 	}
 	config := service.GetVideoSuperResolutionConfig(modelName)
 	common.ApiSuccess(c, gin.H{
-		"supported":         service.IsVideoSuperResolutionModel(modelName),
-		"enabled":           config.Enabled,
-		"source_resolution": config.SourceResolution,
-		"preserve_original": config.PreserveOriginal,
+		"supported":                    service.IsVideoSuperResolutionModel(modelName),
+		"enabled":                      config.Enabled,
+		"source_resolution":            config.SourceResolution,
+		"source_resolutions":           config.SourceResolutions,
+		"supported_target_resolutions": service.VideoSuperResolutionTargets(modelName),
+		"preserve_original":            config.PreserveOriginal,
 	})
 }
 
 func UpdateVideoSuperResolutionConfig(c *gin.Context) {
 	var request struct {
-		ModelName        string `json:"model"`
-		Enabled          bool   `json:"enabled"`
-		SourceResolution string `json:"source_resolution"`
-		PreserveOriginal bool   `json:"preserve_original"`
+		ModelName         string            `json:"model"`
+		Enabled           bool              `json:"enabled"`
+		SourceResolution  string            `json:"source_resolution"`
+		SourceResolutions map[string]string `json:"source_resolutions"`
+		PreserveOriginal  bool              `json:"preserve_original"`
 	}
 	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
@@ -42,7 +45,7 @@ func UpdateVideoSuperResolutionConfig(c *gin.Context) {
 		return
 	}
 	if err := service.SaveVideoSuperResolutionConfig(request.ModelName, service.VideoSuperResolutionConfig{
-		Enabled: request.Enabled, SourceResolution: request.SourceResolution, PreserveOriginal: request.PreserveOriginal,
+		Enabled: request.Enabled, SourceResolution: request.SourceResolution, SourceResolutions: request.SourceResolutions, PreserveOriginal: request.PreserveOriginal,
 	}); err != nil {
 		common.ApiError(c, err)
 		return
@@ -52,10 +55,12 @@ func UpdateVideoSuperResolutionConfig(c *gin.Context) {
 		"enabled": request.Enabled,
 	})
 	common.ApiSuccess(c, gin.H{
-		"supported":         true,
-		"enabled":           request.Enabled,
-		"source_resolution": request.SourceResolution,
-		"preserve_original": request.PreserveOriginal,
+		"supported":                    true,
+		"enabled":                      request.Enabled,
+		"source_resolution":            request.SourceResolution,
+		"source_resolutions":           service.GetVideoSuperResolutionConfig(request.ModelName).SourceResolutions,
+		"supported_target_resolutions": service.VideoSuperResolutionTargets(request.ModelName),
+		"preserve_original":            request.PreserveOriginal,
 	})
 }
 

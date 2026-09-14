@@ -263,3 +263,11 @@
 - Cloudflare DNS only CNAME 与证书 DNS 验证生效；通过 `AddDomainToScheduler` 启用 VOD 调度，`UpdateDomainPlayRule` 设置默认域名。`ListDomain` 与控制台均确认默认域名、调度和配置启用。
 - 配置刚提交时历史素材 `GetPlayInfo` 暂仍返回 `ResourceNotFound.NoAvailableDomain`；随后复核成功。使用与生产代码一致的 `Definition=oe`、MP4、H.264、SSL 参数，现有历史增强素材返回 3844×2160 HTTPS 视频；ECS 正常证书校验下范围下载返回 HTTP 206、video/mp4，读取 1024 字节确认 MP4 文件头。未记录签名地址，未重新生成或超分视频。
 - 本次为云端配置及已有素材访问验证，无应用代码变更，无需重新部署；完整的新任务生成、超分、持久化交付及最终计费仍待端到端验收。
+
+### 超分按目标档位配置与官方分辨率边界
+
+- 标准 Seedance 2.0 的 1080P、4K 可独立选择 480P / 720P 源视频；沿用原有 Option JSON，新增 `source_resolutions`，旧 `source_resolution` 继续作为兼容回退。运行时将当前目标对应源档位写入任务快照，在途任务保持原快照。
+- 官方 ModelArk 价格/能力表：https://docs.byteplus.com/docs/ModelArk/1099320 。标准版支持 480P / 720P / 1080P / 4K，Fast 仅支持 480P / 720P，两者均未列出 2K。前端与后台仅提供官方档位，Fast 超分显示不可开启，旧 Fast 开关有效状态归一为关闭；API 在提交生成前拒绝未支持档位。保留标准模型参考图场景的既有 1080P 限制。
+- 2K 内部链路读取 `BYTEPLUS_VOD_SR_WORKFLOW_2K`，校验短边至少 1440 像素，独立持久化、原片保留与清理复用既有流程；Fast 2K 估算采用官方每分钟 USD 0.4132（不超过 30fps），来源：https://docs.byteplus.com/en/docs/byteplus-vod/docs-pay-as-you-go-pricing 。未新增客户独立超分收费，未开放模型 2K 参数。
+- 使用 ponytail / Matt Pocock TDD；只读探索、隔离前端实现、独立审查并行。审查后补充非法尺寸拒绝、旧 Fast 配置关闭和按目标工作流快照断言；修复 `/v1/videos` 顶层 `size` 在转发时丢失的问题，用真实插件 JSON / multipart 解码、构造请求到超分能力校验的 12 个场景验证。2K 使用纳入版本控制的真实小型 MP4 fixture，VOD HTTP 响应均为模拟。
+- 验证：`GOWORK=off go test ./service ./controller ./relay/channel/task/jsplugin ./plugins -count=1`、根模块 `go vet ./...` / `go build ./...`、前端 `bun run typecheck` / `bun run build` / `bun run format:check`、全量 146 文件 / 1570 项测试通过，`bun run lint` 通过（保留既有 warning）；未改数据库 schema 或模型持久化结构。本次未部署、未发起付费 Provider 请求，不将本地测试视为真实超分验收。

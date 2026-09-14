@@ -1,6 +1,8 @@
 package plugins_test
 
 import (
+	"github.com/QuantumNous/new-api/service"
+	"github.com/gin-gonic/gin"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -99,4 +101,69 @@ func TestDoubaoVideoSubmitPreservesReferenceRoles(t *testing.T) {
 	assert.Equal(t, "first_frame", actualContent[0].(map[string]any)["role"])
 	assert.Equal(t, "last_frame", actualContent[1].(map[string]any)["role"])
 	assert.Equal(t, "text", actualContent[2].(map[string]any)["type"])
+}
+
+func TestDoubaoResponsesKeepsUnsupported2KForValidation(t *testing.T) {
+	plugin := loadDoubaoPlugin(t)
+	for _, size := range []string{"2k", "1440p", "2560x1440"} {
+		value, err := plugin.Engine.CallPath(t.Context(), "protocols", []string{"openai_responses", "decodeRequest"}, map[string]any{
+			"body": map[string]any{"kind": "json", "value": map[string]any{"model": "dreamina-seedance-2-0-260128", "input": "a running fox", "size": size}},
+		})
+		require.NoError(t, err)
+		encoded, err := common.Marshal(value)
+		require.NoError(t, err)
+		var result struct {
+			RequestBody struct {
+				Metadata struct {
+					Resolution string `json:"resolution"`
+				} `json:"metadata"`
+			} `json:"requestBody"`
+		}
+		require.NoError(t, common.Unmarshal(encoded, &result))
+		assert.Contains(t, []string{"2k", "1440p"}, result.RequestBody.Metadata.Resolution, "不得把2K悄悄降为720P/1080P")
+	}
+}
+
+func TestDoubaoVideoSizeReachesResolutionPolicy(t *testing.T) {
+	plugin := loadDoubaoPlugin(t)
+	for _, kind := range []string{"json", "multipart"} {
+		for _, tc := range []struct {
+			model, size, resolution string
+			reject                  bool
+		}{
+			{"dreamina-seedance-2-0-260128", "2560x1440", "2k", true},
+			{"dreamina-seedance-2-0-fast-260128", "1920x1080", "1080p", true},
+			{"dreamina-seedance-2-0-fast-260128", "3840x2160", "4k", true},
+			{"dreamina-seedance-2-0-fast-260128", "480p", "480p", false},
+			{"dreamina-seedance-2-0-fast-260128", "1280x720", "720p", false},
+			{"dreamina-seedance-2-0-260128", "3840x1", "3840x1", true},
+		} {
+			t.Run(kind+"/"+tc.model+"/"+tc.size, func(t *testing.T) {
+				body := map[string]any{"kind": kind, "value": map[string]any{"model": tc.model, "prompt": "a running fox", "size": tc.size}, "fields": map[string]any{"model": []string{tc.model}, "prompt": []string{"a running fox"}, "size": []string{tc.size}}}
+				value, err := plugin.Engine.CallPath(t.Context(), "protocols", []string{"openai_video", "decodeRequest"}, map[string]any{"body": body, "model": tc.model})
+				require.NoError(t, err)
+				encoded, err := common.Marshal(value)
+				require.NoError(t, err)
+				var intent struct {
+					RequestBody map[string]any `json:"requestBody"`
+				}
+				require.NoError(t, common.Unmarshal(encoded, &intent))
+				value, err = plugin.Engine.Call(t.Context(), "buildSubmitRequest", map[string]any{"requestBody": intent.RequestBody, "upstreamModel": tc.model, "baseUrl": "https://provider.example", "apiKey": "test-key"})
+				require.NoError(t, err)
+				encoded, err = common.Marshal(value)
+				require.NoError(t, err)
+				var descriptor struct {
+					Body map[string]any `json:"body"`
+				}
+				require.NoError(t, common.Unmarshal(encoded, &descriptor))
+				assert.Equal(t, tc.resolution, descriptor.Body["resolution"])
+				err = service.ApplyVideoSuperResolution(&gin.Context{}, "doubao", tc.model, tc.model, descriptor.Body)
+				if tc.reject {
+					require.Error(t, err)
+				} else {
+					require.NoError(t, err)
+				}
+			})
+		}
+	}
 }

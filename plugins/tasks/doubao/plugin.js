@@ -105,14 +105,15 @@ function rewriteDraftTaskContent(content, originTasks) {
 
 function normalizeResolution(value) {
   const raw = trimmed(value).toLowerCase();
-  if (["480p", "720p", "1080p", "4k"].includes(raw)) return raw;
+  if (["480p", "720p", "1080p", "4k", "2k", "1440p"].includes(raw)) return raw;
   const parts = raw.replace("*", "x").split("x");
-  if (parts.length !== 2) return "720p";
-  const max = Math.max(Number(parts[0]), Number(parts[1]));
-  if (max >= 3840) return "4k";
-  if (max >= 1920) return "1080p";
-  if (max >= 1280) return "720p";
-  return "480p";
+  if (parts.length !== 2) return raw || "720p";
+  const width = Number(parts[0]);
+  const height = Number(parts[1]);
+  const size = Math.max(width, height) + "x" + Math.min(width, height);
+  const resolutions = { "854x480": "480p", "848x480": "480p", "640x480": "480p", "1280x720": "720p", "1920x1080": "1080p", "2560x1440": "2k", "3840x2160": "4k" };
+  // 保留未支持的输入给校验层拒绝，不能静默降为已支持档位。
+  return resolutions[size] || raw;
 }
 
 function hasVideo(content) {
@@ -260,6 +261,9 @@ export function buildSubmitRequest(ctx) {
   const req = ctx.requestBody;
   const metadata = req.metadata || {};
   const body = Object.assign({ model: req.model || "", content: [] }, metadata);
+  // 统一 JSON、multipart 与 Responses 的尺寸入口，确保能力校验和超分收到同一档位。
+  if (Object.prototype.hasOwnProperty.call(req, "resolution")) body.resolution = req.resolution;
+  else if (req.size && !body.resolution) body.resolution = normalizeResolution(req.size);
   const imageContent = [];
   const images = Array.isArray(req.images) ? req.images : [];
   for (const url of images) imageContent.push({ type: "image_url", image_url: { url: url } });
