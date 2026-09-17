@@ -147,6 +147,37 @@ describe('video submission transport', () => {
     expect(post.mock.calls[1]?.[1]).toBe(seedanceRequest)
   })
 
+  test('keeps OpenRouter Wan text and first-frame requests as JSON', async () => {
+    const request: VideoGenerationRequest = {
+      model: 'alibaba/wan-3.0',
+      prompt: 'A cat crosses a sunny room',
+      seconds: 5,
+      metadata: {
+        resolution: '720p',
+        ratio: '16:9',
+        generate_audio: false,
+        content: [
+          {
+            type: 'image_url',
+            image_url: { url: 'data:image/png;base64,aW1hZ2U=' },
+            role: 'first_frame',
+          },
+        ],
+      },
+    }
+
+    await submitVideoGeneration('default', request)
+
+    expect(post).toHaveBeenCalledWith(
+      '/pg/videos',
+      request,
+      expect.objectContaining({
+        params: { group: 'default' },
+      })
+    )
+    expect(post.mock.calls[0]?.[1]).toBe(request)
+  })
+
   test('submits MiniMax H3 reference images and video as prepared multipart files', async () => {
     const referenceVideoUrl =
       'https://many-models.example/v1/video-reference-files/abcdefghijklmnopqrstuvwx.mp4/content?expires=1&access=signed'

@@ -66,7 +66,7 @@ func TestBuiltInVendorPluginsDeclareNativeRoutesAndLegacyChannelTypes(t *testing
 }
 
 func TestBuiltInTaskPluginResponsesAndUsageContracts(t *testing.T) {
-	taskPluginKeys := []string{"alibaba", "doubao", "google", "hailuo", "jimeng", "kling", "minimax-h3", "sora", "sunoapi", "vertex-ai", "vidu"}
+	taskPluginKeys := []string{"alibaba", "doubao", "google", "hailuo", "jimeng", "kling", "minimax-h3", "openrouter-wan", "sora", "sunoapi", "vertex-ai", "vidu"}
 	generation := jsplugin.DefaultRegistry.Generation()
 	require.NotNil(t, generation)
 
@@ -93,6 +93,14 @@ func TestBuiltInTaskPluginResponsesAndUsageContracts(t *testing.T) {
 			if key == "minimax-h3" {
 				require.Equal(t, "none", plugin.Meta.Auth.Type)
 				require.Equal(t, []string{"minimax-h3-fl2va"}, plugin.Meta.Models)
+				require.Len(t, plugin.Meta.Protocols, 1)
+				assert.Equal(t, "openai_video", plugin.Meta.Protocols[0].Name)
+				return
+			}
+			if key == "openrouter-wan" {
+				require.Equal(t, "api_key", plugin.Meta.Auth.Type)
+				require.Equal(t, "https://openrouter.ai/api", plugin.Meta.BaseURL)
+				require.Equal(t, []string{"alibaba/wan-3.0", "alibaba/wan-3.0-prime"}, plugin.Meta.Models)
 				require.Len(t, plugin.Meta.Protocols, 1)
 				assert.Equal(t, "openai_video", plugin.Meta.Protocols[0].Name)
 				return

@@ -607,6 +607,93 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     )
   })
 
+  test('uses text and first-frame-only modes for OpenRouter Wan', async () => {
+    vi.mocked(getUserModels).mockResolvedValue([
+      { label: 'Wan 3.0', value: 'alibaba/wan-3.0' },
+      { label: 'Wan 3.0 Prime', value: 'alibaba/wan-3.0-prime' },
+    ])
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    const prompt = await screen.findByRole('textbox', { name: 'Prompt' })
+    await waitFor(() =>
+      expect(prompt).toHaveAttribute(
+        'placeholder',
+        'Describe the video you want to create'
+      )
+    )
+    expect(
+      screen.getByRole('button', { name: 'Generation mode: Text to video' })
+    ).toBeVisible()
+    expect(
+      screen.queryByLabelText('Add reference content')
+    ).not.toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('button', { name: 'Generation mode: Text to video' })
+    )
+    await user.click(screen.getByRole('menuitemradio', { name: 'First frame' }))
+    expect(screen.getByLabelText('First frame')).toBeVisible()
+    expect(screen.queryByLabelText('Last frame')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Swap first and last frames' })
+    ).not.toBeInTheDocument()
+    await user.upload(
+      screen.getByLabelText('First frame', { selector: 'input' }),
+      new File(['image'], 'first.png', { type: 'image/png' })
+    )
+    await user.type(prompt, 'A cat walks through a sunny room')
+    await user.click(screen.getByRole('button', { name: 'Generate video' }))
+
+    await waitFor(() =>
+      expect(submitVideoGeneration).toHaveBeenCalledWith('default', {
+        model: 'alibaba/wan-3.0',
+        prompt: 'A cat walks through a sunny room',
+        seconds: 5,
+        metadata: {
+          resolution: '720p',
+          ratio: '16:9',
+          generate_audio: false,
+          content: [
+            {
+              type: 'image_url',
+              image_url: { url: 'data:image/png;base64,aW1hZ2U=' },
+              role: 'first_frame',
+            },
+          ],
+        },
+      })
+    )
+  })
+
+  test('restores a supported duration when switching away from OpenRouter Wan', async () => {
+    vi.mocked(getUserModels).mockResolvedValue([
+      { label: 'Wan 3.0', value: 'alibaba/wan-3.0' },
+      { label: 'MiniMax H3', value: 'minimax-h3-fl2va' },
+    ])
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await openVideoSettings(user)
+    await user.click(screen.getByRole('button', { name: '30s' }))
+    expect(
+      screen.getByRole('button', {
+        name: 'Video settings: 16:9, 720p, 30s, audio off, 1 video',
+      })
+    ).toBeVisible()
+
+    await user.click(screen.getByRole('combobox'))
+    await user.click(await screen.findByText('MiniMax H3'))
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', {
+          name: 'Video settings: 16:9, 768p, 5s, audio off, 1 video',
+        })
+      ).toBeVisible()
+    )
+  })
+
   test('allows MiniMax H3 reference images and one reference video', async () => {
     vi.mocked(getUserModels).mockResolvedValue([
       { label: 'MiniMax H3', value: 'minimax-h3-fl2va' },

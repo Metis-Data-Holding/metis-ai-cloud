@@ -16,10 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { VIDEO_ASPECT_RATIO_OPTIONS } from '../../constants'
+import {
+  VIDEO_ASPECT_RATIO_OPTIONS,
+  VIDEO_DURATION_OPTIONS,
+  WAN_VIDEO_DURATION_OPTIONS,
+} from '../../constants'
 import type {
   VideoAspectRatio,
   VideoGenerationConfig,
+  VideoGenerationMode,
   VideoGenerationRequest,
   VideoResolution,
   VideoTaskStatus,
@@ -28,11 +33,17 @@ import type {
 const FULL_RESOLUTIONS: VideoResolution[] = ['480p', '720p', '1080p', '4k']
 const FAST_RESOLUTIONS: VideoResolution[] = ['480p', '720p']
 const H3_RESOLUTIONS: VideoResolution[] = ['768p']
+const WAN_RESOLUTIONS: VideoResolution[] = ['480p', '720p', '1080p']
 const DEFAULT_ASPECT_RATIOS: VideoAspectRatio[] = [
   ...VIDEO_ASPECT_RATIO_OPTIONS,
 ]
 const H3_ASPECT_RATIOS: VideoAspectRatio[] = ['21:9', ...DEFAULT_ASPECT_RATIOS]
 const H3_MODEL = 'minimax-h3-fl2va'
+const WAN_MODELS = new Set(['alibaba/wan-3.0', 'alibaba/wan-3.0-prime'])
+
+export function isOpenRouterWanVideoPlaygroundModel(model: string): boolean {
+  return WAN_MODELS.has(model.toLowerCase())
+}
 
 export function isMinimaxH3VideoPlaygroundModel(model: string): boolean {
   return model.toLowerCase() === H3_MODEL
@@ -43,8 +54,21 @@ export function isSupportedVideoPlaygroundModel(model: string): boolean {
   return (
     normalized.includes('dreamina-seedance-2-0-260128') ||
     normalized.includes('dreamina-seedance-2-0-fast-260128') ||
-    normalized === H3_MODEL
+    normalized === H3_MODEL ||
+    isOpenRouterWanVideoPlaygroundModel(normalized)
   )
+}
+
+export function getVideoGenerationModes(model: string): VideoGenerationMode[] {
+  return isOpenRouterWanVideoPlaygroundModel(model)
+    ? ['text', 'first_frame']
+    : ['reference', 'keyframes']
+}
+
+export function getVideoDurationOptions(model: string): number[] {
+  return isOpenRouterWanVideoPlaygroundModel(model)
+    ? [...WAN_VIDEO_DURATION_OPTIONS]
+    : [...VIDEO_DURATION_OPTIONS]
 }
 
 export function getVideoResolutionOptions(
@@ -53,6 +77,9 @@ export function getVideoResolutionOptions(
 ): VideoResolution[] {
   if (isMinimaxH3VideoPlaygroundModel(model)) {
     return H3_RESOLUTIONS
+  }
+  if (isOpenRouterWanVideoPlaygroundModel(model)) {
+    return WAN_RESOLUTIONS
   }
   if (model.toLowerCase().includes('seedance-2-0-fast')) {
     return FAST_RESOLUTIONS
@@ -93,7 +120,8 @@ export function normalizeVideoResolution(
   const options = getVideoResolutionOptions(model, hasImageInput)
   const isDisabled = isVideoResolutionDisabled(model, resolution, hasImageInput)
   if (options.includes(resolution) && !isDisabled) return resolution
-  return isMinimaxH3VideoPlaygroundModel(model) ? '768p' : '720p'
+  if (isMinimaxH3VideoPlaygroundModel(model)) return '768p'
+  return '720p'
 }
 
 export function buildVideoGenerationRequest(

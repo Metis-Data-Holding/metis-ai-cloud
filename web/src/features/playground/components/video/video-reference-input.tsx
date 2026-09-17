@@ -698,22 +698,26 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
           className='flex min-h-28 w-full min-w-0 items-center justify-start gap-2 sm:w-fit sm:gap-3'
         >
           {frameSlot('first_frame', t('First frame'))}
-          <Button
-            type='button'
-            size='icon-sm'
-            variant='outline'
-            className='shrink-0 rounded-full'
-            aria-label={t('Swap first and last frames')}
-            disabled={
-              props.disabled ||
-              !props.content.some((item) => item.role === 'first_frame') ||
-              !props.content.some((item) => item.role === 'last_frame')
-            }
-            onClick={swapFrames}
-          >
-            <HugeiconsIcon icon={ArrowLeftRightIcon} aria-hidden='true' />
-          </Button>
-          {frameSlot('last_frame', t('Last frame'))}
+          {props.mode === 'keyframes' ? (
+            <>
+              <Button
+                type='button'
+                size='icon-sm'
+                variant='outline'
+                className='shrink-0 rounded-full'
+                aria-label={t('Swap first and last frames')}
+                disabled={
+                  props.disabled ||
+                  !props.content.some((item) => item.role === 'first_frame') ||
+                  !props.content.some((item) => item.role === 'last_frame')
+                }
+                onClick={swapFrames}
+              >
+                <HugeiconsIcon icon={ArrowLeftRightIcon} aria-hidden='true' />
+              </Button>
+              {frameSlot('last_frame', t('Last frame'))}
+            </>
+          ) : null}
         </div>
       )}
       {imageError ? (

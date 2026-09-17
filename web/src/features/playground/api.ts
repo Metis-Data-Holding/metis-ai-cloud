@@ -74,11 +74,15 @@ export function toModelOptions(
   models: string[],
   displayNames?: Record<string, string>
 ): ModelOption[] {
+  const fallbackDisplayNames: Record<string, string> = {
+    'alibaba/wan-3.0': 'Wan 3.0',
+    'alibaba/wan-3.0-prime': 'Wan 3.0 Prime',
+  }
   return models.map((model) => {
     const displayName = displayNames?.[model]
     const label = typeof displayName === 'string' ? displayName.trim() : ''
     if (!label || label === model) {
-      return { label: model, value: model }
+      return { label: fallbackDisplayNames[model] ?? model, value: model }
     }
     return { label, value: model }
   })

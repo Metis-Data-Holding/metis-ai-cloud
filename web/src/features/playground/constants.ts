@@ -47,6 +47,10 @@ export const CHAT_ENDPOINT_TYPE = 'openai' as const
 export const VIDEO_DURATION_OPTIONS = [
   5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
 ] as const
+export const WAN_VIDEO_DURATION_OPTIONS = Array.from(
+  { length: 29 },
+  (_, index) => index + 2
+) as readonly number[]
 export const VIDEO_ASPECT_RATIO_OPTIONS = [
   '16:9',
   '9:16',

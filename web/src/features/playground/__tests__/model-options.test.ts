@@ -45,4 +45,21 @@ describe('Playground model options', () => {
       { label: 'blank-model', value: 'blank-model' },
     ])
   })
+
+  test('uses the built-in OpenRouter Wan display names without losing model ids', () => {
+    expect(
+      toModelOptions(['alibaba/wan-3.0', 'alibaba/wan-3.0-prime'])
+    ).toEqual([
+      { label: 'Wan 3.0', value: 'alibaba/wan-3.0' },
+      { label: 'Wan 3.0 Prime', value: 'alibaba/wan-3.0-prime' },
+    ])
+  })
+
+  test('keeps an administrator display name ahead of the OpenRouter Wan fallback', () => {
+    expect(
+      toModelOptions(['alibaba/wan-3.0'], {
+        'alibaba/wan-3.0': 'Custom Wan',
+      })
+    ).toEqual([{ label: 'Custom Wan', value: 'alibaba/wan-3.0' }])
+  })
 })

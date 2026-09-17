@@ -36,7 +36,6 @@ import {
 } from '@/components/ui/sheet'
 import { useIsMobile } from '@/hooks/use-mobile'
 
-import { VIDEO_DURATION_OPTIONS } from '../../constants'
 import type { VideoAspectRatio, VideoResolution } from '../../types'
 import { VideoSegmentedControl } from './video-segmented-control'
 
@@ -49,6 +48,7 @@ type VideoParameterPanelProps = {
   resolution: VideoResolution
   resolutions: VideoResolution[]
   disabledResolutions: VideoResolution[]
+  durationOptions: readonly number[]
   seconds: number
   onAudioChange: (value: boolean) => void
   onQuantityChange: (value: number) => void
@@ -138,7 +138,7 @@ function VideoParameterContent(props: VideoParameterPanelProps) {
         <VideoSegmentedControl
           labelledBy='video-duration-label'
           value={String(props.seconds)}
-          options={VIDEO_DURATION_OPTIONS.map((seconds) => ({
+          options={props.durationOptions.map((seconds) => ({
             value: String(seconds),
             label: t('{{value}}s', { value: seconds }),
           }))}

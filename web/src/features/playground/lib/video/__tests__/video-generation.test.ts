@@ -23,7 +23,10 @@ import {
   buildVideoGenerationRequest,
   getVideoAspectRatioOptions,
   getVideoResolutionOptions,
+  getVideoDurationOptions,
+  getVideoGenerationModes,
   isMinimaxH3VideoPlaygroundModel,
+  isOpenRouterWanVideoPlaygroundModel,
   isSupportedVideoPlaygroundModel,
   isTerminalVideoStatus,
   normalizeVideoAspectRatio,
@@ -185,6 +188,21 @@ describe('video generation request', () => {
     ).toBe(false)
   })
 
+  test.each([2, 30])('accepts Wan duration of %s seconds', (seconds) => {
+    expect(
+      videoFormSchema.safeParse({
+        group: 'default',
+        model: 'alibaba/wan-3.0',
+        prompt: 'A paper boat crossing a neon river',
+        seconds,
+        resolution: '480p',
+        ratio: '16:9',
+        generateAudio: false,
+        mode: 'text',
+      }).success
+    ).toBe(true)
+  })
+
   test('allows an empty prompt for media-led generation', () => {
     expect(
       videoFormSchema.safeParse({
@@ -202,6 +220,32 @@ describe('video generation request', () => {
 })
 
 describe('video model constraints', () => {
+  test('enables OpenRouter Wan models with their supported modes and parameters', () => {
+    expect(isOpenRouterWanVideoPlaygroundModel('alibaba/wan-3.0')).toBe(true)
+    expect(isOpenRouterWanVideoPlaygroundModel('alibaba/wan-3.0-prime')).toBe(
+      true
+    )
+    expect(getVideoGenerationModes('alibaba/wan-3.0')).toEqual([
+      'text',
+      'first_frame',
+    ])
+    expect(getVideoResolutionOptions('alibaba/wan-3.0')).toEqual([
+      '480p',
+      '720p',
+      '1080p',
+    ])
+    expect(getVideoAspectRatioOptions('alibaba/wan-3.0')).toEqual([
+      '16:9',
+      '9:16',
+      '1:1',
+      '4:3',
+      '3:4',
+    ])
+    expect(getVideoDurationOptions('alibaba/wan-3.0')).toEqual(
+      Array.from({ length: 29 }, (_, index) => index + 2)
+    )
+  })
+
   test('enables the supported Dreamina Seedance and MiniMax H3 model ids', () => {
     expect(
       isSupportedVideoPlaygroundModel('dreamina-seedance-2-0-260128')

@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { Alert02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
@@ -43,8 +43,11 @@ import {
 import {
   buildVideoGenerationRequest,
   getVideoAspectRatioOptions,
+  getVideoDurationOptions,
+  getVideoGenerationModes,
   getVideoResolutionOptions,
   isMinimaxH3VideoPlaygroundModel,
+  isOpenRouterWanVideoPlaygroundModel,
   isSupportedVideoPlaygroundModel,
   isVideoResolutionDisabled,
   normalizeVideoAspectRatio,
@@ -92,6 +95,11 @@ export function VideoPlayground() {
   const values = form.watch()
   const hasImageInput = inputContent.some((item) => item.type === 'image_url')
   const isH3 = isMinimaxH3VideoPlaygroundModel(values.model)
+  const isWan = isOpenRouterWanVideoPlaygroundModel(values.model)
+  const modeOptions = useMemo(
+    () => getVideoGenerationModes(values.model),
+    [values.model]
+  )
 
   const groupsQuery = useQuery({
     queryKey: ['playground', 'video-groups'],
@@ -110,6 +118,10 @@ export function VideoPlayground() {
     ? getVideoResolutionOptions(values.model, hasImageInput)
     : []
   const ratios = values.model ? getVideoAspectRatioOptions(values.model) : []
+  const durationOptions = useMemo(
+    () => (values.model ? getVideoDurationOptions(values.model) : []),
+    [values.model]
+  )
   const disabledResolutions = resolutions.filter((resolution) =>
     isVideoResolutionDisabled(values.model, resolution, hasImageInput)
   )
@@ -139,6 +151,27 @@ export function VideoPlayground() {
       form.setValue('ratio', nextRatio)
     }
   }, [form, values.model, values.ratio])
+
+  useEffect(() => {
+    if (modeOptions.includes(values.mode)) return
+    form.setValue('mode', modeOptions[0], { shouldValidate: true })
+    setInputContent([])
+    setInputContentValid(true)
+  }, [form, modeOptions, values.mode])
+
+  useEffect(() => {
+    if (
+      durationOptions.length === 0 ||
+      durationOptions.includes(values.seconds)
+    ) {
+      return
+    }
+    form.setValue(
+      'seconds',
+      durationOptions.includes(5) ? 5 : durationOptions[0],
+      { shouldValidate: true }
+    )
+  }, [durationOptions, form, values.seconds])
 
   useEffect(() => {
     const nextResolution = normalizeVideoResolution(
@@ -208,11 +241,12 @@ export function VideoPlayground() {
     generation.isSubmitting || modelsQuery.isPending || noVideoModels
   const hasFirstFrame = inputContent.some((item) => item.role === 'first_frame')
   const inputContentMissing =
-    (values.mode === 'keyframes' && !hasFirstFrame) ||
+    ((values.mode === 'keyframes' || values.mode === 'first_frame') &&
+      !hasFirstFrame) ||
     (values.mode === 'reference' &&
       inputContent.length === 0 &&
       values.prompt.trim() === '')
-  const promptMissing = isH3 && values.prompt.trim() === ''
+  const promptMissing = (isH3 || isWan) && values.prompt.trim() === ''
   const submitDisabled =
     systemDisabled ||
     values.model === '' ||
@@ -242,7 +276,9 @@ export function VideoPlayground() {
       resolution={values.resolution}
       resolutions={resolutions}
       disabledResolutions={disabledResolutions}
+      durationOptions={durationOptions}
       seconds={values.seconds}
+      modeOptions={modeOptions}
       isH3={isH3}
       onAudioChange={(value) => form.setValue('generateAudio', value)}
       onGroupChange={handleGroupChange}

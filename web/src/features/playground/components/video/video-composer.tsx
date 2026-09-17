@@ -92,7 +92,9 @@ type VideoComposerProps = {
   resolution: VideoResolution
   resolutions: VideoResolution[]
   disabledResolutions: VideoResolution[]
+  durationOptions: readonly number[]
   seconds: number
+  modeOptions: VideoGenerationMode[]
   isH3: boolean
   onAudioChange: (value: boolean) => void
   onGroupChange: (value: string) => void
@@ -122,23 +124,30 @@ export function VideoComposer(props: VideoComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const referenceAssets = getVideoReferenceAssets(props.inputContent)
   let modeLabel = t('First and last frames')
+  if (props.mode === 'text') {
+    modeLabel = t('Text to video')
+  } else if (props.mode === 'first_frame') {
+    modeLabel = t('First frame')
+  }
   if (props.mode === 'reference') {
     modeLabel = t('Reference generation')
   }
-  let promptPlaceholder = t(
-    'Describe how the scene should change between the first and last frames.'
-  )
-  if (props.mode === 'reference') {
+  let promptPlaceholder = t('Describe the video you want to create')
+  if (props.mode === 'keyframes') {
+    promptPlaceholder = t(
+      'Describe how the scene should change between the first and last frames.'
+    )
+  } else if (props.mode === 'reference') {
     promptPlaceholder = t(
       'Use @ to quickly reference uploaded files, for example: use the motion from @Video 1 to generate a video in which the characters from @Image 2 and @Image 3 fight.'
     )
   }
-  const showReferenceInput = true
+  const showReferenceInput = props.mode !== 'text'
   const expandLabel = expanded
     ? t('Collapse prompt input')
     : t('Expand prompt input')
   let referenceAreaLayout = 'w-full sm:w-28 sm:overflow-visible'
-  if (props.mode === 'keyframes') {
+  if (props.mode === 'keyframes' || props.mode === 'first_frame') {
     referenceAreaLayout = 'w-full sm:w-fit'
   } else if (referenceTrayExpanded) {
     referenceAreaLayout =
@@ -265,7 +274,7 @@ export function VideoComposer(props: VideoComposerProps) {
               onExpandedChange={setReferenceTrayExpanded}
               onValidityChange={props.onInputValidityChange}
               disabled={props.disabled || props.modelValue === ''}
-              strictKeyframeFormats={props.isH3}
+              strictKeyframeFormats={props.isH3 || props.mode === 'first_frame'}
               strictReferenceFormats={props.isH3 && props.mode === 'reference'}
               maxReferenceImages={props.isH3 ? 2 : undefined}
               maxReferenceVideos={props.isH3 ? 1 : undefined}
@@ -409,22 +418,46 @@ export function VideoComposer(props: VideoComposerProps) {
                     props.onModeChange(value as VideoGenerationMode)
                   }
                 >
-                  <DropdownMenuRadioItem
-                    value='reference'
-                    closeOnClick
-                    className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
-                  >
-                    <HugeiconsIcon icon={AiVideoIcon} aria-hidden='true' />
-                    <span>{t('Reference generation')}</span>
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem
-                    value='keyframes'
-                    closeOnClick
-                    className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
-                  >
-                    <HugeiconsIcon icon={Film01Icon} aria-hidden='true' />
-                    <span>{t('First and last frames')}</span>
-                  </DropdownMenuRadioItem>
+                  {props.modeOptions.includes('text') ? (
+                    <DropdownMenuRadioItem
+                      value='text'
+                      closeOnClick
+                      className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
+                    >
+                      <HugeiconsIcon icon={AiVideoIcon} aria-hidden='true' />
+                      <span>{t('Text to video')}</span>
+                    </DropdownMenuRadioItem>
+                  ) : null}
+                  {props.modeOptions.includes('first_frame') ? (
+                    <DropdownMenuRadioItem
+                      value='first_frame'
+                      closeOnClick
+                      className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
+                    >
+                      <HugeiconsIcon icon={Film01Icon} aria-hidden='true' />
+                      <span>{t('First frame')}</span>
+                    </DropdownMenuRadioItem>
+                  ) : null}
+                  {props.modeOptions.includes('reference') ? (
+                    <DropdownMenuRadioItem
+                      value='reference'
+                      closeOnClick
+                      className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
+                    >
+                      <HugeiconsIcon icon={AiVideoIcon} aria-hidden='true' />
+                      <span>{t('Reference generation')}</span>
+                    </DropdownMenuRadioItem>
+                  ) : null}
+                  {props.modeOptions.includes('keyframes') ? (
+                    <DropdownMenuRadioItem
+                      value='keyframes'
+                      closeOnClick
+                      className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
+                    >
+                      <HugeiconsIcon icon={Film01Icon} aria-hidden='true' />
+                      <span>{t('First and last frames')}</span>
+                    </DropdownMenuRadioItem>
+                  ) : null}
                 </DropdownMenuRadioGroup>
               </DropdownMenuGroup>
             </DropdownMenuContent>
@@ -439,6 +472,7 @@ export function VideoComposer(props: VideoComposerProps) {
             resolution={props.resolution}
             resolutions={props.resolutions}
             disabledResolutions={props.disabledResolutions}
+            durationOptions={props.durationOptions}
             seconds={props.seconds}
             onAudioChange={props.onAudioChange}
             onQuantityChange={props.onQuantityChange}

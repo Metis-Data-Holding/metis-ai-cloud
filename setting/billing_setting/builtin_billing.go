@@ -13,4 +13,7 @@ var builtinBillingExpr = map[string]string{
 	// Do not infer service-tier discounts from incoming request parameters:
 	// channels filter service_tier by default, so it may not reach the upstream.
 	"gpt-6-astra": `len <= 272000 ? tier("standard", p * 10 + c * 50 + cr * 1 + cc * 12.5) : tier("long_context", p * 20 + c * 75 + cr * 2 + cc * 25)`,
+	// OpenRouter /api/v1/videos/models, 2026-09-17. Prices are USD per second.
+	"alibaba/wan-3.0":       `u("resolution") == "480p" ? tier("480p", u("seconds") * 0.05) : u("resolution") == "720p" ? tier("720p", u("seconds") * 0.1) : tier("1080p", u("seconds") * 0.2)`,
+	"alibaba/wan-3.0-prime": `u("resolution") == "480p" ? tier("480p", u("seconds") * 0.068) : u("resolution") == "720p" ? tier("720p", u("seconds") * 0.14) : tier("1080p", u("seconds") * 0.28)`,
 }
