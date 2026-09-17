@@ -123,9 +123,8 @@ export function VideoComposer(props: VideoComposerProps) {
   const mentionListboxId = useId()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const referenceAssets = getVideoReferenceAssets(props.inputContent)
-  const isWanReference =
-    props.modelValue.toLowerCase() === 'alibaba/wan-3.0' &&
-    props.mode === 'reference'
+  const isWan3Model = props.modelValue.toLowerCase() === 'alibaba/wan-3.0'
+  const isWanReference = isWan3Model && props.mode === 'reference'
   let maxReferenceImages: number | undefined
   let maxReferenceVideos: number | undefined
   if (props.isH3) {
@@ -136,6 +135,13 @@ export function VideoComposer(props: VideoComposerProps) {
     maxReferenceImages = 1
     maxReferenceVideos = 0
   }
+  const referenceModeLabel = isWan3Model
+    ? t('Reference image generation')
+    : t('Reference generation')
+  const modeIcon =
+    props.mode === 'first_frame' || props.mode === 'keyframes'
+      ? Film01Icon
+      : AiVideoIcon
   let modeLabel = t('First and last frames')
   if (props.mode === 'text') {
     modeLabel = t('Text to video')
@@ -143,7 +149,7 @@ export function VideoComposer(props: VideoComposerProps) {
     modeLabel = t('First frame')
   }
   if (props.mode === 'reference') {
-    modeLabel = t('Reference generation')
+    modeLabel = referenceModeLabel
   }
   let promptPlaceholder = t('Describe the video you want to create')
   if (props.mode === 'keyframes') {
@@ -416,7 +422,11 @@ export function VideoComposer(props: VideoComposerProps) {
                   />
                 }
               >
-                <HugeiconsIcon icon={AiVideoIcon} data-icon='inline-start' />
+                <HugeiconsIcon
+                  icon={modeIcon}
+                  data-icon='inline-start'
+                  data-mode-icon={props.mode}
+                />
                 <span>{modeLabel}</span>
                 <ChevronDownIcon data-icon='inline-end' />
               </DropdownMenuTrigger>
@@ -462,7 +472,7 @@ export function VideoComposer(props: VideoComposerProps) {
                         className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
                       >
                         <HugeiconsIcon icon={AiVideoIcon} aria-hidden='true' />
-                        <span>{t('Reference generation')}</span>
+                        <span>{referenceModeLabel}</span>
                       </DropdownMenuRadioItem>
                     ) : null}
                     {props.modeOptions.includes('keyframes') ? (

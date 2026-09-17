@@ -290,11 +290,13 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     const user = userEvent.setup()
     render(<VideoPlayground />, { wrapper: createWrapper() })
 
-    await user.click(
-      await screen.findByRole('button', {
-        name: 'Generation mode: Reference generation',
-      })
-    )
+    const referenceModeTrigger = await screen.findByRole('button', {
+      name: 'Generation mode: Reference generation',
+    })
+    expect(
+      referenceModeTrigger.querySelector('[data-mode-icon="reference"]')
+    ).toBeInTheDocument()
+    await user.click(referenceModeTrigger)
     const menuLabel = screen.getByText('Generation mode', {
       selector: '[data-slot="dropdown-menu-label"]',
     })
@@ -309,6 +311,13 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
       screen.getByRole('menuitemradio', { name: 'First and last frames' })
     )
     await waitFor(() => expect(menuLabel).not.toBeInTheDocument())
+    expect(
+      screen
+        .getByRole('button', {
+          name: 'Generation mode: First and last frames',
+        })
+        .querySelector('[data-mode-icon="keyframes"]')
+    ).toBeInTheDocument()
     expect(
       screen.getByLabelText('First frame', { selector: 'input' })
     ).toBeVisible()
@@ -625,6 +634,11 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     expect(
       screen.getByRole('button', { name: 'Generation mode: First frame' })
     ).toBeVisible()
+    expect(
+      screen
+        .getByRole('button', { name: 'Generation mode: First frame' })
+        .querySelector('[data-mode-icon="first_frame"]')
+    ).toBeInTheDocument()
     expect(screen.getByLabelText('First frame')).toBeVisible()
 
     await user.type(prompt, 'A cat walks through a sunny room')
@@ -650,8 +664,17 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
       screen.queryByRole('menuitemradio', { name: 'Text to video' })
     ).not.toBeInTheDocument()
     await user.click(
-      screen.getByRole('menuitemradio', { name: 'Reference generation' })
+      screen.getByRole('menuitemradio', {
+        name: 'Reference image generation',
+      })
     )
+    expect(
+      screen
+        .getByRole('button', {
+          name: 'Generation mode: Reference image generation',
+        })
+        .querySelector('[data-mode-icon="reference"]')
+    ).toBeInTheDocument()
     const referenceInput = screen.getByLabelText('Add reference content')
     expect(referenceInput).toHaveAttribute(
       'accept',
