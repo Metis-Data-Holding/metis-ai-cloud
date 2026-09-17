@@ -16,7 +16,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { VIDEO_ASPECT_RATIO_OPTIONS } from '../../constants'
 import type {
+  VideoAspectRatio,
   VideoGenerationConfig,
   VideoGenerationRequest,
   VideoResolution,
@@ -26,6 +28,10 @@ import type {
 const FULL_RESOLUTIONS: VideoResolution[] = ['480p', '720p', '1080p', '4k']
 const FAST_RESOLUTIONS: VideoResolution[] = ['480p', '720p']
 const H3_RESOLUTIONS: VideoResolution[] = ['768p']
+const DEFAULT_ASPECT_RATIOS: VideoAspectRatio[] = [
+  ...VIDEO_ASPECT_RATIO_OPTIONS,
+]
+const H3_ASPECT_RATIOS: VideoAspectRatio[] = ['21:9', ...DEFAULT_ASPECT_RATIOS]
 const H3_MODEL = 'minimax-h3-fl2va'
 
 export function isMinimaxH3VideoPlaygroundModel(model: string): boolean {
@@ -52,6 +58,19 @@ export function getVideoResolutionOptions(
     return FAST_RESOLUTIONS
   }
   return FULL_RESOLUTIONS
+}
+
+export function getVideoAspectRatioOptions(model: string): VideoAspectRatio[] {
+  return isMinimaxH3VideoPlaygroundModel(model)
+    ? H3_ASPECT_RATIOS
+    : DEFAULT_ASPECT_RATIOS
+}
+
+export function normalizeVideoAspectRatio(
+  model: string,
+  ratio: VideoAspectRatio
+): VideoAspectRatio {
+  return getVideoAspectRatioOptions(model).includes(ratio) ? ratio : '16:9'
 }
 
 export function isVideoResolutionDisabled(

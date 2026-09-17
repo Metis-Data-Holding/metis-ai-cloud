@@ -7,7 +7,7 @@ export const meta = {
     en: "Self-hosted MiniMax H3 text, reference, first-frame, and first-and-last-frame video through ComfyUI",
     zh: "通过 ComfyUI 接入自托管 MiniMax H3 文生、参考内容、首帧及首尾帧图生视频",
   },
-  version: "1.3.1",
+  version: "1.3.2",
   author: { name: "Metis Data" },
   models: ["minimax-h3-fl2va"],
   fetchMode: "per_task",
@@ -31,6 +31,7 @@ export const meta = {
 };
 
 const sizes = {
+  "21:9": [1536, 672],
   "16:9": [1344, 768],
   "9:16": [768, 1344],
   "1:1": [768, 768],
@@ -108,7 +109,7 @@ function normalizedRequest(request) {
   const resolution = String(req.resolution || metadata.resolution || "768p").toLowerCase();
   if (resolution !== "768p") throw new Error("resolution must be 768p");
   const ratio = String(req.ratio || metadata.ratio || "16:9");
-  if (!sizes[ratio]) throw new Error("ratio must be one of 16:9, 9:16, 1:1, 4:3, 3:4");
+  if (!sizes[ratio]) throw new Error("ratio must be one of 21:9, 16:9, 9:16, 1:1, 4:3, 3:4");
   const generateAudio = req.generate_audio === undefined ? metadata.generate_audio === true : req.generate_audio === true;
   const normalized = {
     prompt,

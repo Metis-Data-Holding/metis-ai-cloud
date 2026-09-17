@@ -36,10 +36,7 @@ import {
 } from '@/components/ui/sheet'
 import { useIsMobile } from '@/hooks/use-mobile'
 
-import {
-  VIDEO_ASPECT_RATIO_OPTIONS,
-  VIDEO_DURATION_OPTIONS,
-} from '../../constants'
+import { VIDEO_DURATION_OPTIONS } from '../../constants'
 import type { VideoAspectRatio, VideoResolution } from '../../types'
 import { VideoSegmentedControl } from './video-segmented-control'
 
@@ -48,6 +45,7 @@ type VideoParameterPanelProps = {
   disabled?: boolean
   quantity: number
   ratio: VideoAspectRatio
+  ratios: VideoAspectRatio[]
   resolution: VideoResolution
   resolutions: VideoResolution[]
   disabledResolutions: VideoResolution[]
@@ -60,6 +58,7 @@ type VideoParameterPanelProps = {
 }
 
 const ASPECT_RATIO_ICON_CLASSES: Record<VideoAspectRatio, string> = {
+  '21:9': 'h-2 w-5',
   '16:9': 'h-2 w-4',
   '9:16': 'h-4 w-2',
   '1:1': 'size-3',
@@ -97,7 +96,7 @@ function VideoParameterContent(props: VideoParameterPanelProps) {
         <VideoSegmentedControl
           labelledBy='video-ratio-label'
           value={props.ratio}
-          options={VIDEO_ASPECT_RATIO_OPTIONS.map((ratio) => ({
+          options={props.ratios.map((ratio) => ({
             value: ratio,
             label: (
               <>

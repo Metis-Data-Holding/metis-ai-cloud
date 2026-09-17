@@ -151,7 +151,7 @@ export interface GroupOption {
 }
 
 export type VideoResolution = '480p' | '720p' | '768p' | '1080p' | '4k'
-export type VideoAspectRatio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4'
+export type VideoAspectRatio = '21:9' | '16:9' | '9:16' | '1:1' | '4:3' | '3:4'
 export type VideoGenerationMode = 'reference' | 'keyframes'
 export type VideoImageRole = 'reference_image' | 'first_frame' | 'last_frame'
 

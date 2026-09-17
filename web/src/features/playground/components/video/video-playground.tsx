@@ -42,10 +42,12 @@ import {
 } from '../../lib/video/video-form-schema'
 import {
   buildVideoGenerationRequest,
+  getVideoAspectRatioOptions,
   getVideoResolutionOptions,
   isMinimaxH3VideoPlaygroundModel,
   isSupportedVideoPlaygroundModel,
   isVideoResolutionDisabled,
+  normalizeVideoAspectRatio,
   normalizeVideoResolution,
 } from '../../lib/video/video-generation'
 import type {
@@ -107,6 +109,7 @@ export function VideoPlayground() {
   const resolutions = values.model
     ? getVideoResolutionOptions(values.model, hasImageInput)
     : []
+  const ratios = values.model ? getVideoAspectRatioOptions(values.model) : []
   const disabledResolutions = resolutions.filter((resolution) =>
     isVideoResolutionDisabled(values.model, resolution, hasImageInput)
   )
@@ -129,6 +132,13 @@ export function VideoPlayground() {
       form.setValue('model', nextModel, { shouldValidate: true })
     }
   }, [form, models, modelsQuery.isPending, values.model])
+
+  useEffect(() => {
+    const nextRatio = normalizeVideoAspectRatio(values.model, values.ratio)
+    if (nextRatio !== values.ratio) {
+      form.setValue('ratio', nextRatio)
+    }
+  }, [form, values.model, values.ratio])
 
   useEffect(() => {
     const nextResolution = normalizeVideoResolution(
@@ -228,6 +238,7 @@ export function VideoPlayground() {
       prompt={values.prompt}
       quantity={values.quantity}
       ratio={values.ratio}
+      ratios={ratios}
       resolution={values.resolution}
       resolutions={resolutions}
       disabledResolutions={disabledResolutions}

@@ -548,6 +548,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
       })
     )
     expect(screen.getByRole('button', { name: '768p' })).toBeVisible()
+    expect(screen.getByRole('button', { name: '21:9' })).toBeVisible()
     expect(
       screen.queryByRole('button', { name: '720p' })
     ).not.toBeInTheDocument()

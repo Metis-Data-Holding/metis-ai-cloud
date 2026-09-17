@@ -85,7 +85,7 @@ func TestMinimaxH3OpenAIVideoDecode(t *testing.T) {
 		{"long duration", map[string]any{"prompt": "p", "seconds": 16}, "duration must be an integer between 5 and 15"},
 		{"fractional duration", map[string]any{"prompt": "p", "seconds": 5.5}, "duration must be an integer between 5 and 15"},
 		{"unsupported resolution", map[string]any{"prompt": "p", "metadata": map[string]any{"resolution": "720p"}}, "resolution must be 768p"},
-		{"unsupported ratio", map[string]any{"prompt": "p", "metadata": map[string]any{"ratio": "21:9"}}, "ratio must be one of"},
+		{"unsupported ratio", map[string]any{"prompt": "p", "metadata": map[string]any{"ratio": "2:1"}}, "ratio must be one of"},
 		{"reference content", map[string]any{"prompt": "p", "metadata": map[string]any{"content": []any{map[string]any{"type": "image_url"}}}}, "reference content is not supported"},
 	}
 	for _, test := range tests {
@@ -273,6 +273,7 @@ func TestMinimaxH3OpenAIVideoRender(t *testing.T) {
 func TestMinimaxH3BuildsMinimalComfyWorkflow(t *testing.T) {
 	plugin := loadMinimaxH3Plugin(t)
 	ratioSizes := map[string][2]int{
+		"21:9": {1536, 672},
 		"16:9": {1344, 768},
 		"9:16": {768, 1344},
 		"1:1":  {768, 768},

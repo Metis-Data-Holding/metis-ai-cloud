@@ -88,6 +88,7 @@ type VideoComposerProps = {
   prompt: string
   quantity: number
   ratio: VideoAspectRatio
+  ratios: VideoAspectRatio[]
   resolution: VideoResolution
   resolutions: VideoResolution[]
   disabledResolutions: VideoResolution[]
@@ -434,6 +435,7 @@ export function VideoComposer(props: VideoComposerProps) {
             disabled={props.disabled}
             quantity={props.quantity}
             ratio={props.ratio}
+            ratios={props.ratios}
             resolution={props.resolution}
             resolutions={props.resolutions}
             disabledResolutions={props.disabledResolutions}

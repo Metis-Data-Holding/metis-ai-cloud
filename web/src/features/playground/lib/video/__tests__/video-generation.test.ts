@@ -21,10 +21,12 @@ import { describe, expect, test } from 'vitest'
 import { videoFormSchema } from '../video-form-schema'
 import {
   buildVideoGenerationRequest,
+  getVideoAspectRatioOptions,
   getVideoResolutionOptions,
   isMinimaxH3VideoPlaygroundModel,
   isSupportedVideoPlaygroundModel,
   isTerminalVideoStatus,
+  normalizeVideoAspectRatio,
   normalizeVideoResolution,
 } from '../video-generation'
 
@@ -251,6 +253,16 @@ describe('video model constraints', () => {
     expect(
       isMinimaxH3VideoPlaygroundModel('dreamina-seedance-2-0-260128')
     ).toBe(false)
+  })
+
+  test('adds 21:9 only for MiniMax H3 and normalizes it for other models', () => {
+    expect(getVideoAspectRatioOptions('minimax-h3-fl2va')).toContain('21:9')
+    expect(
+      getVideoAspectRatioOptions('dreamina-seedance-2-0-260128')
+    ).not.toContain('21:9')
+    expect(
+      normalizeVideoAspectRatio('dreamina-seedance-2-0-260128', '21:9')
+    ).toBe('16:9')
   })
 
   test('accepts 768p in the shared video form schema', () => {
