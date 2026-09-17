@@ -152,13 +152,25 @@ export function VideoComposer(props: VideoComposerProps) {
     modeLabel = referenceModeLabel
   }
   let promptPlaceholder = t('Describe the video you want to create')
-  if (props.mode === 'keyframes') {
+  if (props.mode === 'first_frame') {
     promptPlaceholder = t(
-      'Describe how the scene should change between the first and last frames.'
+      'Describe the video you want to create. You can upload 1 first-frame image and type @ to reference it.'
     )
-  } else if (props.mode === 'reference' && !isWanReference) {
+  } else if (props.mode === 'keyframes') {
     promptPlaceholder = t(
-      'Use @ to quickly reference uploaded files, for example: use the motion from @Video 1 to generate a video in which the characters from @Image 2 and @Image 3 fight.'
+      'Describe how the scene should change. You can upload 1 first-frame image and 1 last-frame image, then type @ to reference them.'
+    )
+  } else if (isWanReference) {
+    promptPlaceholder = t(
+      'Describe the video you want to create. You can upload 1 reference image and type @ to reference it.'
+    )
+  } else if (props.mode === 'reference' && props.isH3) {
+    promptPlaceholder = t(
+      'Describe the video you want to create. You can upload up to 2 reference images and 1 reference video, then type @ to reference them.'
+    )
+  } else if (props.mode === 'reference') {
+    promptPlaceholder = t(
+      'Describe the video you want to create. You can upload up to 9 reference images and 3 reference videos, then type @ to reference them.'
     )
   }
   const showReferenceInput = props.mode !== 'text'

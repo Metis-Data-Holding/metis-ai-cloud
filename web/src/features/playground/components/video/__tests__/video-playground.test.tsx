@@ -138,7 +138,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     expect(prompt).toBeVisible()
     expect(prompt).toHaveAttribute(
       'placeholder',
-      'Use @ to quickly reference uploaded files, for example: use the motion from @Video 1 to generate a video in which the characters from @Image 2 and @Image 3 fight.'
+      'Describe the video you want to create. You can upload up to 9 reference images and 3 reference videos, then type @ to reference them.'
     )
     expect(
       screen.queryByText(
@@ -253,7 +253,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
 
     expect(screen.getByRole('textbox', { name: 'Prompt' })).toHaveAttribute(
       'placeholder',
-      'Describe how the scene should change between the first and last frames.'
+      'Describe how the scene should change. You can upload 1 first-frame image and 1 last-frame image, then type @ to reference them.'
     )
   })
 
@@ -541,7 +541,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     await waitFor(() =>
       expect(prompt).toHaveAttribute(
         'placeholder',
-        'Use @ to quickly reference uploaded files, for example: use the motion from @Video 1 to generate a video in which the characters from @Image 2 and @Image 3 fight.'
+        'Describe the video you want to create. You can upload up to 2 reference images and 1 reference video, then type @ to reference them.'
       )
     )
     expect(screen.getByLabelText('Add reference content')).toBeInTheDocument()
@@ -566,7 +566,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     await selectGenerationMode(user, 'First and last frames')
     expect(prompt).toHaveAttribute(
       'placeholder',
-      'Describe how the scene should change between the first and last frames.'
+      'Describe how the scene should change. You can upload 1 first-frame image and 1 last-frame image, then type @ to reference them.'
     )
     const firstFrameInput = screen.getByLabelText('First frame', {
       selector: 'input',
@@ -628,7 +628,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     await waitFor(() =>
       expect(prompt).toHaveAttribute(
         'placeholder',
-        'Describe the video you want to create'
+        'Describe the video you want to create. You can upload 1 first-frame image and type @ to reference it.'
       )
     )
     expect(
@@ -667,6 +667,12 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
       screen.getByRole('menuitemradio', {
         name: 'Reference image generation',
       })
+    )
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Prompt' })).toHaveAttribute(
+        'placeholder',
+        'Describe the video you want to create. You can upload 1 reference image and type @ to reference it.'
+      )
     )
     expect(
       screen
@@ -721,6 +727,10 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     const prompt = await screen.findByRole('textbox', { name: 'Prompt' })
     await waitFor(() =>
       expect(screen.getByLabelText('First frame')).toBeVisible()
+    )
+    expect(prompt).toHaveAttribute(
+      'placeholder',
+      'Describe the video you want to create. You can upload 1 first-frame image and type @ to reference it.'
     )
     expect(
       screen.queryByRole('button', { name: /^Generation mode:/ })
@@ -857,7 +867,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     await waitFor(() =>
       expect(prompt).toHaveAttribute(
         'placeholder',
-        'Use @ to quickly reference uploaded files, for example: use the motion from @Video 1 to generate a video in which the characters from @Image 2 and @Image 3 fight.'
+        'Describe the video you want to create. You can upload up to 2 reference images and 1 reference video, then type @ to reference them.'
       )
     )
     await user.type(prompt, 'A quiet city at night')
