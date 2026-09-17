@@ -31,6 +31,7 @@ import (
 	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/pquerna/otp/totp"
 	"github.com/stretchr/testify/assert"
@@ -38,6 +39,21 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+func reopenSecurityTestSQLite(t *testing.T, db *gorm.DB, path string) *gorm.DB {
+	t.Helper()
+	connection, err := db.DB()
+	require.NoError(t, err)
+	require.NoError(t, connection.Close())
+	// Match the production SQLite concurrency settings for security mutations.
+	// BEGIN IMMEDIATE serializes read-then-write transactions so a concurrent
+	// request observes the committed auth-version change instead of both
+	// requests failing with SQLITE_BUSY_SNAPSHOT.
+	dsn := path + "?_pragma=busy_timeout(30000)&_pragma=journal_mode(WAL)&_txlock=immediate"
+	db, err = gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	require.NoError(t, err)
+	return db
+}
 
 func setupSecurityEnrollmentTest(t *testing.T) (*model.User, service.AuthIdentity) {
 	t.Helper()
@@ -53,8 +69,12 @@ func setupSecurityEnrollmentTest(t *testing.T) (*model.User, service.AuthIdentit
 		dialect = "sqlite"
 	}
 	dsn := os.Getenv("TEST_" + strings.ToUpper(dialect) + "_DSN")
-	db, _ := newAuditTestDatabase(t, dialect, dsn)
-	logDB, _ := newAuditTestDatabase(t, dialect, dsn)
+	db, dbPath := newAuditTestDatabase(t, dialect, dsn)
+	logDB, logDBPath := newAuditTestDatabase(t, dialect, dsn)
+	if dialect == "sqlite" {
+		db = reopenSecurityTestSQLite(t, db, dbPath)
+		logDB = reopenSecurityTestSQLite(t, logDB, logDBPath)
+	}
 	db.Logger = logger.Default.LogMode(logger.Silent)
 	logDB.Logger = logger.Default.LogMode(logger.Silent)
 	versionQuery := "SELECT VERSION()"

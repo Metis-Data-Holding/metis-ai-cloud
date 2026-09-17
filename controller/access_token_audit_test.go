@@ -438,11 +438,7 @@ func newAuditTestDatabase(t *testing.T, kind, dsn string) (*gorm.DB, string) {
 	t.Helper()
 	if kind == "sqlite" {
 		path := t.TempDir() + "/audit.db"
-		// Match the production SQLite concurrency settings. In particular,
-		// BEGIN IMMEDIATE prevents two read-then-write transactions from both
-		// failing with SQLITE_BUSY_SNAPSHOT before the busy timeout can help.
-		dsn := path + "?_pragma=busy_timeout(30000)&_pragma=journal_mode(WAL)&_txlock=immediate"
-		db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+		db, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
 		require.NoError(t, err)
 		return db, path
 	}
