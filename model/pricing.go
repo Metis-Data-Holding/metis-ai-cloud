@@ -209,6 +209,14 @@ func mergeTaskPluginEndpointTypes(modelEndpoints map[string][]string, generation
 	if generation == nil {
 		return
 	}
+	protocols := []struct {
+		path         string
+		name         string
+		endpointType constant.EndpointType
+	}{
+		{"/v1/responses", "openai_responses", constant.EndpointTypeOpenAIResponse},
+		{"/v1/videos", "openai_video", constant.EndpointTypeOpenAIVideo},
+	}
 	for modelName, endpoints := range modelEndpoints {
 		lookupModel := modelName
 		if canonical, ok := generation.CanonicalModel(modelName); ok {
@@ -216,11 +224,13 @@ func mergeTaskPluginEndpointTypes(modelEndpoints map[string][]string, generation
 		} else if target, ok := ResolveTaskModelAlias(generation, modelName); ok && target.Declared != "" {
 			lookupModel = target.Declared
 		}
-		binding, ok := generation.LookupEndpoint(http.MethodPost, "/v1/videos", lookupModel)
-		if !ok || binding.Protocol != "openai_video" {
-			continue
+		for _, protocol := range protocols {
+			binding, ok := generation.LookupEndpoint(http.MethodPost, protocol.path, lookupModel)
+			if ok && binding.Protocol == protocol.name {
+				endpoints = appendPricingEndpoint(endpoints, string(protocol.endpointType))
+			}
 		}
-		modelEndpoints[modelName] = appendPricingEndpoint(endpoints, string(constant.EndpointTypeOpenAIVideo))
+		modelEndpoints[modelName] = endpoints
 	}
 }
 

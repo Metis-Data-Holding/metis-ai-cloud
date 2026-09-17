@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMergeTaskPluginEndpointTypesAddsDeclaredVideoProtocol(t *testing.T) {
+func TestMergeTaskPluginEndpointTypesAddsDeclaredProtocols(t *testing.T) {
 	registry := jsplugin.NewRegistry()
 	_, err := registry.Register(`
 export const meta = {
@@ -25,12 +25,18 @@ export const meta = {
   channelTypes: [54],
   models: ["video-model"],
   fetchMode: "per_task",
-  protocols: ["openai_video"],
+  protocols: [{name: "openai_responses", supports: ["sync"]}, "openai_video"],
 };
-export const protocols = {openai_video: {
-  decodeRequest: function(ctx) { return {kind: "submit", model: ctx.model, requestBody: ctx.body.value}; },
-  render: function(ctx, task) { return task; },
-}};
+export const protocols = {
+  openai_responses: {
+    decodeRequest: function(ctx) { return {kind: "submit", model: ctx.model, requestBody: ctx.body.value}; },
+    renderFinal: function(ctx, task) { return task; },
+  },
+  openai_video: {
+    decodeRequest: function(ctx) { return {kind: "submit", model: ctx.model, requestBody: ctx.body.value}; },
+    render: function(ctx, task) { return task; },
+  },
+};
 export function buildSubmitRequest() { return {}; }
 export function parseSubmitResponse() { return {taskId: "task"}; }
 export function buildQueryRequest() { return {}; }
@@ -41,13 +47,13 @@ export function buildContentRequest() { return {}; }
 	require.NoError(t, err)
 
 	endpoints := map[string][]string{
-		"video-model": {string(constant.EndpointTypeOpenAI)},
+		"video-model": {},
 		"chat-model":  {string(constant.EndpointTypeOpenAI)},
 	}
 	mergeTaskPluginEndpointTypes(endpoints, registry.Generation())
 
 	assert.Equal(t, []string{
-		string(constant.EndpointTypeOpenAI),
+		string(constant.EndpointTypeOpenAIResponse),
 		string(constant.EndpointTypeOpenAIVideo),
 	}, endpoints["video-model"])
 	assert.Equal(t, []string{string(constant.EndpointTypeOpenAI)}, endpoints["chat-model"])

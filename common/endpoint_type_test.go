@@ -13,3 +13,8 @@ func TestGetEndpointTypesByChannelTypeTreatsDoubaoVideoAsVideoOnly(t *testing.T)
 		GetEndpointTypesByChannelType(constant.ChannelTypeDoubaoVideo, "dreamina-seedance-2-0-260128"),
 	)
 }
+
+func TestGetEndpointTypesByChannelTypeDoesNotTreatTaskPluginAsChat(t *testing.T) {
+	assert.Empty(t, GetEndpointTypesByChannelType(constant.ChannelTypeTaskPlugin, "minimax-h3-fl2va"))
+	assert.Empty(t, GetEndpointTypesByChannelType(constant.ChannelTypeTaskPlugin, "dall-e-3"))
+}
