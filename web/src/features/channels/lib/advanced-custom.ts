@@ -42,6 +42,11 @@ export const ADVANCED_CUSTOM_CONVERTER_OPTIONS: Array<{
     triggerLabel: 'Native forwarding',
   },
   {
+    value: 'jina_rerank_to_sglang',
+    label: 'SGLang',
+    triggerLabel: 'SGLang',
+  },
+  {
     value: 'anthropic_messages_to_openai_chat_completions',
     label: 'Anthropic Messages to OpenAI Chat',
     triggerLabel: 'To OpenAI Chat',
@@ -509,6 +514,31 @@ export function isAdvancedCustomIncomingPathAllowed(
   return isConverterPathAllowed(incomingPath, converter)
 }
 
+export function isAdvancedCustomPassThroughAllowed(
+  converter: AdvancedCustomConverter
+): boolean {
+  return converter === 'none' || converter === 'jina_rerank_to_sglang'
+}
+
+export function migrateLegacyAdvancedCustomPassThrough(
+  config: AdvancedCustomConfig
+): AdvancedCustomConfig {
+  const normalized = normalizeAdvancedCustomConfig(config)
+  return {
+    advanced_routes: (normalized.advanced_routes || []).map((route) => {
+      const incomingPath = route.incoming_path?.trim() || ''
+      const converter = route.converter || 'none'
+      if (
+        isAdvancedCustomManagementPath(incomingPath) ||
+        !isAdvancedCustomPassThroughAllowed(converter)
+      ) {
+        return route
+      }
+      return { ...route, pass_through_body_enabled: true }
+    }),
+  }
+}
+
 export function getAdvancedCustomConverterOptions(
   incomingPath: string
 ): typeof ADVANCED_CUSTOM_CONVERTER_OPTIONS {
@@ -656,6 +686,12 @@ export function validateAdvancedCustomConfig(
           message: `${routeLabel} upstream path must not contain {model}`,
         }
       }
+      if (route.pass_through_body_enabled) {
+        return {
+          routeIndex: index,
+          message: `${routeLabel} route does not support pass-through`,
+        }
+      }
     }
     const routeModelsError = validateAdvancedCustomRouteModels(
       index,
@@ -683,6 +719,15 @@ export function validateAdvancedCustomConfig(
       return {
         routeIndex: index,
         message: 'Converter does not match incoming path',
+      }
+    }
+    if (
+      route.pass_through_body_enabled &&
+      !isAdvancedCustomPassThroughAllowed(converter)
+    ) {
+      return {
+        routeIndex: index,
+        message: 'Pass-through requires native forwarding',
       }
     }
 
@@ -780,6 +825,9 @@ function normalizeAdvancedCustomRoute(
   const models = normalizeAdvancedCustomRouteModels(route.models)
   if (models.length > 0) {
     nextRoute.models = models
+  }
+  if (route.pass_through_body_enabled === true) {
+    nextRoute.pass_through_body_enabled = true
   }
   if (route.auth) {
     nextRoute.auth = {
@@ -899,6 +947,9 @@ function isConverterPathAllowed(
   converter: AdvancedCustomConverter
 ): boolean {
   if (converter === 'none') return true
+  if (converter === 'jina_rerank_to_sglang') {
+    return incomingPath === '/v1/rerank' || incomingPath === '/rerank'
+  }
   if (incomingPath === '/v1/alpha/search') return false
   if (converter === 'anthropic_messages_to_openai_chat_completions') {
     return incomingPath === '/v1/messages'
