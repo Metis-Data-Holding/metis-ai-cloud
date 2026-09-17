@@ -78,6 +78,7 @@ interface VideoReferenceInputProps {
   disabled?: boolean
   strictKeyframeFormats?: boolean
   strictReferenceFormats?: boolean
+  referenceImagesOnly?: boolean
   maxReferenceImages?: number
   maxReferenceVideos?: number
   maxReferenceVideoBytes?: number
@@ -642,8 +643,12 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
           <input
             id='video-reference-content'
             type='file'
-            accept={REFERENCE_CONTENT_ACCEPT}
-            multiple
+            accept={
+              props.referenceImagesOnly
+                ? FIRST_FRAME_ONLY_ACCEPT
+                : REFERENCE_CONTENT_ACCEPT
+            }
+            multiple={!props.referenceImagesOnly}
             aria-label={t('Add reference content')}
             className='sr-only'
             disabled={interactionDisabled}

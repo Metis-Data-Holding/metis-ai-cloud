@@ -153,11 +153,19 @@ export function VideoPlayground() {
   }, [form, values.model, values.ratio])
 
   useEffect(() => {
+    if (!values.model) return
+    if (
+      values.model.toLowerCase() === 'alibaba/wan-3.0' &&
+      previousModel.current !== values.model
+    ) {
+      form.setValue('mode', 'first_frame', { shouldValidate: true })
+      return
+    }
     if (modeOptions.includes(values.mode)) return
     form.setValue('mode', modeOptions[0], { shouldValidate: true })
     setInputContent([])
     setInputContentValid(true)
-  }, [form, modeOptions, values.mode])
+  }, [form, modeOptions, values.mode, values.model])
 
   useEffect(() => {
     if (
@@ -241,8 +249,8 @@ export function VideoPlayground() {
     generation.isSubmitting || modelsQuery.isPending || noVideoModels
   const hasFirstFrame = inputContent.some((item) => item.role === 'first_frame')
   const inputContentMissing =
-    ((values.mode === 'keyframes' || values.mode === 'first_frame') &&
-      !hasFirstFrame) ||
+    (values.mode === 'keyframes' && !hasFirstFrame) ||
+    (values.mode === 'first_frame' && !isWan && !hasFirstFrame) ||
     (values.mode === 'reference' &&
       inputContent.length === 0 &&
       values.prompt.trim() === '')

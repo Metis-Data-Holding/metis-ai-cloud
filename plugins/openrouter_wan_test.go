@@ -61,7 +61,7 @@ func mustSource(t *testing.T, key string) string {
 	return source
 }
 
-func TestOpenRouterWanDecodesTextAndFirstFrameRequests(t *testing.T) {
+func TestOpenRouterWanDecodesTextFirstFrameAndReferenceRequests(t *testing.T) {
 	plugin := loadOpenRouterWanPlugin(t)
 	decode := func(body map[string]any) (map[string]any, error) {
 		value, err := plugin.Engine.CallPath(t.Context(), "protocols", []string{"openai_video", "decodeRequest"}, map[string]any{
@@ -119,6 +119,30 @@ func TestOpenRouterWanDecodesTextAndFirstFrameRequests(t *testing.T) {
 		"generate_audio": false,
 		"frame_image":    "data:image/png;base64,AAAA",
 	}, firstFrame["requestBody"])
+
+	reference, err := decode(map[string]any{
+		"model":   "alibaba/wan-3.0",
+		"prompt":  "use the cat as the subject",
+		"seconds": 5,
+		"metadata": map[string]any{
+			"resolution": "720p",
+			"ratio":      "16:9",
+			"content": []any{map[string]any{
+				"type": "image_url", "role": "reference_image",
+				"image_url": map[string]any{"url": "data:image/webp;base64,AAAA"},
+			}},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "reference_to_video", reference["action"])
+	assert.Equal(t, map[string]any{
+		"prompt":          "use the cat as the subject",
+		"duration":        float64(5),
+		"resolution":      "720p",
+		"aspect_ratio":    "16:9",
+		"generate_audio":  false,
+		"reference_image": "data:image/webp;base64,AAAA",
+	}, reference["requestBody"])
 
 	prime, err := plugin.Engine.CallPath(t.Context(), "protocols", []string{"openai_video", "decodeRequest"}, map[string]any{
 		"model": "alibaba/wan-3.0-prime",
@@ -178,6 +202,19 @@ func TestOpenRouterWanBuildsPollAndArtifactRequests(t *testing.T) {
 	assert.Equal(t, []any{map[string]any{
 		"type": "image_url", "image_url": map[string]any{"url": "data:image/png;base64,AAAA"}, "frame_type": "first_frame",
 	}}, firstFrameBody["frame_images"])
+
+	referenceSubmit, err := plugin.Engine.Call(t.Context(), "buildSubmitRequest", map[string]any{
+		"requestBody": map[string]any{
+			"prompt": "a cat", "duration": float64(5), "resolution": "720p", "aspect_ratio": "16:9",
+			"generate_audio": false, "reference_image": "data:image/webp;base64,AAAA",
+		},
+		"model": "alibaba/wan-3.0", "upstreamModel": "alibaba/wan-3.0", "baseUrl": "https://openrouter.ai/api", "apiKey": "test-key",
+	})
+	require.NoError(t, err)
+	referenceBody := roundTripOpenRouterWan(t, referenceSubmit)["body"].(map[string]any)
+	assert.Equal(t, []any{map[string]any{
+		"type": "image_url", "image_url": map[string]any{"url": "data:image/webp;base64,AAAA"},
+	}}, referenceBody["input_references"])
 
 	query, err := plugin.Engine.Call(t.Context(), "buildQueryRequest", map[string]any{
 		"taskId":  "video_123",
@@ -241,4 +278,16 @@ func TestOpenRouterWanRejectsUnsupportedVideoInputs(t *testing.T) {
 			require.ErrorContains(t, err, testCase.err)
 		})
 	}
+
+	_, err := plugin.Engine.CallPath(t.Context(), "protocols", []string{"openai_video", "decodeRequest"}, map[string]any{
+		"model": "alibaba/wan-3.0-prime",
+		"body": map[string]any{"kind": "json", "value": map[string]any{
+			"prompt": "p",
+			"metadata": map[string]any{"content": []any{map[string]any{
+				"type": "image_url", "role": "reference_image",
+				"image_url": map[string]any{"url": "data:image/png;base64,AAAA"},
+			}}},
+		}},
+	})
+	require.ErrorContains(t, err, "reference images are not supported by alibaba/wan-3.0-prime")
 }

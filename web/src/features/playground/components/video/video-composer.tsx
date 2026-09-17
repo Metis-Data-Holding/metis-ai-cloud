@@ -123,6 +123,19 @@ export function VideoComposer(props: VideoComposerProps) {
   const mentionListboxId = useId()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const referenceAssets = getVideoReferenceAssets(props.inputContent)
+  const isWanReference =
+    props.modelValue.toLowerCase() === 'alibaba/wan-3.0' &&
+    props.mode === 'reference'
+  let maxReferenceImages: number | undefined
+  let maxReferenceVideos: number | undefined
+  if (props.isH3) {
+    maxReferenceImages = 2
+    maxReferenceVideos = 1
+  }
+  if (isWanReference) {
+    maxReferenceImages = 1
+    maxReferenceVideos = 0
+  }
   let modeLabel = t('First and last frames')
   if (props.mode === 'text') {
     modeLabel = t('Text to video')
@@ -137,7 +150,7 @@ export function VideoComposer(props: VideoComposerProps) {
     promptPlaceholder = t(
       'Describe how the scene should change between the first and last frames.'
     )
-  } else if (props.mode === 'reference') {
+  } else if (props.mode === 'reference' && !isWanReference) {
     promptPlaceholder = t(
       'Use @ to quickly reference uploaded files, for example: use the motion from @Video 1 to generate a video in which the characters from @Image 2 and @Image 3 fight.'
     )
@@ -275,9 +288,12 @@ export function VideoComposer(props: VideoComposerProps) {
               onValidityChange={props.onInputValidityChange}
               disabled={props.disabled || props.modelValue === ''}
               strictKeyframeFormats={props.isH3 || props.mode === 'first_frame'}
-              strictReferenceFormats={props.isH3 && props.mode === 'reference'}
-              maxReferenceImages={props.isH3 ? 2 : undefined}
-              maxReferenceVideos={props.isH3 ? 1 : undefined}
+              strictReferenceFormats={
+                (props.isH3 && props.mode === 'reference') || isWanReference
+              }
+              referenceImagesOnly={isWanReference}
+              maxReferenceImages={maxReferenceImages}
+              maxReferenceVideos={maxReferenceVideos}
               maxReferenceVideoBytes={
                 props.isH3 ? H3_MAX_REFERENCE_VIDEO_BYTES : undefined
               }
@@ -388,80 +404,82 @@ export function VideoComposer(props: VideoComposerProps) {
         className='bg-card flex-wrap px-3 py-2.5'
       >
         <div className='flex min-w-0 flex-1 flex-wrap items-center gap-1'>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <PromptInputButton
-                  aria-label={t('Generation mode: {{mode}}', {
-                    mode: modeLabel,
-                  })}
-                  disabled={props.disabled}
-                />
-              }
-            >
-              <HugeiconsIcon icon={AiVideoIcon} data-icon='inline-start' />
-              <span>{modeLabel}</span>
-              <ChevronDownIcon data-icon='inline-end' />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              side='top'
-              sideOffset={8}
-              className='w-64 rounded-2xl p-2'
-            >
-              <DropdownMenuGroup>
-                <DropdownMenuLabel className='px-3 py-2 text-sm'>
-                  {t('Generation mode')}
-                </DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={props.mode}
-                  onValueChange={(value) =>
-                    props.onModeChange(value as VideoGenerationMode)
-                  }
-                >
-                  {props.modeOptions.includes('text') ? (
-                    <DropdownMenuRadioItem
-                      value='text'
-                      closeOnClick
-                      className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
-                    >
-                      <HugeiconsIcon icon={AiVideoIcon} aria-hidden='true' />
-                      <span>{t('Text to video')}</span>
-                    </DropdownMenuRadioItem>
-                  ) : null}
-                  {props.modeOptions.includes('first_frame') ? (
-                    <DropdownMenuRadioItem
-                      value='first_frame'
-                      closeOnClick
-                      className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
-                    >
-                      <HugeiconsIcon icon={Film01Icon} aria-hidden='true' />
-                      <span>{t('First frame')}</span>
-                    </DropdownMenuRadioItem>
-                  ) : null}
-                  {props.modeOptions.includes('reference') ? (
-                    <DropdownMenuRadioItem
-                      value='reference'
-                      closeOnClick
-                      className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
-                    >
-                      <HugeiconsIcon icon={AiVideoIcon} aria-hidden='true' />
-                      <span>{t('Reference generation')}</span>
-                    </DropdownMenuRadioItem>
-                  ) : null}
-                  {props.modeOptions.includes('keyframes') ? (
-                    <DropdownMenuRadioItem
-                      value='keyframes'
-                      closeOnClick
-                      className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
-                    >
-                      <HugeiconsIcon icon={Film01Icon} aria-hidden='true' />
-                      <span>{t('First and last frames')}</span>
-                    </DropdownMenuRadioItem>
-                  ) : null}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {props.modeOptions.length > 1 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <PromptInputButton
+                    aria-label={t('Generation mode: {{mode}}', {
+                      mode: modeLabel,
+                    })}
+                    disabled={props.disabled}
+                  />
+                }
+              >
+                <HugeiconsIcon icon={AiVideoIcon} data-icon='inline-start' />
+                <span>{modeLabel}</span>
+                <ChevronDownIcon data-icon='inline-end' />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                side='top'
+                sideOffset={8}
+                className='w-64 rounded-2xl p-2'
+              >
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className='px-3 py-2 text-sm'>
+                    {t('Generation mode')}
+                  </DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={props.mode}
+                    onValueChange={(value) =>
+                      props.onModeChange(value as VideoGenerationMode)
+                    }
+                  >
+                    {props.modeOptions.includes('text') ? (
+                      <DropdownMenuRadioItem
+                        value='text'
+                        closeOnClick
+                        className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
+                      >
+                        <HugeiconsIcon icon={AiVideoIcon} aria-hidden='true' />
+                        <span>{t('Text to video')}</span>
+                      </DropdownMenuRadioItem>
+                    ) : null}
+                    {props.modeOptions.includes('first_frame') ? (
+                      <DropdownMenuRadioItem
+                        value='first_frame'
+                        closeOnClick
+                        className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
+                      >
+                        <HugeiconsIcon icon={Film01Icon} aria-hidden='true' />
+                        <span>{t('First frame')}</span>
+                      </DropdownMenuRadioItem>
+                    ) : null}
+                    {props.modeOptions.includes('reference') ? (
+                      <DropdownMenuRadioItem
+                        value='reference'
+                        closeOnClick
+                        className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
+                      >
+                        <HugeiconsIcon icon={AiVideoIcon} aria-hidden='true' />
+                        <span>{t('Reference generation')}</span>
+                      </DropdownMenuRadioItem>
+                    ) : null}
+                    {props.modeOptions.includes('keyframes') ? (
+                      <DropdownMenuRadioItem
+                        value='keyframes'
+                        closeOnClick
+                        className='data-checked:bg-accent h-14 cursor-pointer gap-3 px-3 text-base'
+                      >
+                        <HugeiconsIcon icon={Film01Icon} aria-hidden='true' />
+                        <span>{t('First and last frames')}</span>
+                      </DropdownMenuRadioItem>
+                    ) : null}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
 
           <VideoParameterPanel
             audio={props.audio}

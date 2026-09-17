@@ -607,7 +607,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     )
   })
 
-  test('uses text and first-frame-only modes for OpenRouter Wan', async () => {
+  test('uses first-frame and reference-image modes for OpenRouter Wan', async () => {
     vi.mocked(getUserModels).mockResolvedValue([
       { label: 'Wan 3.0', value: 'alibaba/wan-3.0' },
       { label: 'Wan 3.0 Prime', value: 'alibaba/wan-3.0-prime' },
@@ -623,25 +623,10 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
       )
     )
     expect(
-      screen.getByRole('button', { name: 'Generation mode: Text to video' })
+      screen.getByRole('button', { name: 'Generation mode: First frame' })
     ).toBeVisible()
-    expect(
-      screen.queryByLabelText('Add reference content')
-    ).not.toBeInTheDocument()
-
-    await user.click(
-      screen.getByRole('button', { name: 'Generation mode: Text to video' })
-    )
-    await user.click(screen.getByRole('menuitemradio', { name: 'First frame' }))
     expect(screen.getByLabelText('First frame')).toBeVisible()
-    expect(screen.queryByLabelText('Last frame')).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: 'Swap first and last frames' })
-    ).not.toBeInTheDocument()
-    await user.upload(
-      screen.getByLabelText('First frame', { selector: 'input' }),
-      new File(['image'], 'first.png', { type: 'image/png' })
-    )
+
     await user.type(prompt, 'A cat walks through a sunny room')
     await user.click(screen.getByRole('button', { name: 'Generate video' }))
 
@@ -654,13 +639,82 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
           resolution: '720p',
           ratio: '16:9',
           generate_audio: false,
+        },
+      })
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: 'Generation mode: First frame' })
+    )
+    expect(
+      screen.queryByRole('menuitemradio', { name: 'Text to video' })
+    ).not.toBeInTheDocument()
+    await user.click(
+      screen.getByRole('menuitemradio', { name: 'Reference generation' })
+    )
+    const referenceInput = screen.getByLabelText('Add reference content')
+    expect(referenceInput).toHaveAttribute(
+      'accept',
+      'image/jpeg,image/png,image/webp'
+    )
+    expect(referenceInput).not.toHaveAttribute('multiple')
+    await user.upload(
+      referenceInput,
+      new File(['image'], 'reference.png', { type: 'image/png' })
+    )
+    const updatedPrompt = screen.getByRole('textbox', { name: 'Prompt' })
+    await user.clear(updatedPrompt)
+    await user.type(updatedPrompt, 'Use the cat as the subject')
+    await user.click(screen.getByRole('button', { name: 'Generate video' }))
+
+    await waitFor(() =>
+      expect(submitVideoGeneration).toHaveBeenCalledWith('default', {
+        model: 'alibaba/wan-3.0',
+        prompt: 'Use the cat as the subject',
+        seconds: 5,
+        metadata: {
+          resolution: '720p',
+          ratio: '16:9',
+          generate_audio: false,
           content: [
             {
               type: 'image_url',
               image_url: { url: 'data:image/png;base64,aW1hZ2U=' },
-              role: 'first_frame',
+              role: 'reference_image',
             },
           ],
+        },
+      })
+    )
+  })
+
+  test('hides the generation mode selector for Wan 3.0 Prime', async () => {
+    vi.mocked(getUserModels).mockResolvedValue([
+      { label: 'Wan 3.0 Prime', value: 'alibaba/wan-3.0-prime' },
+    ])
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    const prompt = await screen.findByRole('textbox', { name: 'Prompt' })
+    await waitFor(() =>
+      expect(screen.getByLabelText('First frame')).toBeVisible()
+    )
+    expect(
+      screen.queryByRole('button', { name: /^Generation mode:/ })
+    ).not.toBeInTheDocument()
+
+    await user.type(prompt, 'Clouds move over a quiet lake')
+    await user.click(screen.getByRole('button', { name: 'Generate video' }))
+
+    await waitFor(() =>
+      expect(submitVideoGeneration).toHaveBeenCalledWith('default', {
+        model: 'alibaba/wan-3.0-prime',
+        prompt: 'Clouds move over a quiet lake',
+        seconds: 5,
+        metadata: {
+          resolution: '720p',
+          ratio: '16:9',
+          generate_audio: false,
         },
       })
     )

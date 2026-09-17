@@ -3,10 +3,10 @@ export const meta = {
   key: "openrouter-wan",
   name: "OpenRouter Wan",
   description: {
-    en: "OpenRouter Alibaba Wan text-to-video and first-frame image-to-video",
-    zh: "通过 OpenRouter 接入阿里 Wan 文生视频与首帧图生视频",
+    en: "OpenRouter Alibaba Wan video generation with first-frame and reference image input",
+    zh: "通过 OpenRouter 接入阿里 Wan 文生视频、首帧与参考图生视频",
   },
-  version: "1.0.0",
+  version: "1.1.0",
   author: { name: "Metis Data" },
   baseUrl: "https://openrouter.ai/api",
   auth: { type: "api_key" },
@@ -48,28 +48,34 @@ function metadataObject(request) {
   return metadata;
 }
 
-function contentFrame(metadata) {
-  if (!Object.prototype.hasOwnProperty.call(metadata, "content")) return "";
+function contentImage(metadata, model) {
+  if (!Object.prototype.hasOwnProperty.call(metadata, "content")) return null;
   if (!Array.isArray(metadata.content)) throw new Error("metadata content must be an array");
-  if (metadata.content.length === 0) return "";
+  if (metadata.content.length === 0) return null;
   if (
     metadata.content.length !== 1 ||
     !metadata.content[0] ||
     typeof metadata.content[0] !== "object" ||
     Array.isArray(metadata.content[0]) ||
-    metadata.content[0].type !== "image_url" ||
-    metadata.content[0].role !== "first_frame"
+    metadata.content[0].type !== "image_url"
   ) {
+    throw new Error("only one first_frame image is supported");
+  }
+  const role = metadata.content[0].role;
+  if (role === "reference_image" && model !== "alibaba/wan-3.0") {
+    throw new Error("reference images are not supported by " + model);
+  }
+  if (role !== "first_frame" && role !== "reference_image") {
     throw new Error("only one first_frame image is supported");
   }
   const image = metadata.content[0].image_url;
   const url = image && typeof image === "object" ? trimmed(image.url) : "";
   const match = firstFramePattern.exec(url);
-  if (!match || match[1].length % 4 !== 0) throw new Error("first_frame must be an image data URL");
+  if (!match || match[1].length % 4 !== 0) throw new Error(role + " must be an image data URL");
   const padding = match[1].endsWith("==") ? 2 : match[1].endsWith("=") ? 1 : 0;
   const decodedBytes = (match[1].length / 4) * 3 - padding;
-  if (decodedBytes > maxFirstFrameBytes) throw new Error("first_frame must not exceed 30 MB");
-  return url;
+  if (decodedBytes > maxFirstFrameBytes) throw new Error(role + " must not exceed 30 MB");
+  return { role, url };
 }
 
 function normalizedRequest(request, model) {
@@ -85,7 +91,7 @@ function normalizedRequest(request, model) {
   const ratio = trimmed(req.aspect_ratio || req.ratio || metadata.aspect_ratio || metadata.ratio || "16:9");
   if (!ratios.has(ratio)) throw new Error("ratio must be one of 16:9, 4:3, 1:1, 3:4, 9:16");
   const generateAudio = req.generate_audio === undefined ? metadata.generate_audio === true : req.generate_audio === true;
-  const frameImage = contentFrame(metadata);
+  const contentImageValue = contentImage(metadata, model);
   if (
     req.input_references !== undefined ||
     req.frame_images !== undefined ||
@@ -96,13 +102,15 @@ function normalizedRequest(request, model) {
     throw new Error("reference content is not supported");
   }
   const normalized = { prompt, duration, resolution, aspect_ratio: ratio, generate_audio: generateAudio };
-  if (frameImage) normalized.frame_image = frameImage;
+  if (contentImageValue && contentImageValue.role === "first_frame") normalized.frame_image = contentImageValue.url;
+  if (contentImageValue && contentImageValue.role === "reference_image") normalized.reference_image = contentImageValue.url;
   if (req.seed !== undefined) {
     const seed = Number(req.seed);
     if (!Number.isInteger(seed) || seed < 0) throw new Error("seed must be a non-negative integer");
     normalized.seed = seed;
   }
-  return { model, action: frameImage ? "image_to_video" : "text_to_video", request: normalized };
+  const action = normalized.reference_image ? "reference_to_video" : normalized.frame_image ? "image_to_video" : "text_to_video";
+  return { model, action, request: normalized };
 }
 
 function endpoint(ctx, suffix) {
@@ -129,12 +137,20 @@ export function buildSubmitRequest(ctx) {
       },
     ];
   }
+  if (request.reference_image) {
+    body.input_references = [
+      {
+        type: "image_url",
+        image_url: { url: request.reference_image },
+      },
+    ];
+  }
   return {
     url: endpoint(ctx, "/v1/videos"),
     method: "POST",
     headers: { Authorization: "Bearer " + ctx.apiKey, "Content-Type": "application/json" },
     body,
-    action: request.frame_image ? "image_to_video" : "text_to_video",
+    action: request.reference_image ? "reference_to_video" : request.frame_image ? "image_to_video" : "text_to_video",
   };
 }
 

@@ -39,7 +39,9 @@ const DEFAULT_ASPECT_RATIOS: VideoAspectRatio[] = [
 ]
 const H3_ASPECT_RATIOS: VideoAspectRatio[] = ['21:9', ...DEFAULT_ASPECT_RATIOS]
 const H3_MODEL = 'minimax-h3-fl2va'
-const WAN_MODELS = new Set(['alibaba/wan-3.0', 'alibaba/wan-3.0-prime'])
+const WAN_MODEL = 'alibaba/wan-3.0'
+const WAN_PRIME_MODEL = 'alibaba/wan-3.0-prime'
+const WAN_MODELS = new Set([WAN_MODEL, WAN_PRIME_MODEL])
 
 export function isOpenRouterWanVideoPlaygroundModel(model: string): boolean {
   return WAN_MODELS.has(model.toLowerCase())
@@ -60,9 +62,10 @@ export function isSupportedVideoPlaygroundModel(model: string): boolean {
 }
 
 export function getVideoGenerationModes(model: string): VideoGenerationMode[] {
-  return isOpenRouterWanVideoPlaygroundModel(model)
-    ? ['text', 'first_frame']
-    : ['reference', 'keyframes']
+  const normalized = model.toLowerCase()
+  if (normalized === WAN_MODEL) return ['first_frame', 'reference']
+  if (normalized === WAN_PRIME_MODEL) return ['first_frame']
+  return ['reference', 'keyframes']
 }
 
 export function getVideoDurationOptions(model: string): number[] {

@@ -226,7 +226,10 @@ describe('video model constraints', () => {
       true
     )
     expect(getVideoGenerationModes('alibaba/wan-3.0')).toEqual([
-      'text',
+      'first_frame',
+      'reference',
+    ])
+    expect(getVideoGenerationModes('alibaba/wan-3.0-prime')).toEqual([
       'first_frame',
     ])
     expect(getVideoResolutionOptions('alibaba/wan-3.0')).toEqual([
