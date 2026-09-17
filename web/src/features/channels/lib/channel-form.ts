@@ -31,11 +31,12 @@ import {
   MODEL_FETCHABLE_TYPES,
   OPENAI_FIELD_PASSTHROUGH_TYPES,
 } from '../constants'
-import type { Channel } from '../types'
+import type { AdvancedCustomConfig, Channel } from '../types'
 import {
   CHANNEL_TYPE_ADVANCED_CUSTOM,
   advancedCustomConfigUsesRelativeUpstreamPath,
   hasValidAdvancedCustomModelListRoute,
+  migrateLegacyAdvancedCustomPassThrough,
   parseAdvancedCustomConfig,
   stringifyAdvancedCustomConfig,
   validateAdvancedCustomConfig,
@@ -576,7 +577,21 @@ export function transformChannelToFormDefaults(
         ? parsed.upstream_model_update_ignored_models.join(',')
         : ''
       if (parsed.advanced_custom) {
-        advancedCustom = stringifyAdvancedCustomConfig(parsed.advanced_custom)
+        let advancedCustomConfig: AdvancedCustomConfig = parsed.advanced_custom
+        if (
+          channel.type === CHANNEL_TYPE_ADVANCED_CUSTOM &&
+          extraSettings.pass_through_body_enabled
+        ) {
+          advancedCustomConfig =
+            migrateLegacyAdvancedCustomPassThrough(advancedCustomConfig)
+          const migrated = advancedCustomConfig.advanced_routes?.some(
+            (route) => route.pass_through_body_enabled === true
+          )
+          if (migrated) {
+            extraSettings.pass_through_body_enabled = false
+          }
+        }
+        advancedCustom = stringifyAdvancedCustomConfig(advancedCustomConfig)
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -645,7 +660,7 @@ export function buildSettingJSON(formData: ChannelFormValues): string {
     force_format: formData.force_format || false,
     thinking_to_content: formData.thinking_to_content || false,
     proxy: formData.proxy?.trim() || '',
-    pass_through_body_enabled: formData.pass_through_body_enabled || false,
+    pass_through_body_enabled: formData.pass_through_body_enabled === true,
     responses_websocket_enabled:
       (formData.type === 1 || formData.type === 57) &&
       formData.responses_websocket_enabled === true,

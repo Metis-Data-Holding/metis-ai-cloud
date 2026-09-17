@@ -124,6 +124,7 @@ export interface AdvancedCustomRoute {
   converter?: AdvancedCustomConverter
   models?: string[]
   auth?: AdvancedCustomRouteAuth
+  pass_through_body_enabled?: boolean
 }
 
 export interface AdvancedCustomRouteAuth {
@@ -134,6 +135,7 @@ export interface AdvancedCustomRouteAuth {
 
 export type AdvancedCustomConverter =
   | 'none'
+  | 'jina_rerank_to_sglang'
   | 'anthropic_messages_to_openai_chat_completions'
   | 'openai_chat_completions_to_anthropic_messages'
   | 'openai_chat_completions_to_openai_responses'
