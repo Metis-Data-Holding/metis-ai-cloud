@@ -365,6 +365,25 @@ func TestMinimaxH3BuildsMinimalComfyWorkflow(t *testing.T) {
 		assert.Equal(t, []any{"16", float64(0)}, workflow["4"].(map[string]any)["inputs"].(map[string]any)["ref_videos.ref_video_0"])
 	})
 
+	t.Run("reference audio uses the Ref2VA workflow", func(t *testing.T) {
+		requestBody := map[string]any{
+			"prompt": "follow the reference voice", "duration": 5, "resolution": "768p", "ratio": "16:9", "generate_audio": true,
+			"reference_audio_0": map[string]any{"__fileRef": "request_file:reference_audio_0"},
+		}
+		context := minimaxH3SubmitContext(requestBody, "task/audio-only")
+		context["files"] = []map[string]any{{
+			"ref": "request_file:reference_audio_0", "field": "reference_audio_0", "filename": "voice.wav", "mimeType": "audio/wav", "size": 12,
+		}}
+
+		descriptor := callMinimaxH3Hook(t, plugin, "buildSubmitRequest", context)
+		prepare := descriptor["prepareRequests"].([]any)
+		require.Len(t, prepare, 1)
+		assert.Equal(t, "input", prepare[0].(map[string]any)["parts"].([]any)[1].(map[string]any)["value"])
+		workflow := descriptor["body"].(map[string]any)["prompt"].(map[string]any)
+		assert.Equal(t, "LoadAudio", workflow["18"].(map[string]any)["class_type"])
+		assert.Equal(t, []any{"18", float64(0)}, workflow["4"].(map[string]any)["inputs"].(map[string]any)["ref_audios.ref_audio_0"])
+	})
+
 	t.Run("reference image supports generated audio", func(t *testing.T) {
 		requestBody := map[string]any{
 			"prompt": "animate the subject", "duration": 5, "resolution": "768p", "ratio": "16:9", "generate_audio": true,

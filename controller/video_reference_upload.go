@@ -48,11 +48,11 @@ func UploadVideoReference(c *gin.Context) {
 		if saveErr != nil {
 			switch {
 			case errors.Is(saveErr, service.ErrVideoReferenceTooLarge):
-				writeVideoReferenceUploadError(c, http.StatusRequestEntityTooLarge, "video_reference_too_large", "video reference must not exceed 80 MB")
+				writeVideoReferenceUploadError(c, http.StatusRequestEntityTooLarge, "video_reference_too_large", "reference file must not exceed 80 MB")
 			case errors.Is(saveErr, service.ErrVideoReferenceUnsupported):
-				writeVideoReferenceUploadError(c, http.StatusBadRequest, "video_reference_unsupported", "video reference must be an MP4 or MOV file")
+				writeVideoReferenceUploadError(c, http.StatusBadRequest, "video_reference_unsupported", "reference file must be MP4, MOV, MP3, or WAV")
 			default:
-				writeVideoReferenceUploadError(c, http.StatusInternalServerError, "video_reference_upload_failed", "unable to store video reference")
+				writeVideoReferenceUploadError(c, http.StatusInternalServerError, "video_reference_upload_failed", "unable to store reference file")
 			}
 			return
 		}

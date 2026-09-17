@@ -7,7 +7,7 @@ export const meta = {
     en: "Self-hosted MiniMax H3 text, reference, first-frame, and first-and-last-frame video through ComfyUI",
     zh: "通过 ComfyUI 接入自托管 MiniMax H3 文生、参考内容、首帧及首尾帧图生视频",
   },
-  version: "1.3.2",
+  version: "1.4.0",
   author: { name: "Metis Data" },
   models: ["minimax-h3-fl2va"],
   fetchMode: "per_task",
@@ -51,9 +51,15 @@ const imageExtensions = {
 const maxFrameBytes = 30 * 1024 * 1024;
 const maxCombinedFrameBytes = 45 * 1024 * 1024;
 const maxReferenceVideoBytes = 64 * 1024 * 1024;
+const maxReferenceAudioBytes = 20 * 1024 * 1024;
 const videoExtensions = {
   "video/mp4": "mp4",
   "video/quicktime": "mov",
+};
+const audioExtensions = {
+  "audio/mpeg": "mp3",
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
 };
 
 function frameMarker(value, field) {
@@ -97,8 +103,11 @@ function normalizedRequest(request) {
   const referenceImage0 = referenceMarker(req, "reference_image_0");
   const referenceImage1 = referenceMarker(req, "reference_image_1");
   const referenceVideo0 = referenceMarker(req, "reference_video_0");
+  const referenceAudios = [0, 1, 2].map(function (index) {
+    return referenceMarker(req, "reference_audio_" + index);
+  });
   if (referenceImage1 && !referenceImage0) throw new Error("reference_image_1 requires reference_image_0");
-  if ((referenceImage0 || referenceImage1 || referenceVideo0) && (inputReference || inputLastFrame)) {
+  if ((referenceImage0 || referenceImage1 || referenceVideo0 || referenceAudios.some(Boolean)) && (inputReference || inputLastFrame)) {
     throw new Error("reference content cannot be combined with keyframes");
   }
 
@@ -123,6 +132,9 @@ function normalizedRequest(request) {
   if (referenceImage0) normalized.reference_image_0 = referenceImage0;
   if (referenceImage1) normalized.reference_image_1 = referenceImage1;
   if (referenceVideo0) normalized.reference_video_0 = referenceVideo0;
+  for (let index = 0; index < referenceAudios.length; index += 1) {
+    if (referenceAudios[index]) normalized["reference_audio_" + index] = referenceAudios[index];
+  }
   return normalized;
 }
 
@@ -169,9 +181,9 @@ function baseWorkflow(request, publicTaskId, modelName, conditioning, size) {
   };
 }
 
-function workflowFor(request, publicTaskId, firstFrame, lastFrame, referenceImages, referenceVideo) {
+function workflowFor(request, publicTaskId, firstFrame, lastFrame, referenceImages, referenceVideo, referenceAudios) {
   const size = sizes[request.ratio];
-  const hasReferences = referenceImages.length > 0 || Boolean(referenceVideo);
+  const hasReferences = referenceImages.length > 0 || Boolean(referenceVideo) || referenceAudios.length > 0;
   const workflow = hasReferences
     ? baseWorkflow(
         request,
@@ -226,6 +238,11 @@ function workflowFor(request, publicTaskId, firstFrame, lastFrame, referenceImag
       };
       workflow[4].inputs["ref_videos.ref_video_0"] = ["16", 0];
     }
+    referenceAudios.forEach(function (audio, index) {
+      const nodeId = String(18 + index);
+      workflow[nodeId] = { class_type: "LoadAudio", inputs: { audio: audio.filename } };
+      workflow[4].inputs["ref_audios.ref_audio_" + index] = [nodeId, 0];
+    });
     workflow[10].inputs.samples = ["9", 0];
     workflow[13] = { class_type: "VAELoader", inputs: { vae_name: "minimax_h3_audio_vae_fp32.safetensors" } };
     workflow[4].inputs.audio_vae = ["13", 0];
@@ -258,8 +275,22 @@ export function buildSubmitRequest(ctx) {
   const referenceVideoFiles = files.filter(function (file) {
     return file.field === "reference_video_0";
   });
+  const referenceAudioFiles = [0, 1, 2].map(function (index) {
+    return files.filter(function (file) {
+      return file.field === "reference_audio_" + index;
+    });
+  });
   const unexpectedFile = files.find(function (file) {
-    return !["input_reference", "input_last_frame", "reference_image_0", "reference_image_1", "reference_video_0"].includes(file.field);
+    return ![
+      "input_reference",
+      "input_last_frame",
+      "reference_image_0",
+      "reference_image_1",
+      "reference_video_0",
+      "reference_audio_0",
+      "reference_audio_1",
+      "reference_audio_2",
+    ].includes(file.field);
   });
   if (unexpectedFile) throw new Error("unexpected file field: " + unexpectedFile.field);
   let firstFrame = null;
@@ -334,6 +365,32 @@ export function buildSubmitRequest(ctx) {
       })()
     : null;
   if (!request.reference_video_0 && referenceVideoFiles.length > 0) throw new Error("unexpected reference_video_0 file");
+  const taskID =
+    trimmed(ctx.publicTaskId)
+      .replace(/[^A-Za-z0-9_-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 80) || "task";
+  const referenceAudios = referenceAudioFiles
+    .map(function (audioFiles, index) {
+      const marker = request["reference_audio_" + index];
+      if (!marker) {
+        if (audioFiles.length > 0) throw new Error("unexpected reference_audio_" + index + " file");
+        return null;
+      }
+      if (audioFiles.length !== 1 || audioFiles[0].ref !== marker.__fileRef) throw new Error("reference_audio_" + index + " file is missing");
+      const mimeType = String(audioFiles[0].mimeType || "")
+        .split(";", 1)[0]
+        .trim()
+        .toLowerCase();
+      if (!Object.prototype.hasOwnProperty.call(audioExtensions, mimeType)) throw new Error("reference audio must be audio/mpeg or audio/wav");
+      const size = Number(audioFiles[0].size);
+      if (!Number.isFinite(size) || size <= 0 || size > maxReferenceAudioBytes) throw new Error("reference audio must not exceed 20 MiB");
+      return { ref: audioFiles[0].ref, filename: "minimax-h3-" + taskID + "-reference-audio-" + index + "." + audioExtensions[mimeType] };
+    })
+    .filter(Boolean);
+  if (request.reference_audio_1 && !request.reference_audio_0) throw new Error("reference_audio_1 requires reference_audio_0");
+  if (request.reference_audio_2 && !request.reference_audio_1) throw new Error("reference_audio_2 requires reference_audio_1");
   if (
     referenceImages.length > 0 &&
     referenceImages.reduce(function (total, image) {
@@ -341,14 +398,15 @@ export function buildSubmitRequest(ctx) {
     }, 0) > maxCombinedFrameBytes
   )
     throw new Error("reference images must not exceed 45 MiB in total");
-  if (referenceImages.length + Number(Boolean(referenceVideo)) > 0 && (firstFrame || lastFrame))
+  if (referenceImages.length + Number(Boolean(referenceVideo)) + referenceAudios.length > 3) throw new Error("reference content accepts at most three files");
+  if (referenceImages.length + Number(Boolean(referenceVideo)) + referenceAudios.length > 0 && (firstFrame || lastFrame))
     throw new Error("reference content cannot be combined with keyframes");
   const descriptor = {
     url: String(ctx.baseUrl || "").replace(/\/$/, "") + "/prompt",
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: { prompt: workflowFor(request, ctx.publicTaskId, firstFrame, lastFrame, referenceImages, referenceVideo) },
-    action: referenceImages.length > 0 || referenceVideo ? "reference_to_video" : firstFrame ? "image_to_video" : "text_to_video",
+    body: { prompt: workflowFor(request, ctx.publicTaskId, firstFrame, lastFrame, referenceImages, referenceVideo, referenceAudios) },
+    action: referenceImages.length > 0 || referenceVideo || referenceAudios.length > 0 ? "reference_to_video" : firstFrame ? "image_to_video" : "text_to_video",
   };
   const prepareRequest = function (frameInfo) {
     return {
@@ -381,11 +439,12 @@ export function buildSubmitRequest(ctx) {
       ],
     };
   };
-  if (referenceImages.length > 0 || referenceVideo) {
+  if (referenceImages.length > 0 || referenceVideo || referenceAudios.length > 0) {
     descriptor.prepareRequests = referenceImages.map(function (image) {
       return referencePrepareRequest(image, "temp");
     });
     if (referenceVideo) descriptor.prepareRequests.push(referencePrepareRequest(referenceVideo, "input"));
+    for (const audio of referenceAudios) descriptor.prepareRequests.push(referencePrepareRequest(audio, "input"));
   }
   return descriptor;
 }
@@ -490,7 +549,14 @@ export const protocols = {
       let req;
       let hasInputReferenceFile = false;
       let hasInputLastFrameFile = false;
-      const referenceFileFields = ["reference_image_0", "reference_image_1", "reference_video_0"];
+      const referenceFileFields = [
+        "reference_image_0",
+        "reference_image_1",
+        "reference_video_0",
+        "reference_audio_0",
+        "reference_audio_1",
+        "reference_audio_2",
+      ];
       const referenceFiles = new Set();
       if (ctx.body.kind === "json") {
         if (!ctx.body.value || typeof ctx.body.value !== "object" || Array.isArray(ctx.body.value)) throw new Error("JSON object required");
@@ -542,7 +608,12 @@ export const protocols = {
       return {
         kind: "submit",
         model: ctx.model,
-        action: request.reference_image_0 || request.reference_video_0 ? "reference_to_video" : request.input_reference ? "image_to_video" : "text_to_video",
+        action:
+          request.reference_image_0 || request.reference_video_0 || request.reference_audio_0
+            ? "reference_to_video"
+            : request.input_reference
+              ? "image_to_video"
+              : "text_to_video",
         requestBody: request,
       };
     },

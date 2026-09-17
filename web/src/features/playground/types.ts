@@ -171,15 +171,24 @@ export interface VideoReferenceContent {
   role: 'reference_video'
 }
 
+export interface VideoAudioContent {
+  type: 'audio_url'
+  audio_url: { url: string }
+  role: 'reference_audio'
+}
+
 export interface VideoReferenceUpload {
   id: string
   url: string
   name: string
-  content_type: 'video/mp4' | 'video/quicktime'
+  content_type: 'video/mp4' | 'video/quicktime' | 'audio/mpeg' | 'audio/wav'
   size: number
 }
 
-export type VideoInputContent = VideoImageContent | VideoReferenceContent
+export type VideoInputContent =
+  | VideoImageContent
+  | VideoReferenceContent
+  | VideoAudioContent
 export type VideoTaskStatus =
   | 'unknown'
   | 'queued'

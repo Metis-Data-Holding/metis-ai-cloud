@@ -20,6 +20,7 @@ export const MAX_REFERENCE_VIDEO_BYTES = 80 * 1024 * 1024
 export const MIN_REFERENCE_VIDEO_SECONDS = 2
 export const MAX_REFERENCE_VIDEO_SECONDS = 15
 export const MAX_COMBINED_REFERENCE_VIDEO_SECONDS = 15
+export const MAX_REFERENCE_AUDIO_BYTES = 20 * 1024 * 1024
 
 export type ReferenceVideoValidationError =
   | 'format'
@@ -87,5 +88,49 @@ export function readReferenceVideoDuration(file: File): Promise<number> {
       { once: true }
     )
     video.src = objectURL
+  })
+}
+
+export function validateReferenceAudioFile(
+  file: File
+): ReferenceVideoValidationError | null {
+  const nameSupported = /\.(mp3|wav)$/i.test(file.name)
+  const typeSupported =
+    file.type === '' ||
+    file.type.toLowerCase() === 'audio/mpeg' ||
+    file.type.toLowerCase() === 'audio/wav' ||
+    file.type.toLowerCase() === 'audio/x-wav'
+  if (!nameSupported || !typeSupported) return 'format'
+  return file.size > MAX_REFERENCE_AUDIO_BYTES ? 'size' : null
+}
+
+export function readReferenceAudioDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const objectURL = URL.createObjectURL(file)
+    const audio = document.createElement('audio')
+    const cleanup = () => {
+      audio.removeAttribute('src')
+      audio.load()
+      URL.revokeObjectURL(objectURL)
+    }
+    audio.preload = 'metadata'
+    audio.addEventListener(
+      'loadedmetadata',
+      () => {
+        const duration = audio.duration
+        cleanup()
+        resolve(duration)
+      },
+      { once: true }
+    )
+    audio.addEventListener(
+      'error',
+      () => {
+        cleanup()
+        reject(new Error('unable to read audio metadata'))
+      },
+      { once: true }
+    )
+    audio.src = objectURL
   })
 }

@@ -48,6 +48,33 @@ func TestSaveVideoReferenceAcceptsMP4AndBuildsSignedURL(t *testing.T) {
 	assert.True(t, errors.Is(err, os.ErrNotExist))
 }
 
+func TestSaveVideoReferenceAcceptsReferenceAudio(t *testing.T) {
+	dir := t.TempDir()
+	previousSecret := common.CryptoSecret
+	previousAddress := system_setting.ServerAddress
+	common.CryptoSecret = "video-reference-test-secret"
+	system_setting.ServerAddress = "https://many-models.example"
+	t.Cleanup(func() {
+		common.CryptoSecret = previousSecret
+		system_setting.ServerAddress = previousAddress
+	})
+
+	wav := append([]byte("RIFF\x24\x00\x00\x00WAVE"), make([]byte, 16)...)
+	result, err := SaveVideoReference(bytes.NewReader(wav), "voice.wav", int64(len(wav)), VideoReferenceSaveOptions{
+		Directory: dir,
+		Now:       time.Unix(1_700_000_000, 0),
+		NewID:     func() (string, error) { return "abcdefghijklmnopqrstuvwx", nil },
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "abcdefghijklmnopqrstuvwx.wav", result.ID)
+	assert.Equal(t, "audio/wav", result.ContentType)
+	file, contentType, err := OpenVideoReference(dir, result.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "audio/wav", contentType)
+	require.NoError(t, file.Close())
+}
+
 func TestSaveVideoReferenceRejectsUnsupportedAndOversizedContent(t *testing.T) {
 	dir := t.TempDir()
 	options := VideoReferenceSaveOptions{
