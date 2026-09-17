@@ -31,6 +31,7 @@ import type {
   ModelOption,
   GroupOption,
   VideoGenerationRequest,
+  VideoAudioContent,
   VideoImageContent,
   VideoReferenceContent,
   VideoReferenceUpload,
@@ -131,11 +132,16 @@ export async function submitVideoGeneration(
   const referenceVideos = content.filter(
     (item): item is VideoReferenceContent => item.role === 'reference_video'
   )
+  const referenceAudios = content.filter(
+    (item): item is VideoAudioContent => item.role === 'reference_audio'
+  )
   let body: VideoGenerationRequest | FormData = payload
   const isH3 = payload.model.toLowerCase() === 'minimax-h3-fl2va'
   const h3FrameCount = Number(Boolean(firstFrame)) + Number(Boolean(lastFrame))
   const hasH3References =
-    referenceImages.length > 0 || referenceVideos.length > 0
+    referenceImages.length > 0 ||
+    referenceVideos.length > 0 ||
+    referenceAudios.length > 0
   if (
     isH3 &&
     content.length > 0 &&
@@ -148,9 +154,15 @@ export async function submitVideoGeneration(
     if (
       firstFrame ||
       lastFrame ||
-      content.length !== referenceImages.length + referenceVideos.length ||
+      content.length !==
+        referenceImages.length +
+          referenceVideos.length +
+          referenceAudios.length ||
       referenceImages.length > 2 ||
-      referenceVideos.length > 1
+      referenceVideos.length > 1 ||
+      referenceAudios.length > 3 ||
+      referenceImages.length + referenceVideos.length + referenceAudios.length >
+        3
     ) {
       throw new Error(i18next.t('Choose a supported image file.'))
     }
@@ -198,6 +210,35 @@ export async function submitVideoGeneration(
     )
     videoFiles.forEach((video, index) => {
       formData.append(`reference_video_${index}`, video)
+    })
+    const audioFiles = await Promise.all(
+      referenceAudios.map(async (audio, index) => {
+        const url = new URL(audio.audio_url.url, window.location.origin)
+        if (
+          !['http:', 'https:'].includes(url.protocol) ||
+          !/^\/v1\/video-reference-files\/[0-9A-Za-z]{24}\.(?:mp3|wav)\/content$/.test(
+            url.pathname
+          ) ||
+          !url.searchParams.has('expires') ||
+          !url.searchParams.has('access')
+        ) {
+          throw new Error(i18next.t('Unable to upload the reference audio.'))
+        }
+        const response = await fetch(url, { credentials: 'omit' })
+        if (!response.ok) {
+          throw new Error(i18next.t('Unable to upload the reference audio.'))
+        }
+        const blob = await response.blob()
+        const type = blob.type === 'audio/wav' ? 'audio/wav' : 'audio/mpeg'
+        return new File(
+          [blob],
+          `reference-${index}.${type === 'audio/wav' ? 'wav' : 'mp3'}`,
+          { type }
+        )
+      })
+    )
+    audioFiles.forEach((audio, index) => {
+      formData.append(`reference_audio_${index}`, audio)
     })
     body = formData
   } else if (isH3 && firstFrame) {

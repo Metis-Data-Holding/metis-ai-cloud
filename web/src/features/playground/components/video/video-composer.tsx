@@ -124,12 +124,20 @@ export function VideoComposer(props: VideoComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const referenceAssets = getVideoReferenceAssets(props.inputContent)
   const isWan3Model = props.modelValue.toLowerCase() === 'alibaba/wan-3.0'
+  const isSeedanceModel = props.modelValue.toLowerCase().includes('seedance')
   const isWanReference = isWan3Model && props.mode === 'reference'
   let maxReferenceImages: number | undefined
   let maxReferenceVideos: number | undefined
+  let maxReferenceAudios: number | undefined
+  let maxReferenceFiles: number | undefined
   if (props.isH3) {
     maxReferenceImages = 2
     maxReferenceVideos = 1
+    maxReferenceAudios = 3
+    maxReferenceFiles = 3
+  }
+  if (isSeedanceModel) {
+    maxReferenceAudios = 3
   }
   if (isWanReference) {
     maxReferenceImages = 1
@@ -166,11 +174,11 @@ export function VideoComposer(props: VideoComposerProps) {
     )
   } else if (props.mode === 'reference' && props.isH3) {
     promptPlaceholder = t(
-      'Describe the video you want to create. You can upload up to 2 reference images and 1 reference video, then type @ to reference them.'
+      'Describe the video you want to create. You can upload up to 3 reference files: 2 images, 1 video, or 3 audio clips, then type @ to reference them.'
     )
   } else if (props.mode === 'reference') {
     promptPlaceholder = t(
-      'Describe the video you want to create. You can upload up to 9 reference images and 3 reference videos, then type @ to reference them.'
+      'Describe the video you want to create. You can upload up to 9 reference images, 3 reference videos, and 3 audio clips, then type @ to reference them.'
     )
   }
   const showReferenceInput = props.mode !== 'text'
@@ -189,10 +197,12 @@ export function VideoComposer(props: VideoComposerProps) {
 
   const submit = (_message: PromptInputMessage) => props.onSubmit()
 
-  const assetLabel = (asset: (typeof referenceAssets)[number]) =>
-    t(asset.kind === 'image' ? 'Image {{number}}' : 'Video {{number}}', {
-      number: asset.number,
-    })
+  const assetLabel = (asset: (typeof referenceAssets)[number]) => {
+    let key = 'Audio {{number}}'
+    if (asset.kind === 'image') key = 'Image {{number}}'
+    if (asset.kind === 'video') key = 'Video {{number}}'
+    return t(key, { number: asset.number })
+  }
 
   const handlePromptChange = (value: string, caret: number | null) => {
     props.onPromptChange(value)
@@ -312,6 +322,8 @@ export function VideoComposer(props: VideoComposerProps) {
               referenceImagesOnly={isWanReference}
               maxReferenceImages={maxReferenceImages}
               maxReferenceVideos={maxReferenceVideos}
+              maxReferenceAudios={maxReferenceAudios}
+              maxReferenceFiles={maxReferenceFiles}
               maxReferenceVideoBytes={
                 props.isH3 ? H3_MAX_REFERENCE_VIDEO_BYTES : undefined
               }

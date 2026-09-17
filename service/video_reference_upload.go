@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -33,8 +34,8 @@ var (
 	ErrVideoReferenceUnsupported   = errors.New("video reference format is unsupported")
 	ErrVideoReferenceInvalid       = errors.New("video reference is invalid")
 	videoReferenceRawIDPattern     = regexp.MustCompile(`^[0-9A-Za-z]{24}$`)
-	videoReferenceFilePattern      = regexp.MustCompile(`^[0-9A-Za-z]{24}\.(mp4|mov)$`)
-	videoReferenceUploadingPattern = regexp.MustCompile(`^[0-9A-Za-z]{24}\.(mp4|mov)\.uploading$`)
+	videoReferenceFilePattern      = regexp.MustCompile(`^[0-9A-Za-z]{24}\.(mp4|mov|mp3|wav)$`)
+	videoReferenceUploadingPattern = regexp.MustCompile(`^[0-9A-Za-z]{24}\.(mp4|mov|mp3|wav)\.uploading$`)
 )
 
 type VideoReferenceSaveOptions struct {
@@ -81,16 +82,28 @@ func normalizeVideoReferenceSaveOptions(options VideoReferenceSaveOptions) Video
 
 func videoReferenceFormat(name string, header []byte) (string, string, error) {
 	extension := strings.ToLower(filepath.Ext(strings.TrimSpace(name)))
-	if extension != ".mp4" && extension != ".mov" {
+	switch extension {
+	case ".mp4", ".mov":
+		if len(header) < 8 || string(header[4:8]) != "ftyp" {
+			return "", "", ErrVideoReferenceUnsupported
+		}
+		if extension == ".mov" {
+			return extension, "video/quicktime", nil
+		}
+		return extension, "video/mp4", nil
+	case ".wav":
+		if len(header) < 12 || string(header[:4]) != "RIFF" || string(header[8:12]) != "WAVE" {
+			return "", "", ErrVideoReferenceUnsupported
+		}
+		return extension, "audio/wav", nil
+	case ".mp3":
+		if len(header) < 3 || (string(header[:3]) != "ID3" && !(header[0] == 0xff && header[1]&0xe0 == 0xe0)) {
+			return "", "", ErrVideoReferenceUnsupported
+		}
+		return extension, "audio/mpeg", nil
+	default:
 		return "", "", ErrVideoReferenceUnsupported
 	}
-	if len(header) < 8 || string(header[4:8]) != "ftyp" {
-		return "", "", ErrVideoReferenceUnsupported
-	}
-	if extension == ".mov" {
-		return extension, "video/quicktime", nil
-	}
-	return extension, "video/mp4", nil
 }
 
 func SaveVideoReference(reader io.Reader, originalName string, declaredSize int64, options VideoReferenceSaveOptions) (VideoReferenceUpload, error) {
@@ -106,7 +119,7 @@ func SaveVideoReference(reader io.Reader, originalName string, declaredSize int6
 		return VideoReferenceUpload{}, ErrVideoReferenceInvalid
 	}
 	extension := strings.ToLower(filepath.Ext(strings.TrimSpace(originalName)))
-	if extension != ".mp4" && extension != ".mov" {
+	if !slices.Contains([]string{".mp4", ".mov", ".mp3", ".wav"}, extension) {
 		return VideoReferenceUpload{}, ErrVideoReferenceUnsupported
 	}
 	fileID := id + extension
@@ -246,6 +259,10 @@ func OpenVideoReference(directory, fileID string) (*os.File, string, error) {
 	contentType := "video/mp4"
 	if strings.HasSuffix(fileID, ".mov") {
 		contentType = "video/quicktime"
+	} else if strings.HasSuffix(fileID, ".mp3") {
+		contentType = "audio/mpeg"
+	} else if strings.HasSuffix(fileID, ".wav") {
+		contentType = "audio/wav"
 	}
 	return file, contentType, nil
 }

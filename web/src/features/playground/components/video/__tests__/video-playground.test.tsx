@@ -30,7 +30,10 @@ import {
   submitVideoGeneration,
   uploadVideoReference,
 } from '../../../api'
-import { readReferenceVideoDuration } from '../../../lib/video/video-reference-upload'
+import {
+  readReferenceAudioDuration,
+  readReferenceVideoDuration,
+} from '../../../lib/video/video-reference-upload'
 import { VideoPlayground } from '../video-playground'
 
 vi.mock('../../../api', () => ({
@@ -47,6 +50,7 @@ vi.mock(
   async (importOriginal) => ({
     ...(await importOriginal()),
     readReferenceVideoDuration: vi.fn(),
+    readReferenceAudioDuration: vi.fn(),
   })
 )
 
@@ -119,6 +123,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
       () => new Promise(() => undefined)
     )
     vi.mocked(readReferenceVideoDuration).mockResolvedValue(5)
+    vi.mocked(readReferenceAudioDuration).mockResolvedValue(5)
     vi.mocked(uploadVideoReference).mockResolvedValue({
       id: 'abcdefghijklmnopqrstuvwx.mp4',
       url: 'https://many-models.example/v1/video-reference-files/abcdefghijklmnopqrstuvwx.mp4/content?expires=1&access=signed',
@@ -138,7 +143,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     expect(prompt).toBeVisible()
     expect(prompt).toHaveAttribute(
       'placeholder',
-      'Describe the video you want to create. You can upload up to 9 reference images and 3 reference videos, then type @ to reference them.'
+      'Describe the video you want to create. You can upload up to 9 reference images, 3 reference videos, and 3 audio clips, then type @ to reference them.'
     )
     expect(
       screen.queryByText(
@@ -541,7 +546,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     await waitFor(() =>
       expect(prompt).toHaveAttribute(
         'placeholder',
-        'Describe the video you want to create. You can upload up to 2 reference images and 1 reference video, then type @ to reference them.'
+        'Describe the video you want to create. You can upload up to 3 reference files: 2 images, 1 video, or 3 audio clips, then type @ to reference them.'
       )
     )
     expect(screen.getByLabelText('Add reference content')).toBeInTheDocument()
@@ -826,6 +831,28 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     )
   })
 
+  test('uploads and mentions reference audio', async () => {
+    vi.mocked(uploadVideoReference).mockResolvedValue({
+      id: 'abcdefghijklmnopqrstuvwx.wav',
+      url: 'https://many-models.example/v1/video-reference-files/abcdefghijklmnopqrstuvwx.wav/content?expires=1&access=signed',
+      name: 'voice.wav',
+      content_type: 'audio/wav',
+      size: 5,
+    })
+    const user = userEvent.setup()
+    render(<VideoPlayground />, { wrapper: createWrapper() })
+
+    await user.upload(
+      await findReadyReferenceInput(),
+      new File(['audio'], 'voice.wav', { type: 'audio/wav' })
+    )
+
+    expect(await findUploadedReference('Audio 1')).toBeVisible()
+    const prompt = screen.getByRole('textbox', { name: 'Prompt' })
+    await user.type(prompt, '@')
+    expect(screen.getByRole('option', { name: '@Audio 1' })).toBeVisible()
+  })
+
   test('rejects MiniMax H3 reference videos above the gateway limit', async () => {
     vi.mocked(getUserModels).mockResolvedValue([
       { label: 'MiniMax H3', value: 'minimax-h3-fl2va' },
@@ -867,7 +894,7 @@ describe('VideoPlayground', { timeout: 10_000 }, () => {
     await waitFor(() =>
       expect(prompt).toHaveAttribute(
         'placeholder',
-        'Describe the video you want to create. You can upload up to 2 reference images and 1 reference video, then type @ to reference them.'
+        'Describe the video you want to create. You can upload up to 3 reference files: 2 images, 1 video, or 3 audio clips, then type @ to reference them.'
       )
     )
     await user.type(prompt, 'A quiet city at night')

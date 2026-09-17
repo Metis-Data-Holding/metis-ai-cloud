@@ -21,7 +21,7 @@ import type { VideoInputContent } from '../../types'
 export interface VideoReferenceAsset {
   contentIndex: number
   item: VideoInputContent
-  kind: 'image' | 'video'
+  kind: 'image' | 'video' | 'audio'
   number: number
 }
 
@@ -30,6 +30,7 @@ export function getVideoReferenceAssets(
 ): VideoReferenceAsset[] {
   let imageNumber = 0
   let videoNumber = 0
+  let audioNumber = 0
   const assets: VideoReferenceAsset[] = []
 
   content.forEach((item, contentIndex) => {
@@ -40,6 +41,10 @@ export function getVideoReferenceAssets(
     if (item.role === 'reference_video') {
       videoNumber += 1
       assets.push({ contentIndex, item, kind: 'video', number: videoNumber })
+    }
+    if (item.role === 'reference_audio') {
+      audioNumber += 1
+      assets.push({ contentIndex, item, kind: 'audio', number: audioNumber })
     }
   })
 

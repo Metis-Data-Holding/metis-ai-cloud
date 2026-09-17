@@ -18,10 +18,19 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { ArrowLeftRightIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { ImagePlusIcon, PlusIcon, Trash2Icon, VideoIcon } from 'lucide-react'
+import {
+  ImagePlusIcon,
+  Music2Icon,
+  PauseIcon,
+  PlayIcon,
+  PlusIcon,
+  Trash2Icon,
+  VideoIcon,
+} from 'lucide-react'
 import {
   type ChangeEvent,
   type CSSProperties,
+  type ReactNode,
   useEffect,
   useRef,
   useState,
@@ -38,9 +47,12 @@ import {
 } from '../../lib/video/video-reference-assets'
 import {
   MAX_REFERENCE_VIDEO_BYTES,
+  MAX_REFERENCE_AUDIO_BYTES,
+  readReferenceAudioDuration,
   readReferenceVideoDuration,
   validateReferenceVideoDuration,
   validateReferenceVideoFile,
+  validateReferenceAudioFile,
 } from '../../lib/video/video-reference-upload'
 import type {
   VideoGenerationMode,
@@ -57,7 +69,8 @@ const IMAGE_ACCEPT =
   'image/jpeg,image/png,image/webp,image/bmp,image/tiff,image/gif,image/heic,image/heif,.heic,.heif'
 const FIRST_FRAME_ONLY_ACCEPT = 'image/jpeg,image/png,image/webp'
 const VIDEO_ACCEPT = 'video/mp4,video/quicktime,.mp4,.mov'
-const REFERENCE_CONTENT_ACCEPT = `${IMAGE_ACCEPT},${VIDEO_ACCEPT}`
+const AUDIO_ACCEPT = 'audio/mpeg,audio/wav,.mp3,.wav'
+const REFERENCE_CONTENT_ACCEPT = `${IMAGE_ACCEPT},${VIDEO_ACCEPT},${AUDIO_ACCEPT}`
 const SUPPORTED_IMAGE_MIME_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -81,6 +94,8 @@ interface VideoReferenceInputProps {
   referenceImagesOnly?: boolean
   maxReferenceImages?: number
   maxReferenceVideos?: number
+  maxReferenceAudios?: number
+  maxReferenceFiles?: number
   maxReferenceVideoBytes?: number
   resetKey?: string
   variant?: 'default' | 'composer'
@@ -93,6 +108,8 @@ interface UploadedReferenceVideo {
   size: number
   duration: number
 }
+
+type UploadedReferenceAudio = UploadedReferenceVideo
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -110,7 +127,9 @@ function readFileAsDataUrl(file: File): Promise<string> {
 }
 
 function contentUrl(item: VideoInputContent): string {
-  return item.type === 'image_url' ? item.image_url.url : item.video_url.url
+  if (item.type === 'image_url') return item.image_url.url
+  if (item.type === 'video_url') return item.video_url.url
+  return item.audio_url.url
 }
 
 function dataUrlByteLength(url: string): number {
@@ -157,29 +176,53 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
   const [uploadedVideos, setUploadedVideos] = useState<
     UploadedReferenceVideo[]
   >([])
-  const [isUploadingVideo, setIsUploadingVideo] = useState(false)
+  const [uploadedAudios, setUploadedAudios] = useState<
+    UploadedReferenceAudio[]
+  >([])
+  const [playingAudioUrl, setPlayingAudioUrl] = useState('')
+  const audioPlayer = useRef<HTMLAudioElement | null>(null)
+  const [isUploadingReference, setIsUploadingReference] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [suppressReferenceExpansion, setSuppressReferenceExpansion] =
     useState(false)
   const [referenceExpanded, setReferenceExpanded] = useState(false)
   const uploadGeneration = useRef(0)
-  const interactionDisabled = props.disabled || isUploadingVideo
+  const interactionDisabled = props.disabled || isUploadingReference
   const maxReferenceImages = props.maxReferenceImages ?? MAX_REFERENCE_IMAGES
   const maxReferenceVideos = props.maxReferenceVideos ?? MAX_REFERENCE_VIDEOS
+  const maxReferenceAudios = props.maxReferenceAudios ?? 0
   const maxReferenceVideoBytes =
     props.maxReferenceVideoBytes ?? MAX_REFERENCE_VIDEO_BYTES
+  let referenceContentAccept = `${IMAGE_ACCEPT},${VIDEO_ACCEPT}`
+  if (maxReferenceAudios > 0) {
+    referenceContentAccept = REFERENCE_CONTENT_ACCEPT
+  }
+  if (props.referenceImagesOnly) {
+    referenceContentAccept = FIRST_FRAME_ONLY_ACCEPT
+  }
 
   useEffect(() => {
     setImageError('')
     setVideoError('')
     setUploadedVideos([])
-    setIsUploadingVideo(false)
+    setUploadedAudios([])
+    audioPlayer.current?.pause()
+    audioPlayer.current = null
+    setPlayingAudioUrl('')
+    setIsUploadingReference(false)
     setUploadProgress(0)
     setSuppressReferenceExpansion(false)
     setReferenceExpanded(false)
     onExpandedChange?.(false)
     uploadGeneration.current += 1
   }, [props.mode, props.resetKey, onExpandedChange])
+
+  useEffect(
+    () => () => {
+      audioPlayer.current?.pause()
+    },
+    []
+  )
 
   const replaceRole = (role: VideoImageRole, next?: VideoInputContent) => {
     const content = props.content.filter((item) => item.role !== role)
@@ -202,13 +245,21 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
     setReferenceExpanded(false)
     onExpandedChange?.(false)
     const currentGeneration = uploadGeneration.current
-    const imageFiles = files.filter(
+    const audioFiles = files.filter(
       (file) =>
-        isSupportedImage(file) ||
-        (!file.type.startsWith('video/') && !/\.(mp4|mov)$/i.test(file.name))
+        file.type.startsWith('audio/') || /\.(mp3|wav)$/i.test(file.name)
+    )
+    const audioFileSet = new Set(audioFiles)
+    const videoFiles = files.filter(
+      (file) =>
+        !audioFileSet.has(file) &&
+        (file.type.startsWith('video/') || /\.(mp4|mov)$/i.test(file.name))
+    )
+    const videoFileSet = new Set(videoFiles)
+    const imageFiles = files.filter(
+      (file) => !audioFileSet.has(file) && !videoFileSet.has(file)
     )
     const imageFileSet = new Set(imageFiles)
-    const videoFiles = files.filter((file) => !imageFileSet.has(file))
     const currentImages = props.content.filter(
       (item) => item.role === 'reference_image'
     )
@@ -254,6 +305,38 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
       )
       return
     }
+    if (uploadedAudios.length + audioFiles.length > maxReferenceAudios) {
+      setVideoError(
+        t('You can add up to {{count}} reference audio clips.', {
+          count: maxReferenceAudios,
+        })
+      )
+      return
+    }
+    if (
+      props.maxReferenceFiles &&
+      props.content.length + files.length > props.maxReferenceFiles
+    ) {
+      setVideoError(
+        t('You can add up to {{count}} reference files.', {
+          count: props.maxReferenceFiles,
+        })
+      )
+      return
+    }
+    const audioErrors = new Set(audioFiles.map(validateReferenceAudioFile))
+    if (audioErrors.has('format')) {
+      setVideoError(t('Choose an MP3 or WAV audio file.'))
+      return
+    }
+    if (audioErrors.has('size')) {
+      setVideoError(
+        t('Each reference audio must not exceed {{count}} MB.', {
+          count: MAX_REFERENCE_AUDIO_BYTES / (1024 * 1024),
+        })
+      )
+      return
+    }
     const fileErrors = new Set(
       videoFiles.map((file) =>
         validateReferenceVideoFile(file, maxReferenceVideoBytes)
@@ -273,13 +356,13 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
     }
     const finishVideoSelection = () => {
       if (currentGeneration === uploadGeneration.current) {
-        setIsUploadingVideo(false)
+        setIsUploadingReference(false)
         setUploadProgress(0)
         props.onValidityChange(true)
       }
     }
-    if (videoFiles.length > 0) {
-      setIsUploadingVideo(true)
+    if (videoFiles.length > 0 || audioFiles.length > 0) {
+      setIsUploadingReference(true)
       setUploadProgress(0)
       setVideoError('')
       props.onValidityChange(false)
@@ -292,6 +375,39 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
       setVideoError(t('Unable to upload the reference video.'))
       finishVideoSelection()
       return
+    }
+    let audioDurations: number[]
+    try {
+      audioDurations = await Promise.all(
+        audioFiles.map(readReferenceAudioDuration)
+      )
+    } catch {
+      setVideoError(t('Unable to upload the reference audio.'))
+      finishVideoSelection()
+      return
+    }
+    let totalAudioDuration = uploadedAudios.reduce(
+      (total, upload) => total + upload.duration,
+      0
+    )
+    for (const duration of audioDurations) {
+      const durationError = validateReferenceVideoDuration(
+        duration,
+        totalAudioDuration
+      )
+      if (durationError === 'duration') {
+        setVideoError(
+          t('Each reference audio must be between 2 and 15 seconds.')
+        )
+        finishVideoSelection()
+        return
+      }
+      if (durationError === 'total-duration') {
+        setVideoError(t('Reference audio must total no more than 15 seconds.'))
+        finishVideoSelection()
+        return
+      }
+      totalAudioDuration += duration
     }
     let totalDuration = uploadedVideos.reduce(
       (total, upload) => total + upload.duration,
@@ -322,14 +438,18 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
 
     const additions: VideoInputContent[] = []
     const newUploads: UploadedReferenceVideo[] = []
+    const newAudioUploads: UploadedReferenceAudio[] = []
     const existingUrls = new Set(props.content.map(contentUrl))
-    let processingKind: 'image' | 'video' = 'image'
+    let processingKind: 'image' | 'video' | 'audio' = 'image'
     const commitAdditions = () => {
       if (additions.length > 0) {
         props.onContentChange([...props.content, ...additions])
       }
       if (newUploads.length > 0) {
         setUploadedVideos((current) => [...current, ...newUploads])
+      }
+      if (newAudioUploads.length > 0) {
+        setUploadedAudios((current) => [...current, ...newAudioUploads])
       }
     }
     try {
@@ -344,6 +464,24 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
           continue
         }
 
+        if (audioFileSet.has(file)) {
+          processingKind = 'audio'
+          const audioIndex = audioFiles.indexOf(file)
+          const uploaded = await uploadVideoReference(file, setUploadProgress)
+          additions.push({
+            type: 'audio_url',
+            audio_url: { url: uploaded.url },
+            role: 'reference_audio',
+          })
+          newAudioUploads.push({
+            id: uploaded.id,
+            url: uploaded.url,
+            name: uploaded.name,
+            size: uploaded.size,
+            duration: audioDurations[audioIndex],
+          })
+          continue
+        }
         const videoIndex = videoFiles.indexOf(file)
         processingKind = 'video'
         const uploaded = await uploadVideoReference(file, (progress) => {
@@ -377,6 +515,8 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
         commitAdditions()
         if (processingKind === 'image') {
           setImageError(t('Unable to read the selected image.'))
+        } else if (processingKind === 'audio') {
+          setVideoError(t('Unable to upload the reference audio.'))
         } else {
           setVideoError(t('Unable to upload the reference video.'))
         }
@@ -459,20 +599,98 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
         current.filter((upload) => upload.url !== item.video_url.url)
       )
     }
+    if (item?.type === 'audio_url') {
+      setUploadedAudios((current) =>
+        current.filter((upload) => upload.url !== item.audio_url.url)
+      )
+    }
     props.onContentChange(
       props.content.filter((_, itemIndex) => itemIndex !== index)
     )
   }
 
   const referenceAssets = getVideoReferenceAssets(props.content)
-  const referenceLabel = (asset: VideoReferenceAsset) =>
-    t(asset.kind === 'image' ? 'Image {{number}}' : 'Video {{number}}', {
-      number: asset.number,
+  const referenceLabel = (asset: VideoReferenceAsset) => {
+    let key = 'Audio {{number}}'
+    if (asset.kind === 'image') key = 'Image {{number}}'
+    if (asset.kind === 'video') key = 'Video {{number}}'
+    return t(key, { number: asset.number })
+  }
+
+  const toggleAudio = (url: string) => {
+    if (playingAudioUrl === url) {
+      audioPlayer.current?.pause()
+      setPlayingAudioUrl('')
+      return
+    }
+    audioPlayer.current?.pause()
+    const player = new Audio(url)
+    audioPlayer.current = player
+    player.addEventListener('ended', () => setPlayingAudioUrl(''), {
+      once: true,
     })
+    void player
+      .play()
+      .then(() => setPlayingAudioUrl(url))
+      .catch(() => setVideoError(t('Unable to play the reference audio.')))
+  }
 
   const referenceCard = (asset: VideoReferenceAsset, index: number) => {
     const label = referenceLabel(asset)
     const url = contentUrl(asset.item)
+    let preview: ReactNode
+    if (asset.kind === 'image') {
+      preview = (
+        <img
+          src={url}
+          alt={t('Reference image {{number}}', { number: asset.number })}
+          className='size-full object-cover'
+        />
+      )
+    } else if (asset.kind === 'video') {
+      preview = (
+        <>
+          <video
+            src={url}
+            aria-label={t('Reference video {{number}}', {
+              number: asset.number,
+            })}
+            className='size-full object-cover'
+            muted
+            playsInline
+            preload='metadata'
+          />
+          <span className='bg-background/85 absolute top-1 right-1 flex size-6 items-center justify-center rounded-full'>
+            <VideoIcon aria-hidden='true' className='size-3.5' />
+          </span>
+        </>
+      )
+    } else {
+      preview = (
+        <button
+          type='button'
+          className='bg-muted flex size-full flex-col items-center justify-center gap-2'
+          aria-label={t(
+            playingAudioUrl === url ? 'Pause {{name}}' : 'Play {{name}}',
+            { name: label }
+          )}
+          onClick={() => toggleAudio(url)}
+        >
+          <Music2Icon aria-hidden='true' className='size-7' />
+          {playingAudioUrl === url ? (
+            <PauseIcon aria-hidden='true' className='size-4' />
+          ) : (
+            <PlayIcon aria-hidden='true' className='size-4' />
+          )}
+          <span className='text-muted-foreground text-xs'>
+            {Math.round(
+              uploadedAudios.find((audio) => audio.url === url)?.duration ?? 0
+            )}
+            s
+          </span>
+        </button>
+      )
+    }
     return (
       <div
         key={url}
@@ -495,29 +713,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
           } as CSSProperties
         }
       >
-        {asset.kind === 'image' ? (
-          <img
-            src={url}
-            alt={t('Reference image {{number}}', { number: asset.number })}
-            className='size-full object-cover'
-          />
-        ) : (
-          <>
-            <video
-              src={url}
-              aria-label={t('Reference video {{number}}', {
-                number: asset.number,
-              })}
-              className='size-full object-cover'
-              muted
-              playsInline
-              preload='metadata'
-            />
-            <span className='bg-background/85 absolute top-1 right-1 flex size-6 items-center justify-center rounded-full'>
-              <VideoIcon aria-hidden='true' className='size-3.5' />
-            </span>
-          </>
-        )}
+        {preview}
         <span className='absolute inset-x-0 bottom-0 truncate bg-black/65 px-1.5 py-0.5 text-center text-xs font-medium text-white'>
           {label}
         </span>
@@ -643,11 +839,7 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
           <input
             id='video-reference-content'
             type='file'
-            accept={
-              props.referenceImagesOnly
-                ? FIRST_FRAME_ONLY_ACCEPT
-                : REFERENCE_CONTENT_ACCEPT
-            }
+            accept={referenceContentAccept}
             multiple={!props.referenceImagesOnly}
             aria-label={t('Add reference content')}
             className='sr-only'
@@ -670,8 +862,8 @@ export function VideoReferenceInput(props: VideoReferenceInputProps) {
             data-slot='video-reference-picker'
           >
             <ImagePlusIcon aria-hidden='true' />
-            {isUploadingVideo
-              ? t('Uploading video {{progress}}%', {
+            {isUploadingReference
+              ? t('Uploading reference {{progress}}%', {
                   progress: uploadProgress,
                 })
               : t(

@@ -239,6 +239,36 @@ describe('video submission transport', () => {
     expect(await video.text()).toBe('video')
   })
 
+  test('submits MiniMax H3 reference audio as a prepared multipart file', async () => {
+    const referenceAudioUrl =
+      'https://many-models.example/v1/video-reference-files/abcdefghijklmnopqrstuvwx.wav/content?expires=1&access=signed'
+    fetchReference.mockResolvedValue({
+      ok: true,
+      blob: vi
+        .fn()
+        .mockResolvedValue(new Blob(['audio'], { type: 'audio/wav' })),
+    })
+
+    await submitVideoGeneration(
+      'default',
+      h3Request([
+        {
+          type: 'audio_url',
+          audio_url: { url: referenceAudioUrl },
+          role: 'reference_audio',
+        },
+      ])
+    )
+
+    const body = post.mock.calls[0]?.[1]
+    expect(body).toBeInstanceOf(FormData)
+    if (!(body instanceof FormData)) return
+    const audio = body.get('reference_audio_0')
+    expect(audio).toBeInstanceOf(File)
+    if (!(audio instanceof File)) return
+    expect(audio.type).toBe('audio/wav')
+  })
+
   test('rejects an untrusted MiniMax H3 reference video URL', async () => {
     await expect(
       submitVideoGeneration(
