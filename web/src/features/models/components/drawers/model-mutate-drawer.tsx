@@ -190,7 +190,7 @@ export function ModelMutateDrawer(props: {
             : ['1080p', '4k']),
       }
     },
-    enabled: props.open && isEditing && Boolean(superResolutionModelName),
+    enabled: props.open && Boolean(superResolutionModelName),
     retry: false,
   })
   const superResolutionSupported =

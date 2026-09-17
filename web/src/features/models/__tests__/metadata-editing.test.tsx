@@ -149,10 +149,15 @@ describe('model pricing entry', () => {
     client.clear()
   })
 
-  it.each(['alibaba/wan-3.0', 'alibaba/wan-3.0-prime'])(
-    'configures only the 1080P target for %s',
-    async (modelName) => {
-      const wanModel = { ...model, model_name: modelName }
+  it.each([
+    ['alibaba/wan-3.0', 7],
+    ['alibaba/wan-3.0-prime', 7],
+    ['alibaba/wan-3.0', 0],
+    ['alibaba/wan-3.0-prime', 0],
+  ] as const)(
+    'configures only the 1080P target for %s with metadata id %s',
+    async (modelName, id) => {
+      const wanModel = { ...model, id, model_name: modelName }
       const settings = {
         enabled: false,
         source_resolution: '720p',
@@ -170,12 +175,15 @@ describe('model pricing entry', () => {
         }
         return { data: { success: true, data: { items: [] } } }
       })
+      const post = vi.spyOn(api, 'post')
       const put = vi.spyOn(api, 'put').mockResolvedValue({
         data: { success: true, data: settings },
       })
       const client = renderModelActions(wanModel)
       const user = userEvent.setup()
-      await user.click(screen.getByRole('button', { name: 'Edit' }))
+      await user.click(
+        screen.getByRole('button', { name: id ? 'Edit' : 'Add metadata' })
+      )
       await user.click(
         await screen.findByRole('tab', { name: 'Super-resolution' })
       )
@@ -201,6 +209,8 @@ describe('model pricing entry', () => {
           { skipBusinessError: true, skipErrorHandler: true }
         )
       )
+      expect(post).not.toHaveBeenCalled()
+      expect(put).toHaveBeenCalledTimes(1)
       client.clear()
     }
   )
