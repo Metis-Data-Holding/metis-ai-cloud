@@ -178,6 +178,21 @@ describe('video submission transport', () => {
     expect(post.mock.calls[0]?.[1]).toBe(request)
   })
 
+  test('rejects an error payload before it can start polling an undefined task', async () => {
+    post.mockResolvedValueOnce({
+      status: 202,
+      data: {
+        code: 'fail_to_fetch_task',
+        message: 'upstream submission was not accepted',
+        data: null,
+      },
+    })
+
+    await expect(submitVideoGeneration('default', h3Request())).rejects.toThrow(
+      'upstream submission was not accepted'
+    )
+  })
+
   test('submits MiniMax H3 reference images and video as prepared multipart files', async () => {
     const referenceVideoUrl =
       'https://many-models.example/v1/video-reference-files/abcdefghijklmnopqrstuvwx.mp4/content?expires=1&access=signed'

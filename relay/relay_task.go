@@ -353,7 +353,7 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		return nil, service.TaskErrorWrapperLocal(errors.New("upstream returned an empty response"), "fail_to_fetch_task", http.StatusBadGateway)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	if !isSuccessfulTaskSubmitStatus(resp.StatusCode) {
 		responseBody, _ := io.ReadAll(resp.Body)
 		if common.GetContextKeyBool(c, constant.ContextKeyTaskPrepareResponse) && isPrepareRequestInputError(resp.StatusCode) {
 			return nil, service.TaskErrorWrapperLocal(fmt.Errorf("%s", string(responseBody)), "fail_to_fetch_task", resp.StatusCode)
@@ -409,6 +409,10 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		Immediate:      parsed.Immediate,
 		PluginState:    parsed.PluginState,
 	}, nil
+}
+
+func isSuccessfulTaskSubmitStatus(statusCode int) bool {
+	return statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices
 }
 
 func isPrepareRequestInputError(statusCode int) bool {

@@ -111,6 +111,15 @@ func TestPrepareRequestInputErrorClassification(t *testing.T) {
 	}
 }
 
+func TestTaskSubmitAcceptsEverySuccessfulHTTPStatus(t *testing.T) {
+	for _, status := range []int{http.StatusOK, http.StatusCreated, http.StatusAccepted, http.StatusNoContent} {
+		assert.True(t, isSuccessfulTaskSubmitStatus(status))
+	}
+	for _, status := range []int{http.StatusContinue, http.StatusMultipleChoices, http.StatusBadRequest, http.StatusInternalServerError} {
+		assert.False(t, isSuccessfulTaskSubmitStatus(status))
+	}
+}
+
 const mappingOrderSubmitPlugin = `
 export const meta = {apiVersion:1,key:"maporder",name:"Map Order",version:"1.0.0",author:{name:"Test"},models:["declared-model"],fetchMode:"per_task"};
 export function buildSubmitRequest(ctx) {

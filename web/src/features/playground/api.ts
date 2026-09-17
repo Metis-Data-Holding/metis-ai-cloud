@@ -19,7 +19,10 @@ For commercial licensing, please contact support@quantumnous.com
 import i18next from 'i18next'
 
 import { api } from '@/lib/api'
-import { requireServerSuccess } from '@/lib/server-error-message'
+import {
+  createServerError,
+  requireServerSuccess,
+} from '@/lib/server-error-message'
 
 import { API_ENDPOINTS } from './constants'
 import type {
@@ -220,6 +223,9 @@ export async function submitVideoGeneration(
     params: { group },
     skipErrorHandler: true,
   })
+  if (!res.data || typeof res.data.id !== 'string' || !res.data.id.trim()) {
+    throw createServerError(res.data, i18next.t('Unable to submit video task'))
+  }
   return res.data
 }
 
