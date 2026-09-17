@@ -715,6 +715,49 @@ export function parseTaskResult(){return {status:"SUCCESS"};}
 	assert.Nil(t, descriptor)
 }
 
+func TestTaskAdaptorFetchVideoSuperResolutionSourceUsesTaskKeyAndRejectsRedirect(t *testing.T) {
+	pluginSource := strings.Replace(mockPlugin, `export function buildContentRequest() { throw new Error("artifact_not_found"); }`, `export function buildContentRequest(ctx) {
+  if (ctx.artifactKey !== "video" || ctx.upstreamTaskId !== "wan-task") throw new Error("bad content context");
+  return {url: ctx.baseUrl + "/content/wan-task", method: "GET", headers: {Authorization: "Bearer " + ctx.apiKey}};
+}`, 1)
+	plugin, err := pluginruntime.NewRegistry().Register(pluginSource, pluginruntime.Options{})
+	require.NoError(t, err)
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		assert.Equal(t, "Bearer stale-channel-key", r.Header.Get("Authorization"))
+		if requests == 1 {
+			http.Redirect(w, r, "https://other.example/video.mp4?token=must-not-leak", http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		_, _ = w.Write([]byte("video"))
+	}))
+	defer server.Close()
+	service.InitHttpClient()
+	adaptor := New(plugin)
+	adaptor.Init(&relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{ChannelBaseUrl: "https://stale.example", ApiKey: "stale-info-key"}})
+	task := &model.Task{
+		TaskID:      "public-wan-task",
+		PrivateData: model.TaskPrivateData{UpstreamTaskID: "wan-task"},
+	}
+	response, err := adaptor.FetchVideoSuperResolutionSource(t.Context(), task, server.URL, "stale-channel-key", "")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusFound, response.StatusCode)
+	assert.Equal(t, 1, requests, "content fetch must not follow redirects")
+	assert.NotContains(t, response.Header.Get("Location"), "task-key")
+	response.Body.Close()
+	response, err = adaptor.FetchVideoSuperResolutionSource(t.Context(), task, server.URL, "stale-channel-key", "")
+	require.NoError(t, err)
+	body, err := io.ReadAll(response.Body)
+	response.Body.Close()
+	require.NoError(t, err)
+	assert.Equal(t, []byte("video"), body)
+}
+
 func TestTaskAdaptorRejectsInvalidArtifactProjection(t *testing.T) {
 	testCases := []struct {
 		name       string

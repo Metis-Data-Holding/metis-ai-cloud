@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -21,7 +22,7 @@ const VideoSuperResolutionOptionKeyPrefix = "VideoSuperResolution:"
 const videoSuperResolutionContextKey = "video_super_resolution.snapshot"
 
 var (
-	ErrVideoSuperResolutionUnsupportedModel = errors.New("video super-resolution supports Seedance 2.0 models only")
+	ErrVideoSuperResolutionUnsupportedModel = errors.New("video super-resolution does not support this model")
 	ErrVideoSuperResolutionNotConfigured    = errors.New("video super-resolution is not configured")
 	ErrVideoSuperResolutionPreflightFailed  = errors.New("video generation is temporarily unavailable")
 )
@@ -86,13 +87,28 @@ func isSeedance20Model(modelName string) bool {
 	}
 }
 
-func IsVideoSuperResolutionModel(modelName string) bool {
-	return isSeedance20Model(modelName)
+func isWan30Model(modelName string) bool {
+	switch strings.ToLower(normalizeVideoSuperResolutionModel(modelName)) {
+	case "alibaba/wan-3.0", "alibaba/wan-3.0-prime":
+		return true
+	default:
+		return false
+	}
 }
 
-// 官方 ModelArk 分辨率档位（2026-09-14）；内部超分不能扩大模型对外承诺。
+func IsVideoSuperResolutionModel(modelName string) bool {
+	return isSeedance20Model(modelName) || isWan30Model(modelName)
+}
+
+// 官方分辨率档位；内部超分不能扩大模型对外承诺。
+// Wan（2026-09-17）：https://openrouter.ai/alibaba/wan-3.0
+// https://openrouter.ai/alibaba/wan-3.0-prime
+// ModelArk（2026-09-14）：
 // https://docs.byteplus.com/docs/ModelArk/1099320
 func VideoSuperResolutionTargets(modelName string) []string {
+	if isWan30Model(modelName) {
+		return []string{"1080p"}
+	}
 	if !isSeedance20Model(modelName) || strings.Contains(strings.ToLower(modelName), "fast") {
 		return []string{}
 	}
@@ -152,7 +168,7 @@ func SaveVideoSuperResolutionConfig(modelName string, config VideoSuperResolutio
 	if config.SourceResolution != "480p" && config.SourceResolution != "720p" {
 		return errors.New("source_resolution must be 480p or 720p")
 	}
-	if !isSeedance20Model(modelName) {
+	if !IsVideoSuperResolutionModel(modelName) {
 		return ErrVideoSuperResolutionUnsupportedModel
 	}
 	targets := VideoSuperResolutionTargets(modelName)
@@ -231,7 +247,8 @@ func ApplyVideoSuperResolution(c *gin.Context, pluginKey, originModelName, upstr
 	}
 	resolution := targetResolution(rawResolution)
 	// 无论是否启用超分，均在改写请求和付费生成前限制已识别模型的档位。
-	if pluginKey == "doubao" && isSeedance20Model(modelName) && explicit {
+	modelSupportsSR := (pluginKey == "doubao" && isSeedance20Model(modelName)) || (pluginKey == "openrouter-wan" && isWan30Model(modelName))
+	if modelSupportsSR && explicit {
 		raw := strings.ToLower(strings.TrimSpace(fmt.Sprint(rawResolution)))
 		known := raw == "480p" || raw == "720p" || raw == "1080p" || raw == "4k"
 		if (strings.Contains(raw, "x") || strings.Contains(raw, "*")) && resolution != "" {
@@ -245,7 +262,7 @@ func ApplyVideoSuperResolution(c *gin.Context, pluginKey, originModelName, upstr
 	if !configured || !config.Enabled {
 		return nil
 	}
-	if pluginKey != "doubao" || !isSeedance20Model(modelName) {
+	if !modelSupportsSR {
 		return ErrVideoSuperResolutionUnsupportedModel
 	}
 	if !isBody {
@@ -261,6 +278,11 @@ func ApplyVideoSuperResolution(c *gin.Context, pluginKey, originModelName, upstr
 	}
 	if runtime.WorkflowID == "" {
 		return ErrVideoSuperResolutionNotConfigured
+	}
+	if pluginKey == "openrouter-wan" {
+		if err := preflightVideoSuperResolutionReferenceStorage(); err != nil {
+			return videoSuperResolutionPreflightFailure(c, err)
+		}
 	}
 	client := NewVideoSuperResolutionVODClient(runtime)
 	requestContext := context.Background()
@@ -286,6 +308,18 @@ func ApplyVideoSuperResolution(c *gin.Context, pluginKey, originModelName, upstr
 	})
 	c.Set(videoSuperResolutionRuntimeContextKey, runtime)
 	return nil
+}
+
+func preflightVideoSuperResolutionReferenceStorage() error {
+	directory := VideoReferenceUploadDirectory()
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return fmt.Errorf("video reference storage is unavailable: %w", err)
+	}
+	if err := ensureWritableDirectory(directory); err != nil {
+		return fmt.Errorf("video reference storage is not writable: %w", err)
+	}
+	_, err := BuildVideoReferenceContentURL("000000000000000000000000.mp4", time.Now().Add(VideoReferenceTTL))
+	return err
 }
 
 func GetVideoSuperResolutionSnapshot(c *gin.Context) (VideoSuperResolutionSnapshot, bool) {

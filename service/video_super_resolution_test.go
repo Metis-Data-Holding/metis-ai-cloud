@@ -9,11 +9,13 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -72,13 +74,16 @@ func TestSuperResolutionPipelineDeliversAndCleansWithoutGenerationChannel(t *tes
 	for _, scenario := range []struct {
 		name, target  string
 		preserve      bool
+		wan           bool
 		width, height int
 		estimate      float64
 	}{
-		{"1080p without original", "1080p", false, 1920, 1080, 0.000286944444444},
-		{"1080p with original", "1080p", true, 1920, 1080, 0.000286944444444},
-		{"4k with original", "4k", true, 3840, 2160, 0.001147777777778},
-		{"2k with original", "2k", true, 2560, 1440, 0.000573888888889},
+		{"1080p without original", "1080p", false, false, 1920, 1080, 0.000286944444444},
+		{"1080p with original", "1080p", true, false, 1920, 1080, 0.000286944444444},
+		{"4k with original", "4k", true, false, 3840, 2160, 0.001147777777778},
+		{"2k with original", "2k", true, false, 2560, 1440, 0.000573888888889},
+		{"wan with original", "1080p", true, true, 1920, 1080, 0.000286944444444},
+		{"wan without original", "1080p", false, true, 1920, 1080, 0.000286944444444},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			preserve := scenario.preserve
@@ -91,6 +96,44 @@ func TestSuperResolutionPipelineDeliversAndCleansWithoutGenerationChannel(t *tes
 			task.Progress = "45%"
 			task.PrivateData.SuperResolution = &model.TaskSuperResolutionState{Phase: "upload_pending", SourceResolution: "720p", TargetResolution: scenario.target, PreserveOriginal: preserve, WorkflowID: "workflow-fast-" + scenario.target, OriginalURL: "https://8.8.8.8/source.mp4"}
 			require.NoError(t, model.DB.Create(task).Error)
+			sourceURL := "https://8.8.8.8/source.mp4"
+			originalBytes := []byte("private original")
+			if scenario.wan {
+				oldSecret, oldAddress, oldPublic := common.CryptoSecret, system_setting.ServerAddress, system_setting.TaskPublicAddress
+				common.CryptoSecret, system_setting.ServerAddress, system_setting.TaskPublicAddress = "test-staging-secret", "https://8.8.8.8", ""
+				t.Cleanup(func() {
+					common.CryptoSecret, system_setting.ServerAddress, system_setting.TaskPublicAddress = oldSecret, oldAddress, oldPublic
+				})
+				t.Setenv("VIDEO_REFERENCE_UPLOAD_DIR", t.TempDir())
+				task.Properties.UpstreamModelName = "alibaba/wan-3.0"
+				task.PrivateData.Execution = &model.TaskExecutionSnapshot{TaskPlugin: &model.TaskPluginSnapshot{Key: "openrouter-wan"}}
+				task.PrivateData.SuperResolution.Phase = superResolutionPhaseGeneration
+				task.PrivateData.SuperResolution.OriginalURL = ""
+				require.NoError(t, model.DB.Save(task).Error)
+				var stale model.Task
+				require.NoError(t, model.DB.First(&stale, task.ID).Error)
+				source := &srSourceAdaptor{video: video}
+				require.NoError(t, captureVideoSuperResolutionGeneration(t.Context(), source, task, &relaycommon.TaskInfo{Status: model.TaskStatusSuccess}, task.Status, "https://provider.example", "test-provider-key", ""))
+				require.NoError(t, model.DB.First(task, task.ID).Error)
+				sourceURL = task.PrivateData.SuperResolution.OriginalURL
+				require.Contains(t, sourceURL, "/v1/video-reference-files/")
+				assert.NotContains(t, sourceURL, "test-provider-key")
+				assert.NotContains(t, string(VideoSuperResolutionPublicData(task)), "access=")
+				assert.EqualValues(t, model.TaskStatusInProgress, task.Status)
+				files, err := os.ReadDir(VideoReferenceUploadDirectory())
+				require.NoError(t, err)
+				require.Len(t, files, 1)
+				// 并发轮询的旧快照不能覆盖已保存地址，也不能留下第二份原片。
+				require.NoError(t, captureVideoSuperResolutionGeneration(t.Context(), source, &stale, &relaycommon.TaskInfo{Status: model.TaskStatusSuccess}, stale.Status, "https://provider.example", "test-provider-key", ""))
+				files, err = os.ReadDir(VideoReferenceUploadDirectory())
+				require.NoError(t, err)
+				require.Len(t, files, 1)
+				removeVideoReferenceURLIfUnpersisted(task, sourceURL)
+				files, err = os.ReadDir(VideoReferenceUploadDirectory())
+				require.NoError(t, err)
+				require.Len(t, files, 1)
+				originalBytes = video
+			}
 			counts := map[string]int{}
 			deleted := false
 			oldVOD := videoSuperResolutionHTTPClient
@@ -113,7 +156,9 @@ func TestSuperResolutionPipelineDeliversAndCleansWithoutGenerationChannel(t *tes
 					assert.Equal(t, "application/x-www-form-urlencoded", r.Header.Get("Content-Type"))
 					require.NoError(t, r.ParseForm())
 					assert.Equal(t, "test-space", r.PostForm.Get("SpaceName"))
-					assert.JSONEq(t, `[{"SourceUrl":"https://8.8.8.8/source.mp4"}]`, r.PostForm.Get("URLSets"))
+					encodedSource, err := common.Marshal([]map[string]string{{"SourceUrl": sourceURL}})
+					require.NoError(t, err)
+					assert.JSONEq(t, string(encodedSource), r.PostForm.Get("URLSets"))
 					result = `{"Data":[{"JobId":"upload-job"}]}`
 				case "QueryUploadTaskInfo":
 					assert.Equal(t, "GET", r.Method)
@@ -156,8 +201,8 @@ func TestSuperResolutionPipelineDeliversAndCleansWithoutGenerationChannel(t *tes
 			})}
 			mediaClient := &http.Client{Transport: srTransport(func(r *http.Request) (*http.Response, error) {
 				data := video
-				if r.URL.Path == "/source.mp4" {
-					data = []byte("private original")
+				if r.URL.String() == sourceURL {
+					data = originalBytes
 				}
 				return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(bytes.NewReader(data))}, nil
 			})}
@@ -186,7 +231,7 @@ func TestSuperResolutionPipelineDeliversAndCleansWithoutGenerationChannel(t *tes
 				require.NoError(t, err)
 				got, _ := io.ReadAll(original)
 				original.Close()
-				assert.Equal(t, "private original", string(got))
+				assert.Equal(t, originalBytes, got)
 			} else {
 				assert.ErrorIs(t, err, os.ErrNotExist)
 			}
@@ -206,6 +251,11 @@ func TestSuperResolutionPipelineDeliversAndCleansWithoutGenerationChannel(t *tes
 			assert.Empty(t, task.PrivateData.SuperResolution.OriginalURL)
 			assert.EqualValues(t, model.TaskStatusSuccess, task.Status)
 			assert.False(t, model.HasUnfinishedSyncTasks())
+			if scenario.wan {
+				files, err := os.ReadDir(VideoReferenceUploadDirectory())
+				require.NoError(t, err)
+				assert.Empty(t, files)
+			}
 		})
 	}
 }
@@ -515,6 +565,69 @@ func TestSuperResolutionConfigCompatibilityAndValidation(t *testing.T) {
 	assert.Equal(t, map[string]string{"1080p": "480p", "4k": "480p"}, GetVideoSuperResolutionConfig(name).SourceResolutions, "无效配置不得覆盖旧值")
 }
 
+func TestWanSuperResolutionSupportsOnly1080pWithIndependentSource(t *testing.T) {
+	name := "alibaba/wan-3.0"
+	key := VideoSuperResolutionOptionKeyPrefix + name
+	common.OptionMapRWMutex.Lock()
+	if common.OptionMap == nil {
+		common.OptionMap = make(map[string]string)
+	}
+	old, exists := common.OptionMap[key]
+	common.OptionMap[key] = `{"enabled":true,"source_resolution":"480p","source_resolutions":{"1080p":"720p","4k":"480p","2k":"480p"},"preserve_original":true}`
+	common.OptionMapRWMutex.Unlock()
+	t.Cleanup(func() {
+		common.OptionMapRWMutex.Lock()
+		defer common.OptionMapRWMutex.Unlock()
+		if exists {
+			common.OptionMap[key] = old
+		} else {
+			delete(common.OptionMap, key)
+		}
+	})
+
+	assert.True(t, IsVideoSuperResolutionModel(name))
+	assert.Equal(t, []string{"1080p"}, VideoSuperResolutionTargets(name))
+	config := GetVideoSuperResolutionConfig(name)
+	assert.True(t, config.Enabled)
+	assert.Equal(t, map[string]string{"1080p": "720p"}, config.SourceResolutions)
+
+	for _, unsupported := range []string{"4k", "2k", "2560x1440"} {
+		c := &gin.Context{}
+		body := map[string]any{"model": name, "resolution": unsupported}
+		require.Error(t, ApplyVideoSuperResolution(c, "openrouter-wan", name, name, body), unsupported)
+		assert.Equal(t, unsupported, body["resolution"])
+	}
+	for _, pluginKey := range []string{"doubao", "other-plugin"} {
+		c := &gin.Context{}
+		body := map[string]any{"model": name, "resolution": "1080p"}
+		require.ErrorIs(t, ApplyVideoSuperResolution(c, pluginKey, name, name, body), ErrVideoSuperResolutionUnsupportedModel)
+	}
+}
+
+func TestWanSuperResolutionReferencePreflightCreatesStorage(t *testing.T) {
+	directory := filepath.Join(t.TempDir(), "video-references")
+	previousSecret := common.CryptoSecret
+	previousAddress := system_setting.ServerAddress
+	previousPublicAddress := system_setting.TaskPublicAddress
+	common.CryptoSecret = "wan-sr-preflight-secret"
+	system_setting.ServerAddress = "https://many-models.example"
+	system_setting.TaskPublicAddress = ""
+	t.Setenv("VIDEO_REFERENCE_UPLOAD_DIR", directory)
+	t.Cleanup(func() {
+		common.CryptoSecret = previousSecret
+		system_setting.ServerAddress = previousAddress
+		system_setting.TaskPublicAddress = previousPublicAddress
+	})
+
+	require.NoError(t, preflightVideoSuperResolutionReferenceStorage())
+	info, err := os.Stat(directory)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+	entries, err := os.ReadDir(directory)
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
 func TestSuperResolutionLegacyFastIsEffectivelyDisabled(t *testing.T) {
 	key := VideoSuperResolutionOptionKeyPrefix + "dreamina-seedance-2-0-fast-260128"
 	common.OptionMapRWMutex.Lock()
@@ -536,4 +649,83 @@ func TestSuperResolutionLegacyFastIsEffectivelyDisabled(t *testing.T) {
 	config := GetVideoSuperResolutionConfig("dreamina-seedance-2-0-fast-260128")
 	assert.False(t, config.Enabled)
 	assert.Empty(t, config.SourceResolutions)
+}
+
+type srSourceAdaptor struct {
+	TaskPollingAdaptor
+	video []byte
+}
+
+func (a *srSourceAdaptor) FetchVideoSuperResolutionSource(ctx context.Context, task *model.Task, baseURL, key, proxy string) (*http.Response, error) {
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(a.video)), ContentLength: int64(len(a.video))}, nil
+}
+
+func TestWanSuperResolutionRewritesOnlyRequested1080p(t *testing.T) {
+	configureSRTest(t)
+	t.Setenv("VIDEO_REFERENCE_UPLOAD_DIR", filepath.Join(t.TempDir(), "new"))
+	oldSecret, oldAddress, oldPublic := common.CryptoSecret, system_setting.ServerAddress, system_setting.TaskPublicAddress
+	common.CryptoSecret, system_setting.ServerAddress, system_setting.TaskPublicAddress = "test-secret", "https://8.8.8.8", ""
+	t.Cleanup(func() {
+		common.CryptoSecret, system_setting.ServerAddress, system_setting.TaskPublicAddress = oldSecret, oldAddress, oldPublic
+	})
+	oldVOD := videoSuperResolutionHTTPClient
+	calls := 0
+	videoSuperResolutionHTTPClient = &http.Client{Transport: srTransport(func(*http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"Result":{"DefaultPlayDomain":"play.example.com"}}`))}, nil
+	})}
+	t.Cleanup(func() { videoSuperResolutionHTTPClient = oldVOD })
+	for _, name := range []string{"alibaba/wan-3.0", "alibaba/wan-3.0-prime"} {
+		key := VideoSuperResolutionOptionKeyPrefix + name
+		common.OptionMapRWMutex.Lock()
+		if common.OptionMap == nil {
+			common.OptionMap = make(map[string]string)
+		}
+		old, exists := common.OptionMap[key]
+		common.OptionMapRWMutex.Unlock()
+		t.Cleanup(func() {
+			common.OptionMapRWMutex.Lock()
+			defer common.OptionMapRWMutex.Unlock()
+			if exists {
+				common.OptionMap[key] = old
+			} else {
+				delete(common.OptionMap, key)
+			}
+		})
+		for _, source := range []string{"480p", "720p"} {
+			encoded, err := common.Marshal(VideoSuperResolutionConfig{Enabled: true, SourceResolution: "720p", SourceResolutions: map[string]string{"1080p": source}, PreserveOriginal: true})
+			require.NoError(t, err)
+			common.OptionMapRWMutex.Lock()
+			common.OptionMap[key] = string(encoded)
+			common.OptionMapRWMutex.Unlock()
+			for _, resolution := range []string{"480p", "720p", "1080p"} {
+				c := &gin.Context{}
+				body := map[string]any{"model": name, "resolution": resolution, "duration": 5, "prompt": "a fox", "generate_audio": false, "frame_images": []string{"https://image.example/ref.png"}}
+				before := calls
+				require.NoError(t, ApplyVideoSuperResolution(c, "openrouter-wan", name, name, body))
+				snapshot, ok := GetVideoSuperResolutionSnapshot(c)
+				if resolution == "1080p" {
+					require.True(t, ok)
+					assert.Equal(t, source, body["resolution"])
+					assert.Equal(t, "1080p", snapshot.TargetResolution)
+					assert.Equal(t, source, snapshot.SourceResolution)
+					assert.Equal(t, before+1, calls)
+				} else {
+					assert.False(t, ok)
+					assert.Equal(t, resolution, body["resolution"])
+					assert.Equal(t, before, calls)
+				}
+				assert.Equal(t, 5, body["duration"])
+				assert.Equal(t, "a fox", body["prompt"])
+				assert.Equal(t, false, body["generate_audio"])
+				assert.Equal(t, []string{"https://image.example/ref.png"}, body["frame_images"])
+			}
+		}
+		common.OptionMapRWMutex.Lock()
+		delete(common.OptionMap, key)
+		common.OptionMapRWMutex.Unlock()
+		body := map[string]any{"model": name, "resolution": "1080p"}
+		require.NoError(t, ApplyVideoSuperResolution(&gin.Context{}, "openrouter-wan", name, name, body))
+		assert.Equal(t, "1080p", body["resolution"])
+	}
 }

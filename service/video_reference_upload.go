@@ -219,6 +219,33 @@ func BuildVideoReferenceContentURL(fileID string, expires time.Time) (string, er
 	return baseURL.String(), nil
 }
 
+// removeVideoReferenceContentURL 只删除本系统当前公网址和有效签名对应的文件。
+// 调用方仅传入自己刚创建的中转地址，用户上传地址不会被误删。
+func removeVideoReferenceContentURL(rawURL string) {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return
+	}
+	baseAddress := strings.TrimSpace(system_setting.TaskPublicAddress)
+	if baseAddress == "" {
+		baseAddress = strings.TrimSpace(system_setting.ServerAddress)
+	}
+	baseURL, err := url.Parse(baseAddress)
+	if err != nil || baseURL.Scheme != parsed.Scheme || baseURL.Host != parsed.Host {
+		return
+	}
+	prefix := strings.TrimRight(baseURL.Path, "/") + "/v1/video-reference-files/"
+	if !strings.HasPrefix(parsed.Path, prefix) || !strings.HasSuffix(parsed.Path, "/content") {
+		return
+	}
+	fileID := strings.TrimSuffix(strings.TrimPrefix(parsed.Path, prefix), "/content")
+	expires, err := ParseVideoReferenceExpiry(parsed.Query().Get("expires"))
+	if err != nil || !VerifyVideoReferenceAccess(parsed.Query().Get("access"), fileID, expires, time.Now()) {
+		return
+	}
+	_ = os.Remove(filepath.Join(VideoReferenceUploadDirectory(), fileID))
+}
+
 func OpenVideoReference(directory, fileID string) (*os.File, string, error) {
 	if !videoReferenceFilePattern.MatchString(fileID) {
 		return nil, "", ErrVideoReferenceInvalid

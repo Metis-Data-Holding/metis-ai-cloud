@@ -1040,6 +1040,10 @@ func (a *TaskAdaptor) BuildContentRequest(task *model.Task, artifactKey string, 
 	if a.info == nil {
 		return nil, fmt.Errorf("plugin adaptor is not initialized")
 	}
+	return a.buildContentRequestWithCredentials(task, artifactKey, clientRequest, a.info.ChannelBaseUrl, a.info.ApiKey, a.info.ChannelSetting.Proxy)
+}
+
+func (a *TaskAdaptor) buildContentRequestWithCredentials(task *model.Task, artifactKey string, clientRequest channel.TaskArtifactClientRequest, baseURL, key, proxy string) (*channel.TaskContentRequest, error) {
 	if !taskArtifactKeyPattern.MatchString(artifactKey) {
 		return nil, fmt.Errorf("invalid artifact key")
 	}
@@ -1047,19 +1051,18 @@ func (a *TaskAdaptor) BuildContentRequest(task *model.Task, artifactKey string, 
 	if err != nil {
 		return nil, err
 	}
-	ctx["upstreamTaskId"] = task.GetUpstreamTaskID()
-	ctx["artifactKey"] = artifactKey
-	ctx["baseUrl"] = a.info.ChannelBaseUrl
-	ctx["clientRequest"] = jsonValue(clientRequest)
-	proxy := a.info.ChannelSetting.Proxy
-	auth, err := resolveAuth(a.plugin.Meta.Auth, a.info.ApiKey, proxy)
+	auth, err := resolveAuth(a.plugin.Meta.Auth, key, proxy)
 	if err != nil {
 		return nil, err
 	}
+	ctx["baseUrl"] = baseURL
+	ctx["upstreamTaskId"] = task.GetUpstreamTaskID()
+	ctx["artifactKey"] = artifactKey
+	ctx["clientRequest"] = jsonValue(clientRequest)
 	ctx["auth"] = auth
 	ctx["authHeader"] = auth["authHeader"]
 	if a.plugin.Meta.Auth.Type == "" || a.plugin.Meta.Auth.Type == "none" || a.plugin.Meta.Auth.Type == "api_key" {
-		ctx["apiKey"] = a.info.ApiKey
+		ctx["apiKey"] = key
 	}
 	value, err := a.plugin.Engine.Call(context.Background(), "buildContentRequest", ctx)
 	if err != nil {
@@ -1090,7 +1093,7 @@ func (a *TaskAdaptor) BuildContentRequest(task *model.Task, artifactKey string, 
 		if parseErr != nil || parsedURL.Host == "" || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
 			return nil, fmt.Errorf("credentialless artifact request URL must be absolute HTTP(S)")
 		}
-	} else if err = pluginruntime.ValidateRequestURL(descriptor.URL, a.info.ChannelBaseUrl, a.plugin.Meta.AllowedHosts); err != nil {
+	} else if err = pluginruntime.ValidateRequestURL(descriptor.URL, baseURL, a.plugin.Meta.AllowedHosts); err != nil {
 		return nil, err
 	}
 	var body []byte
@@ -1111,6 +1114,40 @@ func (a *TaskAdaptor) BuildContentRequest(task *model.Task, artifactKey string, 
 		Body:           body,
 		Credentialless: descriptor.Credentialless,
 	}, nil
+}
+
+// FetchVideoSuperResolutionSource 使用当前轮询渠道凭据构造插件内容请求，
+// 并拒绝重定向，避免 Bearer 凭据被带到其他来源。
+func (a *TaskAdaptor) FetchVideoSuperResolutionSource(ctx context.Context, task *model.Task, baseURL, key, proxy string) (*http.Response, error) {
+	descriptor, err := a.buildContentRequestWithCredentials(task, "video", channel.TaskArtifactClientRequest{Method: http.MethodGet}, baseURL, key, proxy)
+	if err != nil {
+		return nil, fmt.Errorf("video source request unavailable")
+	}
+	if descriptor == nil {
+		return nil, fmt.Errorf("video source request unavailable")
+	}
+	if descriptor.Credentialless {
+		return nil, fmt.Errorf("video source request unavailable")
+	}
+	request, err := http.NewRequestWithContext(ctx, descriptor.Method, descriptor.URL, bytes.NewReader(descriptor.Body))
+	if err != nil {
+		return nil, fmt.Errorf("video source request unavailable")
+	}
+	for name, value := range descriptor.Headers {
+		request.Header.Set(name, value)
+	}
+	client, err := service.GetHttpClientWithProxy(proxy)
+	if err != nil {
+		return nil, fmt.Errorf("video source request unavailable")
+	}
+	noRedirectClient := *client
+	noRedirectClient.Timeout = 5 * time.Minute
+	noRedirectClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
+	response, err := noRedirectClient.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("video source request unavailable")
+	}
+	return response, nil
 }
 
 func taskArtifactContext(task *model.Task) (map[string]any, error) {

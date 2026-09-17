@@ -149,6 +149,62 @@ describe('model pricing entry', () => {
     client.clear()
   })
 
+  it.each(['alibaba/wan-3.0', 'alibaba/wan-3.0-prime'])(
+    'configures only the 1080P target for %s',
+    async (modelName) => {
+      const wanModel = { ...model, model_name: modelName }
+      const settings = {
+        enabled: false,
+        source_resolution: '720p',
+        source_resolutions: { '1080p': '720p' },
+        supported_target_resolutions: ['1080p'],
+        preserve_original: true,
+        supported: true,
+      }
+      vi.spyOn(api, 'get').mockImplementation(async (url) => {
+        if (url === '/api/models/7') {
+          return { data: { success: true, data: wanModel } }
+        }
+        if (url === '/api/models/super-resolution') {
+          return { data: { success: true, data: settings } }
+        }
+        return { data: { success: true, data: { items: [] } } }
+      })
+      const put = vi.spyOn(api, 'put').mockResolvedValue({
+        data: { success: true, data: settings },
+      })
+      const client = renderModelActions(wanModel)
+      const user = userEvent.setup()
+      await user.click(screen.getByRole('button', { name: 'Edit' }))
+      await user.click(
+        await screen.findByRole('tab', { name: 'Super-resolution' })
+      )
+      await user.click(
+        screen.getByRole('switch', { name: 'Enable super-resolution' })
+      )
+      expect(screen.getAllByRole('radio', { name: '480P' })).toHaveLength(1)
+      expect(screen.getAllByRole('radio', { name: '720P' })).toHaveLength(1)
+      expect(screen.queryByText('4K')).not.toBeInTheDocument()
+      expect(screen.queryByText('2K')).not.toBeInTheDocument()
+      await user.click(screen.getByRole('radio', { name: '480P' }))
+      await user.click(screen.getByRole('button', { name: 'Save settings' }))
+      await waitFor(() =>
+        expect(put).toHaveBeenCalledWith(
+          '/api/models/super-resolution',
+          {
+            model: modelName,
+            enabled: true,
+            source_resolution: '480p',
+            source_resolutions: { '1080p': '480p' },
+            preserve_original: true,
+          },
+          { skipBusinessError: true, skipErrorHandler: true }
+        )
+      )
+      client.clear()
+    }
+  )
+
   it('disables super-resolution for Seedance Fast when no target is supported', async () => {
     useAuthStore.getState().auth.setUser({ id: 1, username: 'root', role: 100 })
     const fastModel = {

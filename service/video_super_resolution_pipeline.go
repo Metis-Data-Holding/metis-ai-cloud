@@ -78,7 +78,7 @@ func rememberVideoSuperResolutionError(task *model.Task, err error) {
 	_, _ = task.UpdateSuperResolutionState(task.Status, before)
 }
 
-func captureVideoSuperResolutionGeneration(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task, result *relaycommon.TaskInfo, fromStatus model.TaskStatus) error {
+func captureVideoSuperResolutionGeneration(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task, result *relaycommon.TaskInfo, fromStatus model.TaskStatus, baseURL, key, proxy string) error {
 	state := task.PrivateData.SuperResolution
 	before := *state
 	task.Status = fromStatus
@@ -90,11 +90,37 @@ func captureVideoSuperResolutionGeneration(ctx context.Context, adaptor TaskPoll
 	if result.Status == model.TaskStatusFailure {
 		return failVideoSuperResolutionTask(ctx, adaptor, task, "视频生成失败")
 	}
+	stagedURL := ""
 	if result.Status == model.TaskStatusSuccess {
-		if err := ValidateSSRFProtectedFetchURL(result.Url); err != nil || result.Url == "" {
+		originalURL := strings.TrimSpace(result.Url)
+		if isWanSuperResolutionTask(task) {
+			// Wan 的完成响应不提供可直接信任的 URL；即使适配器返回了 URL，
+			// 也统一通过受信内容接口转存，确保终态清理只触及本次中转文件。
+			originalURL = ""
+			fetcher, ok := adaptor.(VideoSuperResolutionSourceFetcher)
+			if !ok {
+				return errors.New("video super-resolution source fetch is unavailable")
+			}
+			response, err := fetcher.FetchVideoSuperResolutionSource(ctx, task, baseURL, key, proxy)
+			if err != nil {
+				return err
+			}
+			if response == nil {
+				return errors.New("video source response is empty")
+			}
+			stagedURL, err = stageVideoSuperResolutionSource(response)
+			if err != nil {
+				return err
+			}
+			originalURL = stagedURL
+		}
+		if err := ValidateSSRFProtectedFetchURL(originalURL); err != nil || originalURL == "" {
+			if stagedURL != "" {
+				removeVideoReferenceContentURL(stagedURL)
+			}
 			return failVideoSuperResolutionTask(ctx, adaptor, task, "视频生成结果不可用")
 		}
-		state.OriginalURL = result.Url
+		state.OriginalURL = originalURL
 		state.UsageFacts = result.UsageFacts
 		state.GenerationCompletionTokens = result.CompletionTokens
 		state.GenerationTotalTokens = result.TotalTokens
@@ -111,7 +137,57 @@ func captureVideoSuperResolutionGeneration(ctx context.Context, adaptor TaskPoll
 		task.StartTime = time.Now().Unix()
 	}
 	state.LastError = ""
+	if stagedURL != "" {
+		won, err := task.UpdateSuperResolutionState(fromStatus, before)
+		if err == nil && !won {
+			removeVideoReferenceContentURL(stagedURL)
+		} else if err != nil {
+			removeVideoReferenceURLIfUnpersisted(task, stagedURL)
+		}
+		return err
+	}
 	return saveVideoSuperResolutionState(task, fromStatus, before)
+}
+
+// removeVideoReferenceURLIfUnpersisted 仅在确认 CAS 写入没有留下中转地址时清理。
+// 数据库读取失败时保留文件，交给现有 TTL 清理，避免误删已提交的原片。
+func removeVideoReferenceURLIfUnpersisted(task *model.Task, stagedURL string) {
+	if task == nil || strings.TrimSpace(stagedURL) == "" {
+		return
+	}
+	var persisted model.Task
+	if task.ID == 0 || model.DB.First(&persisted, task.ID).Error != nil {
+		return
+	}
+	if persisted.PrivateData.SuperResolution == nil || persisted.PrivateData.SuperResolution.OriginalURL != stagedURL {
+		removeVideoReferenceContentURL(stagedURL)
+	}
+}
+
+func isWanSuperResolutionTask(task *model.Task) bool {
+	if task == nil || task.PrivateData.Execution == nil || task.PrivateData.Execution.TaskPlugin == nil {
+		return false
+	}
+	modelName := firstString(task.Properties.UpstreamModelName, task.Properties.OriginModelName)
+	return task.PrivateData.Execution.TaskPlugin.Key == "openrouter-wan" && isWan30Model(modelName)
+}
+
+func stageVideoSuperResolutionSource(response *http.Response) (string, error) {
+	if response.Body == nil {
+		return "", errors.New("video source response body is empty")
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("video source returned HTTP %d", response.StatusCode)
+	}
+	if response.ContentLength > maxVideoSuperResolutionBytes {
+		return "", errors.New("video source is too large")
+	}
+	upload, err := SaveVideoReference(response.Body, "wan-source.mp4", response.ContentLength, VideoReferenceSaveOptions{MaxBytes: maxVideoSuperResolutionBytes})
+	if err != nil {
+		return "", err
+	}
+	return upload.URL, nil
 }
 
 func updateVideoSuperResolutionTask(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task) (err error) {
@@ -313,6 +389,10 @@ func cleanupVideoSuperResolutionTask(ctx context.Context, task *model.Task) {
 	if task.Status == model.TaskStatusFailure {
 		removeVideoSuperResolutionFile(task, false)
 		state.OutputPath = ""
+		if isWanSuperResolutionTask(task) {
+			removeVideoReferenceContentURL(state.OriginalURL)
+			state.OriginalURL = ""
+		}
 	}
 	if !state.PreserveOriginal {
 		removeVideoSuperResolutionFile(task, true)
@@ -353,6 +433,9 @@ func cleanupVideoSuperResolutionTask(ctx context.Context, task *model.Task) {
 		}
 	}
 	if state.CleanupStatus == "confirmed" {
+		if isWanSuperResolutionTask(task) {
+			removeVideoReferenceContentURL(state.OriginalURL)
+		}
 		state.OriginalURL = ""
 		state.OutputURL = ""
 	}

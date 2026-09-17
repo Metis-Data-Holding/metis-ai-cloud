@@ -32,6 +32,12 @@ type TaskPollingAdaptor interface {
 	AdjustBillingOnComplete(task *model.Task, taskResult *relaycommon.TaskInfo) int
 }
 
+// VideoSuperResolutionSourceFetcher 用于完成响应没有公开 URL 的任务插件。
+// 凭据来自轮询时的渠道快照，避免适配器初始化过期后误用其他渠道密钥。
+type VideoSuperResolutionSourceFetcher interface {
+	FetchVideoSuperResolutionSource(ctx context.Context, task *model.Task, baseURL, key, proxy string) (*http.Response, error)
+}
+
 type BatchTaskPollingAdaptor interface {
 	TaskPollingAdaptor
 	FetchMode() string
@@ -586,7 +592,10 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	}
 
 	if isVideoSuperResolutionPipelineTask(task) {
-		return captureVideoSuperResolutionGeneration(ctx, adaptor, task, taskResult, snap.Status)
+		if err := captureVideoSuperResolutionGeneration(ctx, adaptor, task, taskResult, snap.Status, baseURL, key, proxy); err != nil {
+			return recordPollFailure(ctx, adaptor, task, snap.Status, pollClassTransport, 0, "")
+		}
+		return nil
 	}
 	task.Data = redactVideoResponseBody(responseBody)
 	if len(taskResult.PluginState) > 0 {
