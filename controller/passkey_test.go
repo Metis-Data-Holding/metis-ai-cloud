@@ -147,7 +147,7 @@ func TestPasskeyDomainsPreserveCredentialsAcrossVerificationFlows(t *testing.T) 
 			beginHandler, finishHandler := PasskeyLoginBegin, PasskeyLoginFinish
 			request := map[string]any{"rp_id": legacyRPID}
 			if kind == "login factor" {
-				pending, err := service.StartLoginVerification(user, "password")
+				pending, err := service.StartLoginVerification(user, "password", nil)
 				require.NoError(t, err)
 				request["flow_token"] = pending.FlowToken
 				beginPath, finishPath = "/api/user/login/passkey/begin", "/api/user/login/passkey/finish"
@@ -366,6 +366,24 @@ func TestPasskeyBulkRejectsMixedModelPricingOptionsAtomically(t *testing.T) {
 	require.NoError(t, model.DB.
 		Where(&model.Option{Key: "passkey.rp_id"}).
 		Or(&model.Option{Key: billing_setting.PluginBillingExprOption}).
+		Find(&options).Error)
+	assert.Empty(t, options)
+}
+
+func TestPasskeyBulkRejectsMixedRequestPolicyOptionsAtomically(t *testing.T) {
+	setupSecurityEnrollmentTest(t)
+	setupPasskeyDomainOptions(t)
+
+	err := model.UpdateOptionsBulk(map[string]string{
+		"passkey.rp_id": "example.com",
+		"RetryTimes":    "3",
+	})
+	require.ErrorContains(t, err, "cannot be updated together")
+
+	var options []model.Option
+	require.NoError(t, model.DB.
+		Where(&model.Option{Key: "passkey.rp_id"}).
+		Or(&model.Option{Key: "RetryTimes"}).
 		Find(&options).Error)
 	assert.Empty(t, options)
 }
