@@ -304,3 +304,10 @@
 - 实测线上 current 为 `6713d8753`，与同步前 develop 一致；远端 main 为 `9716c77f6`。两分支分叉，main 独有 104 个提交、develop 独有 10 个提交。按用户要求合并 main，保留 develop 已上线的 Wan、超分及参考音频功能，不强制覆盖分支历史。
 - 解决任务插件凭据上下文、2xx 提交响应及 locale 冲突：沿用 main 的 applyUpstreamCredentials，同时保留 Wan 超分显式轮询渠道参数；独立审查无阻塞问题。
 - 本地相关 Go 包、根模块 vet/build、relaykit test/build、前端 typecheck、189 文件 / 2283 项测试及生产构建通过。服务器数据库已做 root-only 本地备份；数据库兼容性与部署结果见后续验收记录。
+
+### 2026-10-01 同步版本部署验收
+
+- `59d0c7c34c8df6f6f68c4162715c029267e65803` 已合入并推送 develop，包含 main `9716c77f6` 全部提交，同时保留 develop 独有视频功能。Deploy Run `36820765531` 首次执行成功，无失败重试；云端后端/前端验证、镜像推送、服务器激活、公网 HTTPS 全部通过。
+- 三数据库验证：以 `TEST_MYSQL_DSN` / `TEST_POSTGRES_DSN` 指向隔离本机测试库运行 `GOWORK=off go test ./model -count=1` 通过；SQLite、MySQL 8.0.46、PostgreSQL 15.19 均完成新库启动两次、旧线上版本 `6713d8753` 初始化后升级启动两次。均确认 `user_access_tokens` 表及 `LegacyAccessTokenRetireAt` 已建立；测试容器已清理。完整 `make test` 同样通过。
+- 服务器部署前已在 root-only 目录保存 PostgreSQL 全库备份并校验 gzip；未下载数据。部署后独立 SSH 确认 current 为目标完整 SHA，app/PostgreSQL/Redis healthy，app restart=0、OOM=false，本机和公网 `/api/status` 成功，线上新表及退役配置存在。数据库及 Redis 保持原有持久化容器。
+- 本次验证发布与迁移健康，未重跑付费模型、视频超分、登录或计费端到端业务。此记录提交仅更新文档，应用代码与已部署版本一致。
