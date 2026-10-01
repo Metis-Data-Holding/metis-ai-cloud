@@ -73,6 +73,73 @@ func TestDoubaoBytePlusSubmitUsage(t *testing.T) {
 	})
 }
 
+func TestDoubaoExplicitResolutionUsesNormalizedBillingTier(t *testing.T) {
+	plugin := loadDoubaoPlugin(t)
+	videoContent := []any{map[string]any{
+		"type":      "video_url",
+		"video_url": map[string]any{"url": "https://cdn.example/reference.mp4"},
+	}}
+
+	decoded, err := plugin.Engine.CallPath(t.Context(), "protocols", []string{"openai_responses", "decodeRequest"}, map[string]any{
+		"body": map[string]any{"kind": "json", "value": map[string]any{
+			"model":      "doubao-seedance-2-0-260128",
+			"input":      "animate the reference video",
+			"resolution": "1920x1080",
+			"metadata":   map[string]any{"content": videoContent},
+		}},
+	})
+	require.NoError(t, err)
+	requestBody := alibabaObject(t, decoded)["requestBody"].(map[string]any)
+	metadata := requestBody["metadata"].(map[string]any)
+	assert.Equal(t, "1080p", metadata["resolution"])
+	descriptor, err := plugin.Engine.Call(t.Context(), "buildSubmitRequest", map[string]any{
+		"baseUrl":       "https://provider.example",
+		"apiKey":        "test-key",
+		"upstreamModel": "doubao-seedance-2-0-260128",
+		"requestBody":   requestBody,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "1080p", alibabaObject(t, descriptor)["body"].(map[string]any)["resolution"])
+
+	usage, err := plugin.Engine.Call(t.Context(), "extractUsage", map[string]any{
+		"model":         "doubao-seedance-2-0-260128",
+		"upstreamModel": "doubao-seedance-2-0-260128",
+		"usagePurpose":  "billing_ratios",
+		"requestBody":   requestBody,
+	})
+	require.NoError(t, err)
+	assert.InDelta(t, 31.0/46.0, alibabaObject(t, usage)["video_input_ratio"], 1e-12)
+}
+
+func TestDoubaoVideoSizeUsesNormalizedBillingTier(t *testing.T) {
+	plugin := loadDoubaoPlugin(t)
+	videoContent := []any{map[string]any{
+		"type":      "video_url",
+		"video_url": map[string]any{"url": "https://cdn.example/reference.mp4"},
+	}}
+
+	decoded, err := plugin.Engine.CallPath(t.Context(), "protocols", []string{"openai_video", "decodeRequest"}, map[string]any{
+		"model": "doubao-seedance-2-0-260128",
+		"body": map[string]any{"kind": "json", "value": map[string]any{
+			"model":           "doubao-seedance-2-0-260128",
+			"input_reference": "https://cdn.example/reference.mp4",
+			"size":            "1920x1080",
+			"metadata":        map[string]any{"content": videoContent},
+		}},
+	})
+	require.NoError(t, err)
+	requestBody := alibabaObject(t, decoded)["requestBody"].(map[string]any)
+
+	usage, err := plugin.Engine.Call(t.Context(), "extractUsage", map[string]any{
+		"model":         "doubao-seedance-2-0-260128",
+		"upstreamModel": "doubao-seedance-2-0-260128",
+		"usagePurpose":  "billing_ratios",
+		"requestBody":   requestBody,
+	})
+	require.NoError(t, err)
+	assert.InDelta(t, 31.0/46.0, alibabaObject(t, usage)["video_input_ratio"], 1e-12)
+}
+
 func TestDoubaoBytePlusCompletionUsage(t *testing.T) {
 	plugin := loadDoubaoPlugin(t)
 	body := map[string]any{
