@@ -24,7 +24,7 @@
 - 独立 Go 模块：`relaykit/`，主模块通过本地 `replace` 引用。
 - 数据与认证：SQLite、MySQL、PostgreSQL，独立日志库可使用 ClickHouse；缓存使用 Redis/内存，认证覆盖浏览器 Session、API Token、JWT、WebAuthn、TOTP 和 OAuth/OIDC，授权使用 Casbin。
 - 前端：`web/`，React 19、TypeScript、Rsbuild 2、TanStack Router/Query/Table、Zustand、Base UI、Tailwind CSS 4；包管理和脚本运行使用 Bun。
-- 扩展：JavaScript task plugin 位于 `plugins/tasks/`，通过 `pkg/jsplugin/` 的 Sobek runtime 执行；`electron/` 为桌面封装。
+- 扩展：JavaScript task plugin 位于 `plugins/tasks/`，通过 `pkg/jsplugin/` 的 moejs runtime 执行；`electron/` 为桌面封装。
 - 国际化：后端 `i18n/`（en/zh）；前端 `web/src/i18n/`（i18next，多语言）。
 - 容器：`Dockerfile` 为前后端多阶段生产构建；`Dockerfile.dev` 与 `docker-compose.dev.yml` 用于本地后端；`docker-compose.yml` 默认拉取 upstream 镜像并启动 PostgreSQL/Redis。
 - 前端任务必须同时阅读 `web/AGENTS.md`；计费表达式任务必须先阅读 `pkg/billingexpr/expr.md`。
