@@ -2,6 +2,15 @@
 
 本文档按日期记录项目已完成的关键工作。保持简洁，不记录完整执行过程、测试报告、Git 状态、当前 TODO 或 Secret。当前状态见 [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md)，重要决策见 `docs/DECISIONS.md`。
 
+## 2026-10-08
+
+### 修复插件清单漏合并并同步上游
+
+- 同步目标 `upstream/main@45094bdf4`，保留 fork 的 MiniMax H3 接入并合入上游 xAI、tokenkit 和兼容修复。仅在局部插件测试清单补入 `xai`，保留 H3 的 `openai_video` 特例与严格集合断言；定向测试从原有失败转为通过。
+- `AGENTS.md` 冲突按语义合并：保留中文协作与安全规则，补齐 Go 1.26、tokenkit 职责边界和独立模块验证要求；未采用整文件 ours/theirs。
+- 独立审查补齐两个新转换器标签的静态 i18n 键登记；七语言既有译文完整，在临时副本执行同步脚本后内容一致，未触碰仓库内未跟踪的旧报告。
+- 本地必需验证通过：`make test`、前端五项（190 文件 / 2269 项测试）、三 Go 模块独立构建/vet、`make build-web` 与生产 Docker 构建。未改数据库行为；未进行部署或真实 Provider/计费/退款验收。额外插件 lint 通过，但全量插件格式检查报告既存 doubao 和上游 xai 格式问题，本次未做无关重排。
+
 ## 2026-08-21
 
 ### Step 0 — 建立 AI 开发协作与上下文基础设施
