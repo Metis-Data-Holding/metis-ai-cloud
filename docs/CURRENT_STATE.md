@@ -1,6 +1,6 @@
 # Metis AI Cloud 当前状态
 
-> 最后更新：2026-10-08（main → develop 本地验证通过，待部署；下述部署与业务验收记录仍为历史记录）
+> 最后更新：2026-10-08（main → develop 同步及 ECS 部署已核验；其他日期的业务验收记录保留为历史证据）
 > 当前 Milestone：Seedance 2.0 内部视频超分
 > 当前目标：内部超分代码已部署，继续进行 BytePlus VOD 真实联调和成本评估
 
@@ -8,7 +8,7 @@
 
 ## 1. 当前摘要
 
-- 分支同步（2026-10-08，待部署）：以 develop `40dd3fad8` 合入 main `65c8ab40f`，保留 H3 参考音频、Wan 与内部超分。冲突仅为插件契约测试名单及本文件，保留双方新增内容；上游替换的旧翻译键随调用一起更新。`make test`、根模块/relaykit/tokenkit 独立 build/vet、前端五项检查（190 文件 / 2285 项测试）与生产 Docker 构建通过，lint 有既有 warning。未改变数据库 schema、ORM/driver 或迁移；未执行付费 Provider、超分、计费或退款验收。
+- 分支同步与部署（2026-10-08）：以 develop `40dd3fad8` 合入 main `65c8ab40f`，保留 H3 参考音频、Wan 与内部超分。冲突仅为插件契约测试名单及本文件，保留双方新增内容；上游替换的旧翻译键随调用一起更新。合并提交 `1fe14039f7d2f31ad0a2a66d9a6c11dec1684cea` 已由 develop 触发 Deploy Run `37721324912`，首次执行成功。独立 SSH 确认 current、镜像 OCI revision 与该 SHA 一致，linux/amd64；app/PostgreSQL/Redis healthy，app restart=0、OOM=false，数据库及 Redis 容器 ID 未变，本机与公网 HTTPS status 成功。`make test`、根模块/relaykit/tokenkit 独立 build/vet、前端五项检查（本地及云端均为 190 文件 / 2285 项测试）与生产 Docker 构建通过，lint 有既有 warning。未改变数据库 schema、ORM/driver 或迁移；未执行付费 Provider、超分、计费或退款验收。本次部署结果记录提交仅更新文档，运行代码与已部署 SHA 一致。
 
 - 分支同步（2026-10-01）：将 main `9716c77f6` 合入 develop，同时保留其 Wan、超分和参考音频改动；合并提交 `59d0c7c34c8df6f6f68c4162715c029267e65803` 已经部署 Run `36820765531` 成功发布；ECS current 一致，三个容器 healthy，应用重启 0、OOM false，本机及公网 status 成功。新增访问令牌表和退役配置均已初始化。SQLite、MySQL 8.0.46、PostgreSQL 15.19 的空库及旧版本升级后重复启动通过；下述更早的部署信息仅为历史记录。
 
@@ -81,11 +81,11 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 
 | 项目 | 当前状态 | 说明 |
 |---|---|---|
-| 本地仓库 | ✅ | H3 参考内容生视频已完成验收并同步至 `main` 与 `develop`；后续 upstream 合并提交尚未部署 |
+| 本地仓库 | ✅ | main `65c8ab40f` 已完整合入 develop 并部署；保留 develop 独有 H3/Wan/超分能力 |
 | BytePlus ECS | ✅ | app、PostgreSQL、Redis 均为 healthy；应用仅监听 `127.0.0.1:3000` |
 | Cloudflare DNS | ✅ | `many-models.metisdata.ai` 已通过 Tunnel Published application route 生效 |
 | HTTPS | ✅ | Universal SSL Active；公网首页与 `/api/status` 均返回 HTTP 200，TLS 校验通过 |
-| GitHub Actions 发布 | ✅ | Deploy Run `34429230406` 成功部署 `de6d2992e…`；固定镜像发布与历史 release 回滚能力均已验证 |
+| GitHub Actions 发布 | ✅ | 2026-10-08 Deploy Run `37721324912` 成功部署 `1fe14039f`；固定镜像、ECS current 及公网健康已独立核对 |
 | Singapore Local Model | ✅ Gemma 闭环已验证 | LM Studio 提供 OpenAI-compatible API；平台非流式、Streaming、Usage、Billing、权限边界和停服恢复均已验证 |
 | ECS → Singapore 网络 | ✅ | Tailscale 固定私网链路已验证；不使用 exit node 或 subnet route，Tailscale 不接管 ECS DNS |
 | 公网 Demo | ✅ 核心闭环已建立 | 管理员已初始化为对外营业模式；Playground 与限模型 API Token 均已完成真实模型调用 |
@@ -111,16 +111,18 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 - ECS 主机：通过 SSH alias `ECS-RI4m` 管理；本文不记录凭据
 - Domain：`many-models.metisdata.ai`
 - DNS / HTTPS：Cloudflare Tunnel `byteplus-hk-RI4m`；route 指向 `http://127.0.0.1:3000`
-- Deployment：应用 commit `de6d2992eb6115f477b0c71e3efc11652aa6b3f3`，使用 GHCR 固定 digest 的 `linux/amd64` 镜像；release 目录为 `/data/metis-ai-cloud/releases/<full-sha>`，`current` 已指向该 release
+- Deployment：应用 commit `1fe14039f7d2f31ad0a2a66d9a6c11dec1684cea`，使用 GHCR 固定 digest `sha256:24057ccb4d0fd6289ca4b24fe308c866ac1d6d8e404b15e205cfcb124eb7c0b8` 的 `linux/amd64` 镜像；`current` 已指向对应 release，OCI revision 一致
 - Runtime：app、PostgreSQL、Redis 均通过健康检查；PostgreSQL / Redis 未发布宿主端口
 - Persistence：容器重启与 app、PostgreSQL、Redis 分别重建后，管理员数据及非敏感 Redis 探针均通过恢复验证；探针已删除
 - 初始化：管理员初始化完成，运行模式为对外营业模式
 - Authentication：用户已通过公网 HTTPS 完成管理员登录、刷新保持会话与退出验证
-- Release Automation：`byteplus-demo` Environment、独立 ECS Self-hosted Runner、受限 root wrapper 与默认分支 Workflow 已启用；最新 Deploy Run `34038331884` 成功，历史 release 回滚与再次部署恢复能力已验证
+- Release Automation：`byteplus-demo` Environment、独立 ECS Self-hosted Runner 与受限 root wrapper 已启用；最新 Deploy Run `37721324912` 从 develop 触发并固定完整提交 SHA，首次成功；历史 release 回滚能力保留，本次未实际回滚
 - 共存回归：`xy-stock` systemd 服务、loopback HTTP 与既有公网入口保持可用；Cloudflare Tunnel 进程 active，验收时重启计数为 0
 - 回滚边界：本次由用户明确接受不创建 BytePlus 系统盘或数据盘快照；应用可通过历史完整 release 回滚，但 shared 数据无云盘级部署前快照保护
 
 ## 7. 当前风险与 Blockers
+
+- 2026-10-08 独立审查提出工具价格币种疑点：上游工具默认值包含 CNY 来源，但配置界面和既有接口注释仍采用 $/1K calls，结算路径未见对应换算。是否影响现有渠道尚未验收；本次未修改管理员价格或执行付费请求，需单独核对实际配置与计费单位。
 
 1. `Max Concurrent Predictions = 6` 仅通过短时参数实验，不能替代并发 4 的 30 分钟稳定性证据。
 2. ECS 当前使用公共递归 DNS 规避 BytePlus DHCP DNS 与 Tailscale 地址段冲突；后续如有企业 DNS 或合规要求，应更换为 ECS 可达且不位于 `100.64.0.0/10` 的递归 DNS。

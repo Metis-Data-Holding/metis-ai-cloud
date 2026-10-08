@@ -327,3 +327,10 @@
 - 两处冲突：插件契约测试名单保留 H3、Wan 并加入 xAI；状态文档保留双方记录。locale 自动合并的两条删除为上游文案替换，与当前调用一致，不恢复已弃用键。
 - 原 develop 工作树共享 node_modules 时图标动态导入测试出现超时；相同 SHA 使用独立 frozen-lockfile 安装后，全量基线通过，未放宽测试超时或修改业务代码。合并后 `make test`、三个 Go 模块独立 build/vet、前端 typecheck/test/lint/format:check/build（190 文件 / 2285 项）与生产 Docker build 均通过；lint 保留既有 warning。
 - 本次无数据库行为改动，未执行三数据库迁移矩阵或真实付费业务验收。后端构建曾因提前执行且缺少 web/dist 失败，前端生产构建后重跑通过；部署与公网验收结果另行记录。
+
+### 2026-10-08 develop 同步版本部署验收
+
+- 合并提交 `1fe14039f7d2f31ad0a2a66d9a6c11dec1684cea` 已推送 origin/develop，确认 main `65c8ab40f` 为其祖先；原 develop 工作树安全快进，main 工作树不变。独立审查无集成阻塞问题，H3/Wan/超分等专属实现未丢失，License/attribution 未改。
+- 使用 develop 触发 Deploy Run `37721324912`，ref 固定该完整 SHA；首次执行成功，无部署失败或重试。云端后端验证、前端类型检查及 190 文件 / 2285 项测试、linux/amd64 镜像发布、ECS 激活和公网 HTTPS 均通过。
+- 2026-10-08 11:26（Asia/Shanghai）独立 SSH 核对 current 与镜像 OCI revision 均为目标 SHA；镜像 digest 为 `sha256:24057ccb4d0fd6289ca4b24fe308c866ac1d6d8e404b15e205cfcb124eb7c0b8`，平台 linux/amd64。三个容器 healthy，app restart=0、OOM=false，PostgreSQL/Redis 容器 ID 与部署前一致，本机及公网 `/api/status` success=true。
+- 未执行真实付费模型、视频超分、登录、计费或退款端到端验收。审查提出 main 上游工具价格币种疑点（CNY 来源与 $/1K calls 界面/接口注释不一致，结算未见换算），未擅自改动价格，需单独核对实际配置。本验收记录仅文档变化，不再次发布同一份运行代码。
