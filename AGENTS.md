@@ -19,9 +19,9 @@
 
 ## 项目结构与技术栈
 
-- 后端：Go 1.25.1、Gin、GORM v2；入口 `main.go`，分层为 `router -> controller -> service -> model`。
+- 后端：根模块和 `tokenkit/` 使用 Go 1.26，`relaykit/` 使用 Go 1.25.1（以各模块 `go.mod` 为准）；Gin、GORM v2；入口 `main.go`，分层为 `router -> controller -> service -> model`。
 - Provider relay：`relay/`、`relay/channel/`；共享 DTO/类型位于 `dto/`、`types/`、`constant/`。
-- 独立 Go 模块：`relaykit/`，主模块通过本地 `replace` 引用。
+- 独立 Go 模块：`relaykit/` 提供协议 DTO 与转换，`tokenkit/` 提供文本和图像 token 计数与估算；主模块通过本地 `replace` 引用。传输、认证、数据库访问、请求解析、文件加载和计费保留在 host。
 - 数据与认证：SQLite、MySQL、PostgreSQL，独立日志库可使用 ClickHouse；缓存使用 Redis/内存，认证覆盖浏览器 Session、API Token、JWT、WebAuthn、TOTP 和 OAuth/OIDC，授权使用 Casbin。
 - 前端：`web/`，React 19、TypeScript、Rsbuild 2、TanStack Router/Query/Table、Zustand、Base UI、Tailwind CSS 4；包管理和脚本运行使用 Bun。
 - 扩展：JavaScript task plugin 位于 `plugins/tasks/`，通过 `pkg/jsplugin/` 的 moejs runtime 执行；`electron/` 为桌面封装。
@@ -49,7 +49,7 @@
 
 ### 后端
 
-- `relaykit/` 不得依赖根模块或根模块专有配置；相关变更必须执行 `cd relaykit && GOWORK=off go build ./...`。
+- `relaykit/` 和 `tokenkit/` 不得依赖根模块、根模块专有配置、生成文件或 workspace wiring；`tokenkit/` 也不得依赖 `relaykit/`。相关变更及公开 API 变更必须在受影响模块内执行 `GOWORK=off go build ./...`，根模块构建不能替代独立构建。
 - 根模块业务代码的 JSON 编解码统一使用 `common/json.go` 的 wrapper；`relaykit/` 使用 `relaykit/relayconvert/kitutil/json.go`，不得依赖根模块 `common`；`encoding/json` 仅可用于 `RawMessage`、`Number` 等类型。
 - 数据库代码必须同时支持 SQLite、MySQL >= 5.7.8、PostgreSQL >= 9.6。优先 GORM；原生 SQL 必须提供各 dialect 分支与 fallback。
 - 标准行锁使用 `model/` 的 `lockForUpdate(tx)`；保留字列、布尔值和主/日志库分支使用 `model/main.go` / `common` 的既有适配。
@@ -91,8 +91,8 @@
 按修改范围运行最小充分验证；以下命令均来自当前仓库。不要把未运行的检查写成已通过。
 
 - 后端测试：`make test`。
-- 后端 vet：先确保 `web/dist/index.html` 存在，再运行 `GOWORK=off go vet ./...`；独立模块运行 `cd relaykit && GOWORK=off go vet ./...`。
-- 后端构建：先运行 `make build-web`，再运行 `GOWORK=off go build ./...`；`relaykit` 另行运行独立 build。
+- 后端 vet：先确保 `web/dist/index.html` 存在，再运行 `GOWORK=off go vet ./...`；`relaykit/` 和 `tokenkit/` 各自在模块内运行 `GOWORK=off go vet ./...`。
+- 后端构建：先运行 `make build-web`，再运行 `GOWORK=off go build ./...`；`relaykit/` 和 `tokenkit/` 另行运行独立 build。
 - Go 格式检查：`gofmt -l <本次修改的.go文件>`。
 - 前端（从 `web/` 运行）：`bun run typecheck`、`bun run test`、`bun run lint`、`bun run format:check`、`bun run build`。
 - Dockerfile 验证：`docker build .`。

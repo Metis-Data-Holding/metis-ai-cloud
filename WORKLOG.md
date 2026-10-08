@@ -2,6 +2,15 @@
 
 本文档按日期记录项目已完成的关键工作。保持简洁，不记录完整执行过程、测试报告、Git 状态、当前 TODO 或 Secret。当前状态见 [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md)，重要决策见 `docs/DECISIONS.md`。
 
+## 2026-10-08
+
+### 修复插件清单漏合并并同步上游
+
+- 同步目标 `upstream/main@45094bdf4`，保留 fork 的 MiniMax H3 接入并合入上游 xAI、tokenkit 和兼容修复。仅在局部插件测试清单补入 `xai`，保留 H3 的 `openai_video` 特例与严格集合断言；定向测试从原有失败转为通过。
+- `AGENTS.md` 冲突按语义合并：保留中文协作与安全规则，补齐 Go 1.26、tokenkit 职责边界和独立模块验证要求；未采用整文件 ours/theirs。
+- 独立审查补齐两个新转换器标签的静态 i18n 键登记；七语言既有译文完整，在临时副本执行同步脚本后内容一致，未触碰仓库内未跟踪的旧报告。
+- 本地必需验证通过：`make test`、前端五项（190 文件 / 2269 项测试）、三 Go 模块独立构建/vet、`make build-web` 与生产 Docker 构建。未改数据库行为；未进行部署或真实 Provider/计费/退款验收。额外插件 lint 通过，但全量插件格式检查报告既存 doubao 和上游 xai 格式问题，本次未做无关重排。
+
 ## 2026-08-21
 
 ### Step 0 — 建立 AI 开发协作与上下文基础设施
@@ -311,3 +320,10 @@
 - 三数据库验证：以 `TEST_MYSQL_DSN` / `TEST_POSTGRES_DSN` 指向隔离本机测试库运行 `GOWORK=off go test ./model -count=1` 通过；SQLite、MySQL 8.0.46、PostgreSQL 15.19 均完成新库启动两次、旧线上版本 `6713d8753` 初始化后升级启动两次。均确认 `user_access_tokens` 表及 `LegacyAccessTokenRetireAt` 已建立；测试容器已清理。完整 `make test` 同样通过。
 - 服务器部署前已在 root-only 目录保存 PostgreSQL 全库备份并校验 gzip；未下载数据。部署后独立 SSH 确认 current 为目标完整 SHA，app/PostgreSQL/Redis healthy，app restart=0、OOM=false，本机和公网 `/api/status` 成功，线上新表及退役配置存在。数据库及 Redis 保持原有持久化容器。
 - 本次验证发布与迁移健康，未重跑付费模型、视频超分、登录或计费端到端业务。此记录提交仅更新文档，应用代码与已部署版本一致。
+
+### 2026-10-08 同步 main 到 develop，部署前验证
+
+- 同步前 main 为 `65c8ab40f123b9f9f90d4c4aa4aa42c06de67089`，develop 为 `40dd3fad84001c19a5c2bbc1d1c97e289c144d09`，双方独有提交为 11 / 13。以临时隔离工作树合入 main，不改动原工作树或用户未跟踪文件；保留 develop 的 H3 参考音频、Wan、内部超分和渠道鉴权媒体能力。
+- 两处冲突：插件契约测试名单保留 H3、Wan 并加入 xAI；状态文档保留双方记录。locale 自动合并的两条删除为上游文案替换，与当前调用一致，不恢复已弃用键。
+- 原 develop 工作树共享 node_modules 时图标动态导入测试出现超时；相同 SHA 使用独立 frozen-lockfile 安装后，全量基线通过，未放宽测试超时或修改业务代码。合并后 `make test`、三个 Go 模块独立 build/vet、前端 typecheck/test/lint/format:check/build（190 文件 / 2285 项）与生产 Docker build 均通过；lint 保留既有 warning。
+- 本次无数据库行为改动，未执行三数据库迁移矩阵或真实付费业务验收。后端构建曾因提前执行且缺少 web/dist 失败，前端生产构建后重跑通过；部署与公网验收结果另行记录。

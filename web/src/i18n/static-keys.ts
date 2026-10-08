@@ -691,6 +691,8 @@ export const STATIC_I18N_KEYS = [
   'Batch detection complete: {{channels}} channels, {{add}} to add, {{remove}} to remove, {{fails}} failed',
 
   // Advanced Custom model discovery
+  'Anthropic Messages to OpenAI Responses',
+  'Gemini Generate Content to OpenAI Responses',
   'Only one OpenAI Models route is allowed',
   'OpenAI Models route does not support client model rules',
   'OpenAI Models route must use native forwarding',
