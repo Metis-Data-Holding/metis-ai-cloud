@@ -2,6 +2,15 @@
 
 本文档按日期记录项目已完成的关键工作。保持简洁，不记录完整执行过程、测试报告、Git 状态、当前 TODO 或 Secret。当前状态见 [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md)，重要决策见 `docs/DECISIONS.md`。
 
+## 2026-10-09
+
+### 语义合并任务插件冲突并同步上游
+
+- 同步目标 `upstream/main@7aa3531ef` 的 8 个提交，合入任务插件 JSON 顺序保持、Gemini Grounding 计费、参数覆盖正则条件和 moejs PGO 更新。
+- `relay/channel/task/jsplugin` 冲突按调用链语义合并：保留 fork 的单个/多个准备请求与 multipart 文件复用，并为准备请求递归保留 `json-order@1`；各请求使用自身重建后的 multipart boundary，避免复用客户端旧 boundary。
+- 独立审查确认未丢失任一侧功能，未修改 License / attribution、数据库 schema / migration 或未跟踪文件。`make test`、主模块与 relaykit 独立构建、前端五项检查均通过；前端 191 文件 / 2277 项测试通过，lint 仍有 21 个既有 warning。
+- 未涉及数据库行为，未执行三数据库矩阵；未验证远端 CI、跨平台 PGO 发布、部署或真实 Provider / 计费 / 退款。
+
 ## 2026-10-08
 
 ### 修复插件清单漏合并并同步上游
