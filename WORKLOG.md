@@ -15,7 +15,9 @@
 
 - 以 `develop@37fdce032` 为基线合入 `main@46576af00`，保留 develop 的 H3 参考音频、Wan / OpenRouter、内部超分与多阶段 task plugin 请求，并吸收 main 的最新 upstream 更新。
 - 唯一文本冲突为当前状态文档，按快照语义保留 develop 的部署和 Wan 状态并采用 main 的最新 upstream 状态；task plugin 自动合并经独立三方审查，确认双方功能和 multipart boundary 语义完整。
-- 本地 `make test`、三 Go 模块 build / vet、前端五项检查（191 文件 / 2293 项测试）与生产 Docker 构建通过。未改变数据库 schema、ORM / driver 或 migration，不触发三数据库矩阵；部署与真实 Provider / 计费仍待执行或验收。
+- 本地 `make test`、三 Go 模块 build / vet、前端五项检查（191 文件 / 2293 项测试）与生产 Docker 构建通过。未改变数据库 schema、ORM / driver 或 migration，不触发三数据库矩阵。
+- 合并提交 `e5a117a081e23334efefc842f32ac2bf1b42a56d` 已推送 origin/develop，并以 develop 的固定完整 SHA 触发 Deploy Run `37878193057`。首次执行成功，云端后端/前端验证、linux/amd64 镜像发布、ECS 激活和公网 HTTPS 检查全部通过。
+- 独立 SSH 核验 ECS current 和镜像 OCI revision 均为目标 SHA，镜像 digest 为 `sha256:c1ed9817de49eb4299b713233ab39508c91f6ab456b154dcc710391ae169253f`；app/PostgreSQL/Redis healthy、restart=0、OOM=false，公网 `/api/status` 返回 HTTP 200 且 `success=true`。未执行真实 Provider、付费计费、退款或登录端到端验收；本验收记录仅更新文档，运行代码与已部署 SHA 一致。
 
 ## 2026-10-08
 

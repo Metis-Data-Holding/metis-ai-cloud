@@ -1,6 +1,6 @@
 # Metis AI Cloud 当前状态
 
-> 最后更新：2026-10-09（main → develop 同步候选已通过本地验证、待部署；其他日期的部署与业务验收记录保留为历史证据）
+> 最后更新：2026-10-09（main → develop 同步及 ECS 部署已核验；其他日期的部署与业务验收记录保留为历史证据）
 > 当前 Milestone：Seedance 2.0 内部视频超分
 > 当前目标：内部超分代码已部署，继续进行 BytePlus VOD 真实联调和成本评估
 
@@ -8,7 +8,7 @@
 
 ## 1. 当前摘要
 
-- 分支同步候选（2026-10-09）：以 `develop@37fdce032` 为基线合入 `main@46576af00`，保留 H3 参考音频、Wan / OpenRouter、内部超分与多阶段 task plugin 请求，同时吸收 JSON 顺序、multipart boundary、Gemini Grounding 计费、参数覆盖正则和 moejs PGO 更新。唯一文本冲突为本状态文件；task plugin 自动合并已完成独立三方语义审查。`make test`、三 Go 模块 build / vet、前端五项检查（191 文件 / 2293 项测试）与生产 Docker 构建通过；未改变数据库 schema、ORM / driver 或 migration。部署尚未执行，未验证真实 Provider、付费计费或退款。
+- 分支同步与部署（2026-10-09）：以 `develop@37fdce032` 为基线合入 `main@46576af00`，保留 H3 参考音频、Wan / OpenRouter、内部超分与多阶段 task plugin 请求，同时吸收 JSON 顺序、multipart boundary、Gemini Grounding 计费、参数覆盖正则和 moejs PGO 更新。唯一文本冲突为本状态文件；task plugin 自动合并已完成独立三方语义审查。合并提交 `e5a117a081e23334efefc842f32ac2bf1b42a56d` 已由 develop 触发 Deploy Run `37878193057`，首次执行成功；云端后端/前端验证、linux/amd64 镜像发布、ECS 激活与公网 HTTPS 检查通过。独立 SSH 确认 current 与镜像 OCI revision 均为该 SHA，镜像 digest 为 `sha256:c1ed9817de49eb4299b713233ab39508c91f6ab456b154dcc710391ae169253f`；app/PostgreSQL/Redis healthy、restart=0、OOM=false，公网 `/api/status` 返回 HTTP 200 且 `success=true`。本地 `make test`、三 Go 模块 build / vet、前端五项检查（191 文件 / 2293 项测试）与生产 Docker 构建通过；未改变数据库 schema、ORM / driver 或 migration。未验证真实 Provider、付费计费或退款；本部署结果记录仅更新文档，运行代码与已部署 SHA 一致。
 
 - 分支同步与部署（2026-10-08）：以 develop `40dd3fad8` 合入 main `65c8ab40f`，保留 H3 参考音频、Wan 与内部超分。冲突仅为插件契约测试名单及本文件，保留双方新增内容；上游替换的旧翻译键随调用一起更新。合并提交 `1fe14039f7d2f31ad0a2a66d9a6c11dec1684cea` 已由 develop 触发 Deploy Run `37721324912`，首次执行成功。独立 SSH 确认 current、镜像 OCI revision 与该 SHA 一致，linux/amd64；app/PostgreSQL/Redis healthy，app restart=0、OOM=false，数据库及 Redis 容器 ID 未变，本机与公网 HTTPS status 成功。`make test`、根模块/relaykit/tokenkit 独立 build/vet、前端五项检查（本地及云端均为 190 文件 / 2285 项测试）与生产 Docker 构建通过，lint 有既有 warning。未改变数据库 schema、ORM/driver 或迁移；未执行付费 Provider、超分、计费或退款验收。本次部署结果记录提交仅更新文档，运行代码与已部署 SHA 一致。
 
@@ -83,11 +83,11 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 
 | 项目 | 当前状态 | 说明 |
 |---|---|---|
-| 本地仓库 | ✅ | main `65c8ab40f` 已完整合入 develop 并部署；保留 develop 独有 H3/Wan/超分能力 |
+| 本地仓库 | ✅ | main `46576af00` 已完整合入 develop 并部署；保留 develop 独有 H3/Wan/超分能力 |
 | BytePlus ECS | ✅ | app、PostgreSQL、Redis 均为 healthy；应用仅监听 `127.0.0.1:3000` |
 | Cloudflare DNS | ✅ | `many-models.metisdata.ai` 已通过 Tunnel Published application route 生效 |
 | HTTPS | ✅ | Universal SSL Active；公网首页与 `/api/status` 均返回 HTTP 200，TLS 校验通过 |
-| GitHub Actions 发布 | ✅ | 2026-10-08 Deploy Run `37721324912` 成功部署 `1fe14039f`；固定镜像、ECS current 及公网健康已独立核对 |
+| GitHub Actions 发布 | ✅ | 2026-10-09 Deploy Run `37878193057` 成功部署 `e5a117a08`；固定镜像、ECS current 及公网健康已独立核对 |
 | Singapore Local Model | ✅ Gemma 闭环已验证 | LM Studio 提供 OpenAI-compatible API；平台非流式、Streaming、Usage、Billing、权限边界和停服恢复均已验证 |
 | ECS → Singapore 网络 | ✅ | Tailscale 固定私网链路已验证；不使用 exit node 或 subnet route，Tailscale 不接管 ECS DNS |
 | 公网 Demo | ✅ 核心闭环已建立 | 管理员已初始化为对外营业模式；Playground 与限模型 API Token 均已完成真实模型调用 |
