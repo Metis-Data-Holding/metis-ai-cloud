@@ -1,6 +1,6 @@
 # Metis AI Cloud 当前状态
 
-> 最后更新：2026-10-08（main → develop 同步及 ECS 部署已核验；其他日期的业务验收记录保留为历史证据）
+> 最后更新：2026-10-09（main → develop 同步候选已通过本地验证、待部署；其他日期的部署与业务验收记录保留为历史证据）
 > 当前 Milestone：Seedance 2.0 内部视频超分
 > 当前目标：内部超分代码已部署，继续进行 BytePlus VOD 真实联调和成本评估
 
@@ -8,13 +8,15 @@
 
 ## 1. 当前摘要
 
+- 分支同步候选（2026-10-09）：以 `develop@37fdce032` 为基线合入 `main@46576af00`，保留 H3 参考音频、Wan / OpenRouter、内部超分与多阶段 task plugin 请求，同时吸收 JSON 顺序、multipart boundary、Gemini Grounding 计费、参数覆盖正则和 moejs PGO 更新。唯一文本冲突为本状态文件；task plugin 自动合并已完成独立三方语义审查。`make test`、三 Go 模块 build / vet、前端五项检查（191 文件 / 2293 项测试）与生产 Docker 构建通过；未改变数据库 schema、ORM / driver 或 migration。部署尚未执行，未验证真实 Provider、付费计费或退款。
+
 - 分支同步与部署（2026-10-08）：以 develop `40dd3fad8` 合入 main `65c8ab40f`，保留 H3 参考音频、Wan 与内部超分。冲突仅为插件契约测试名单及本文件，保留双方新增内容；上游替换的旧翻译键随调用一起更新。合并提交 `1fe14039f7d2f31ad0a2a66d9a6c11dec1684cea` 已由 develop 触发 Deploy Run `37721324912`，首次执行成功。独立 SSH 确认 current、镜像 OCI revision 与该 SHA 一致，linux/amd64；app/PostgreSQL/Redis healthy，app restart=0、OOM=false，数据库及 Redis 容器 ID 未变，本机与公网 HTTPS status 成功。`make test`、根模块/relaykit/tokenkit 独立 build/vet、前端五项检查（本地及云端均为 190 文件 / 2285 项测试）与生产 Docker 构建通过，lint 有既有 warning。未改变数据库 schema、ORM/driver 或迁移；未执行付费 Provider、超分、计费或退款验收。本次部署结果记录提交仅更新文档，运行代码与已部署 SHA 一致。
 
 - 分支同步（2026-10-01）：将 main `9716c77f6` 合入 develop，同时保留其 Wan、超分和参考音频改动；合并提交 `59d0c7c34c8df6f6f68c4162715c029267e65803` 已经部署 Run `36820765531` 成功发布；ECS current 一致，三个容器 healthy，应用重启 0、OOM false，本机及公网 status 成功。新增访问令牌表和退役配置均已初始化。SQLite、MySQL 8.0.46、PostgreSQL 15.19 的空库及旧版本升级后重复启动通过；下述更早的部署信息仅为历史记录。
 
 - 项目：`metis-ai-cloud`，来源于 New API fork。
 - Wan 超分（2026-09-17）：`alibaba/wan-3.0` 与 `alibaba/wan-3.0-prime` 复用后台超分配置，1080P 可选 480P / 720P 源视频；未启用或低分辨率请求保持原样。服务端使用当前渠道凭据读取原片，暂存为短期签名地址供既有 BytePlus VOD 工作流拉取，完成后复用成片交付、管理员原片保留及清理流程。2026-09-17 核验 ECS 已部署 `b0f02a4d7`，包含 Wan 超分；发现仅存在于渠道的模型因未保存元数据而隐藏超分入口，已修复查询前提并补充回归，入口修复待部署。未提交付费生成，尚未做生产端到端验收。
-- 上游同步（2026-10-08）：本次同步目标为 `upstream/main` 的 `45094bdf41fb13a5d24bd3e8eb3fdfec6241c59f`（10 个上游提交）。保留 fork 的 MiniMax H3 接入，合入 xAI Grok Imagine、tokenkit 和协议兼容更新；插件契约测试清单同时包含 H3 与 xAI，未弱化断言。根模块、relaykit、tokenkit 测试/构建/vet、前端五项检查与生产 Docker 构建均通过；前端 190 文件 / 2269 项通过，lint 仍有既有 warning。未涉及数据库行为；额外全量插件格式检查仍报告既存 doubao 与上游 xai 格式问题，未混入无关格式重排。本次未验证远端 CI、部署或真实 Provider/计费/退款。
+- 上游同步（2026-10-09）：本次同步目标为 `upstream/main` 的 `7aa3531ef4c247ad4891c06cc8ed9d0ffb73fecc`（8 个上游提交）。任务插件冲突按语义合并，保留 fork 的多阶段准备请求与 multipart 文件复用，同时合入上游 `json-order@1`、独立 multipart boundary、Gemini Grounding 计费、参数覆盖正则条件和 moejs PGO 更新；未整文件选择任一侧。`make test`、主模块与 relaykit 独立构建、前端五项检查均通过；前端 191 文件 / 2277 项通过，lint 仍有 21 个既有 warning。未涉及数据库行为；未验证远端 CI、跨平台 PGO 发布、部署或真实 Provider/计费/退款。
 - Step 0：已完成 AI 开发协作与上下文基础设施。
 - 内部视频超分（2026-09-13）：后台模型开关、480P / 720P 源分辨率、原片保留、1080P / 4K Fast 工作流与私有交付已完成代码和本地模拟验证；后端/前端测试、构建及模型层三数据库回归通过。2026-09-14 已随提交 `f166e170adc9c787b5585d75ef4cb89b977bfb48` 部署至 ECS（Run `34798127592`），包含默认播放域名预检与私有失败诊断修复，容器与公网健康检查通过，VOD 环境变量已注入且持久目录可写。用户真实任务已到达成片播放信息阶段后失败并退款；只读 VOD 查询确认工作流有 4K 增强输出，但空间缺少播放域名。播放域名 `video-play.metisdata.ai` 的 DNS only CNAME、HTTPS 证书绑定、VOD 调度与默认域名已完成；2026-09-14 从 ECS 使用现有历史增强素材验证 `GetPlayInfo` 返回 HTTPS MP4，范围下载返回 206 且 MP4 文件头正确。证书到期日为 2027-03-31。未新增付费任务，完整生成到交付链路尚未重新验收，该部署版本尚不读取 2K 配置。
 - 当前阶段：BytePlus ECS 公网部署、Cloudflare HTTPS、持久化、自动发布 / 回滚、Singapore Local Model Provider 和 Usage / Billing 闭环均已完成真实验收。
