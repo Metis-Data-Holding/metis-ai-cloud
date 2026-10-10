@@ -2,6 +2,15 @@
 
 本文档按日期记录项目已完成的关键工作。保持简洁，不记录完整执行过程、测试报告、Git 状态、当前 TODO 或 Secret。当前状态见 [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md)，重要决策见 `docs/DECISIONS.md`。
 
+## 2026-10-10
+
+### 保留 fork 定制并同步结构化国际化上游变更
+
+- 同步目标 `upstream/main@1d4328e97` 的 3 个提交，合入 Responses 转换尾部 assistant 文本修复、前后端结构化国际化消息和 relaykit README 更新。
+- 13 个冲突按调用链和三方内容语义合并：保留 fork 的加固 options 主键迁移、视频超分轮询与清理、task plugin 多阶段 multipart 准备；七种前端语言保留双方独有 key，并接入统一服务端消息解析。
+- 独立审查确认未丢失任一侧功能，未混入未跟踪文件，未修改 License / attribution、GitHub Actions、部署配置或实际 Secret。加固迁移文件与同步前 `main` 完全一致，其他 migration 差异只包装日志文本，不改变数据库行为，因此未执行三数据库矩阵。
+- `make test`、主模块与 relaykit 独立构建、前端五项检查均通过；前端 193 文件 / 2285 项测试通过，lint 保留 21 个既有 warning。未验证远端 CI、部署、生产运行态或真实 Provider / 支付 / 认证端到端。
+
 ## 2026-10-09
 
 ### 语义合并任务插件冲突并同步上游
