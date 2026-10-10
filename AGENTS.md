@@ -25,7 +25,7 @@
 - 数据与认证：SQLite、MySQL、PostgreSQL，独立日志库可使用 ClickHouse；缓存使用 Redis/内存，认证覆盖浏览器 Session、API Token、JWT、WebAuthn、TOTP 和 OAuth/OIDC，授权使用 Casbin。
 - 前端：`web/`，React 19、TypeScript、Rsbuild 2、TanStack Router/Query/Table、Zustand、Base UI、Tailwind CSS 4；包管理和脚本运行使用 Bun。
 - 扩展：JavaScript task plugin 位于 `plugins/tasks/`，通过 `pkg/jsplugin/` 的 moejs runtime 执行；`electron/` 为桌面封装。
-- 国际化：后端 `i18n/`（en/zh）；前端 `web/src/i18n/`（i18next，多语言）。
+- 国际化：后端 `i18n/`（en/zh-CN/zh-TW）；前端 `web/src/i18n/`（i18next，多语言）。
 - 容器：`Dockerfile` 为前后端多阶段生产构建；`Dockerfile.dev` 与 `docker-compose.dev.yml` 用于本地后端；`docker-compose.yml` 默认拉取 upstream 镜像并启动 PostgreSQL/Redis。
 - 前端任务必须同时阅读 `web/AGENTS.md`；计费表达式任务必须先阅读 `pkg/billingexpr/expr.md`。
 
@@ -38,6 +38,13 @@
 3. 执行 `git status` 与 `git log --oneline -10`，识别用户已有改动。
 4. 涉及历史架构或产品决策时读取 `docs/DECISIONS.md`；需要失败尝试或执行历史时检索 `WORKLOG.md`。
 5. 阅读任务相关代码、配置和测试；非简单修改先形成简要方案和验证范围。
+
+## 国际化
+
+- 后端使用 `nicksnyder/go-i18n/v2`，支持 en、zh-CN、zh-TW；不经过 Web Console 的 AI Client 错误、邮件与通知使用 `i18n.T` / `i18n.Translate`。
+- Web Console API 消息以英文源文案通过 `common.NewMessage` / `common.ApiErrorT` / `common.ApiSuccessT` 构造，由前端翻译；新增时同步补齐七种前端 locale。
+- 持久化日志内容使用 `[]*common.Message`；网关写入的任务失败原因使用固定英文句子，并在前端 locale 中提供同名 key。
+- 服务端日志以英文源文案传入 `common.LogText`；`DEFAULT_LANGUAGE=zh-CN` 时使用 `common/log_text.zh-CN.json` 中已有的中文日志，并作为未声明语言的后端消息默认语言。
 
 ## 代码与兼容性规则
 

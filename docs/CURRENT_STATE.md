@@ -1,6 +1,6 @@
 # Metis AI Cloud 当前状态
 
-> 最后更新：2026-10-09（本次仅核验 main 上游同步；下述部署与业务验收记录仍为历史记录）
+> 最后更新：2026-10-10（本次仅核验 main 上游同步；下述部署与业务验收记录仍为历史记录）
 > 当前 Milestone：Seedance 2.0 内部视频超分
 > 当前目标：内部超分代码已部署，继续进行 BytePlus VOD 真实联调和成本评估
 
@@ -9,7 +9,7 @@
 ## 1. 当前摘要
 
 - 项目：`metis-ai-cloud`，来源于 New API fork。
-- 上游同步（2026-10-09）：本次同步目标为 `upstream/main` 的 `7aa3531ef4c247ad4891c06cc8ed9d0ffb73fecc`（8 个上游提交）。任务插件冲突按语义合并，保留 fork 的多阶段准备请求与 multipart 文件复用，同时合入上游 `json-order@1`、独立 multipart boundary、Gemini Grounding 计费、参数覆盖正则条件和 moejs PGO 更新；未整文件选择任一侧。`make test`、主模块与 relaykit 独立构建、前端五项检查均通过；前端 191 文件 / 2277 项通过，lint 仍有 21 个既有 warning。未涉及数据库行为；未验证远端 CI、跨平台 PGO 发布、部署或真实 Provider/计费/退款。
+- 上游同步（2026-10-10）：本次同步目标为 `upstream/main` 的 `1d4328e97417a043a161a0dd30a5b129be3ace49`（3 个上游提交）。13 个冲突按语义合并：保留 fork 的加固 options 主键迁移和视频超分轮询链路，合入 upstream 的结构化服务端消息、日志国际化及 Responses 转换修复；七种前端语言按 key 合并双方并集。加固迁移文件与同步前 `main` 完全一致，其余 migration 暂存差异仅为日志国际化，不改变数据库行为，因此未触发三数据库矩阵。`make test`、主模块与 relaykit 独立构建、前端五项检查均通过；前端 193 文件 / 2285 项通过，lint 仍有 21 个既有 warning。未验证远端 CI、部署、生产运行态或真实 Provider / 支付 / 认证端到端。
 - Step 0：已完成 AI 开发协作与上下文基础设施。
 - 内部视频超分（2026-09-13）：后台模型开关、480P / 720P 源分辨率、原片保留、1080P / 4K Fast 工作流与私有交付已完成代码和本地模拟验证；后端/前端测试、构建及模型层三数据库回归通过。2026-09-14 已随提交 `f166e170adc9c787b5585d75ef4cb89b977bfb48` 部署至 ECS（Run `34798127592`），包含默认播放域名预检与私有失败诊断修复，容器与公网健康检查通过，VOD 环境变量已注入且持久目录可写。用户真实任务已到达成片播放信息阶段后失败并退款；只读 VOD 查询确认工作流有 4K 增强输出，但空间缺少播放域名。播放域名 `video-play.metisdata.ai` 的 DNS only CNAME、HTTPS 证书绑定、VOD 调度与默认域名已完成；2026-09-14 从 ECS 使用现有历史增强素材验证 `GetPlayInfo` 返回 HTTPS MP4，范围下载返回 206 且 MP4 文件头正确。证书到期日为 2027-03-31。未新增付费任务，完整生成到交付链路尚未重新验收，该部署版本尚不读取 2K 配置。
 - 当前阶段：BytePlus ECS 公网部署、Cloudflare HTTPS、持久化、自动发布 / 回滚、Singapore Local Model Provider 和 Usage / Billing 闭环均已完成真实验收。
