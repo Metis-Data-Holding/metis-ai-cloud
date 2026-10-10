@@ -1,12 +1,14 @@
 # Metis AI Cloud 当前状态
 
-> 最后更新：2026-10-10（本次 main → develop 同步待部署验证；其他日期的部署与业务验收记录保留为历史证据）
+> 最后更新：2026-10-10（本次 main → develop 同步与部署已验证；其他日期的部署与业务验收记录保留为历史证据）
 > 当前 Milestone：Seedance 2.0 内部视频超分
 > 当前目标：内部超分代码已部署，继续进行 BytePlus VOD 真实联调和成本评估
 
 本文档是项目当前状态的单一快照，采用覆盖式维护。长期背景见 [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)，执行历史与重要决策分别见 [`../WORKLOG.md`](../WORKLOG.md) 和 [`DECISIONS.md`](DECISIONS.md)。
 
 ## 1. 当前摘要
+
+- 分支同步与部署（2026-10-10）：以 `develop@451756f7b` 为基线合入 `main@4b3f1e522`，保留 develop 的 H3、Wan、内部超分与 task plugin 定制，并吸收 main 的结构化国际化消息与 Responses 转换修复。唯一内容冲突为本状态文件，按快照语义保留双方有效记录；15 个自动合并文件经独立三方语义审查，未丢失任一侧功能，未修改 License / attribution、部署配置或实际 Secret。合并提交 `3f8ea27df6e3efeb432dc1ea28153d3e17c0f471` 已由 develop 固定完整 SHA 触发 Deploy Run `38018944811`，首次执行成功；云端后端/前端验证、linux/amd64 镜像发布、ECS 激活与公网 HTTPS 检查通过。独立 SSH 确认 current 与镜像 OCI revision 均为该 SHA，镜像 digest 为 `sha256:e9b402c8aa2d3846e6f15e81454bee61c6bf5d75d06c6f7cd64eb4595149272a`；app/PostgreSQL/Redis healthy、restart=0、OOM=false，公网 `/api/status` 返回 HTTP 200、TLS 校验成功且 `success=true`。本地 `make test`、三 Go 模块 build / vet、前端五项检查（193 文件 / 2301 项测试）与 `make build-web` 通过；未改变数据库 schema、ORM / driver 或 migration。未验证真实 Provider、付费计费、退款、登录或视频生成端到端；本部署结果记录仅更新文档，运行代码与已部署 SHA 一致。
 
 - 分支同步与部署（2026-10-09）：以 `develop@37fdce032` 为基线合入 `main@46576af00`，保留 H3 参考音频、Wan / OpenRouter、内部超分与多阶段 task plugin 请求，同时吸收 JSON 顺序、multipart boundary、Gemini Grounding 计费、参数覆盖正则和 moejs PGO 更新。唯一文本冲突为本状态文件；task plugin 自动合并已完成独立三方语义审查。合并提交 `e5a117a081e23334efefc842f32ac2bf1b42a56d` 已由 develop 触发 Deploy Run `37878193057`，首次执行成功；云端后端/前端验证、linux/amd64 镜像发布、ECS 激活与公网 HTTPS 检查通过。独立 SSH 确认 current 与镜像 OCI revision 均为该 SHA，镜像 digest 为 `sha256:c1ed9817de49eb4299b713233ab39508c91f6ab456b154dcc710391ae169253f`；app/PostgreSQL/Redis healthy、restart=0、OOM=false，公网 `/api/status` 返回 HTTP 200 且 `success=true`。本地 `make test`、三 Go 模块 build / vet、前端五项检查（191 文件 / 2293 项测试）与生产 Docker 构建通过；未改变数据库 schema、ORM / driver 或 migration。未验证真实 Provider、付费计费或退款；本部署结果记录仅更新文档，运行代码与已部署 SHA 一致。
 
@@ -83,11 +85,11 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 
 | 项目 | 当前状态 | 说明 |
 |---|---|---|
-| 本地仓库 | ✅ | main `46576af00` 已完整合入 develop 并部署；保留 develop 独有 H3/Wan/超分能力 |
+| 本地仓库 | ✅ | main `4b3f1e522` 已完整合入 develop `3f8ea27df` 并部署；保留 develop 独有 H3/Wan/超分能力 |
 | BytePlus ECS | ✅ | app、PostgreSQL、Redis 均为 healthy；应用仅监听 `127.0.0.1:3000` |
 | Cloudflare DNS | ✅ | `many-models.metisdata.ai` 已通过 Tunnel Published application route 生效 |
 | HTTPS | ✅ | Universal SSL Active；公网首页与 `/api/status` 均返回 HTTP 200，TLS 校验通过 |
-| GitHub Actions 发布 | ✅ | 2026-10-09 Deploy Run `37878193057` 成功部署 `e5a117a08`；固定镜像、ECS current 及公网健康已独立核对 |
+| GitHub Actions 发布 | ✅ | 2026-10-10 Deploy Run `38018944811` 成功部署 `3f8ea27df`；固定镜像、ECS current 及公网健康已独立核对 |
 | Singapore Local Model | ✅ Gemma 闭环已验证 | LM Studio 提供 OpenAI-compatible API；平台非流式、Streaming、Usage、Billing、权限边界和停服恢复均已验证 |
 | ECS → Singapore 网络 | ✅ | Tailscale 固定私网链路已验证；不使用 exit node 或 subnet route，Tailscale 不接管 ECS DNS |
 | 公网 Demo | ✅ 核心闭环已建立 | 管理员已初始化为对外营业模式；Playground 与限模型 API Token 均已完成真实模型调用 |
@@ -113,12 +115,12 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 - ECS 主机：通过 SSH alias `ECS-RI4m` 管理；本文不记录凭据
 - Domain：`many-models.metisdata.ai`
 - DNS / HTTPS：Cloudflare Tunnel `byteplus-hk-RI4m`；route 指向 `http://127.0.0.1:3000`
-- Deployment：应用 commit `1fe14039f7d2f31ad0a2a66d9a6c11dec1684cea`，使用 GHCR 固定 digest `sha256:24057ccb4d0fd6289ca4b24fe308c866ac1d6d8e404b15e205cfcb124eb7c0b8` 的 `linux/amd64` 镜像；`current` 已指向对应 release，OCI revision 一致
+- Deployment：应用 commit `3f8ea27df6e3efeb432dc1ea28153d3e17c0f471`，使用 GHCR 固定 digest `sha256:e9b402c8aa2d3846e6f15e81454bee61c6bf5d75d06c6f7cd64eb4595149272a` 的 `linux/amd64` 镜像；`current` 已指向对应 release，OCI revision 一致
 - Runtime：app、PostgreSQL、Redis 均通过健康检查；PostgreSQL / Redis 未发布宿主端口
 - Persistence：容器重启与 app、PostgreSQL、Redis 分别重建后，管理员数据及非敏感 Redis 探针均通过恢复验证；探针已删除
 - 初始化：管理员初始化完成，运行模式为对外营业模式
 - Authentication：用户已通过公网 HTTPS 完成管理员登录、刷新保持会话与退出验证
-- Release Automation：`byteplus-demo` Environment、独立 ECS Self-hosted Runner 与受限 root wrapper 已启用；最新 Deploy Run `37721324912` 从 develop 触发并固定完整提交 SHA，首次成功；历史 release 回滚能力保留，本次未实际回滚
+- Release Automation：`byteplus-demo` Environment、独立 ECS Self-hosted Runner 与受限 root wrapper 已启用；最新 Deploy Run `38018944811` 从 develop 触发并固定完整提交 SHA，首次成功；历史 release 回滚能力保留，本次未实际回滚
 - 共存回归：`xy-stock` systemd 服务、loopback HTTP 与既有公网入口保持可用；Cloudflare Tunnel 进程 active，验收时重启计数为 0
 - 回滚边界：本次由用户明确接受不创建 BytePlus 系统盘或数据盘快照；应用可通过历史完整 release 回滚，但 shared 数据无云盘级部署前快照保护
 

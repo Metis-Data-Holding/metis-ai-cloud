@@ -4,6 +4,14 @@
 
 ## 2026-10-10
 
+### 将 main 同步到 develop 并完成部署验收
+
+- 同步前 `main=4b3f1e52277f67a288dd7fbdf2efa4cedba1e67c`、`develop=451756f7b8439f2196eac54b0d72487f19d3a908`，双方独有提交为 4 / 17。按稳定分支到集成分支的方向将 main 合入 develop，不反向改动 main；保留 develop 的 H3、Wan、内部超分和 task plugin 定制。
+- 唯一内容冲突为 `docs/CURRENT_STATE.md`，保留 develop 的历史部署与视频能力记录，并加入 main 的最新 upstream 同步状态。15 个自动合并文件经独立三方语义审查，确认结构化消息、Responses 转换、渠道凭据、multipart、CAS、结算退款及认证边界未丢失；未修改 License / attribution、部署配置或实际 Secret。
+- 合并提交 `3f8ea27df6e3efeb432dc1ea28153d3e17c0f471` 已推送 origin/develop。`make test`、三个 Go 模块独立 build / vet、`make build-web` 及前端 typecheck/test/lint/format:check/build 通过；前端 193 文件 / 2301 项测试通过，lint 保留 21 个既有 warning。未改变数据库 schema、ORM / driver 或 migration，不触发三数据库矩阵。
+- 使用 develop 工作流定义和上述完整 SHA 触发 Deploy Run `38018944811`；首次执行成功，总耗时 14m44s，云端后端/前端验证、linux/amd64 镜像发布、ECS 激活与公网 HTTPS 检查全部通过。
+- 独立 SSH 核验 ECS current 与镜像 OCI revision 均为目标 SHA，镜像 digest 为 `sha256:e9b402c8aa2d3846e6f15e81454bee61c6bf5d75d06c6f7cd64eb4595149272a`；app/PostgreSQL/Redis healthy、restart=0、OOM=false，本机 `/api/status` 成功。公网 HTTPS 返回 HTTP 200、TLS 校验成功且 `success=true`。未执行真实 Provider、付费计费、退款、登录或视频生成端到端验收；本验收记录仅更新文档，运行代码与已部署 SHA 一致。
+
 ### 保留 fork 定制并同步结构化国际化上游变更
 
 - 同步目标 `upstream/main@1d4328e97` 的 3 个提交，合入 Responses 转换尾部 assistant 文本修复、前后端结构化国际化消息和 relaykit README 更新。
