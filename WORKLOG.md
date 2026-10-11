@@ -2,6 +2,16 @@
 
 本文档按日期记录项目已完成的关键工作。保持简洁，不记录完整执行过程、测试报告、Git 状态、当前 TODO 或 Secret。当前状态见 [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md)，重要决策见 `docs/DECISIONS.md`。
 
+## 2026-10-11
+
+### 保留 fork 视频能力并同步任务插件与性能指标上游变更
+
+- 同步目标 `upstream/main@0f38a14a5` 的 9 个提交，合入任务插件受限 `utils.fetch`、Hailuo 签名文件获取、xAI 按输出分辨率结算、channel 级 TLS 跳过开关、近期性能指标历史、上传允许域名显示及主题修复。
+- 4 个冲突按调用链语义合并：任务测试保留 fork 的视频超分私有交付回归并补入 Hailuo 获取测试；视频代理仅对可信同源任务插件请求保留例外，同时采用 channel 配置感知的 HTTP client；JavaScript 工具同时保留 Volc 签名导出与上游调用上下文；Doubao 保留 Dreamina 模型、2K 边界和参考视频 15 秒预扣，并接入 `duration=-1` 自动时长及最长时长预扣。
+- 独立审查确认未丢失任一侧功能，未混入未跟踪文件，未修改 License / attribution、GitHub Actions、部署配置或实际 Secret。`make test`、前端五项、三个 Go 模块的独立 build / vet 均通过；前端全量复跑为 193 文件 / 2296 项通过，lint 保留 21 个既有 warning。
+- 性能指标查询在 SQLite 3.50.4、MySQL 8.0.46、PostgreSQL 15.19 上通过真实数据库回归；三个数据库均完成新建、从生产 release 二进制升级及候选二进制重复启动的迁移幂等验证，探针数据保留。前端首次全量测试在未改动的焦点断言上出现 1 项偶发失败，单文件及全量新进程复跑均通过；单独运行的既有 service 测试因未初始化 `OptionMap` 在合并前后同样 panic，不影响全量 `make test`。
+- 本记录仅覆盖 main 上游同步的本地验证；远端 CI、develop 同步、部署、生产运行态和真实 Provider / 支付 / 认证端到端在本阶段尚未完成。
+
 ## 2026-10-10
 
 ### 将 main 同步到 develop 并完成部署验收
