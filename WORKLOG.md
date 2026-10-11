@@ -4,13 +4,22 @@
 
 ## 2026-10-11
 
+### 将 main 同步到 develop 并完成部署验收
+
+- 同步前 `main=f6fb620c8bcadbf02dbe47a4ca0cb10ee0e4cca4`、`develop=bde5e68c7834cbd386953fcb61aecbccb368dab3`，双方独有提交为 10 / 19。按 main 到 develop 的方向合并，保留 develop 的 H3、Wan、内部超分和 task plugin 定制。
+- 两个冲突按语义合并：`docs/CURRENT_STATE.md` 保留 develop 历史状态并纳入本轮上游记录；`relay/channel/task/jsplugin/adaptor.go` 同时保留 Wan 源文件获取、轮询配置快照、重定向与超时限制，以及上游调用上下文、受限 `utils.fetch`、允许域名和 channel 级 TLS 配置。独立审查确认未丢失任一侧功能，未修改 License / attribution、部署配置或实际 Secret。
+- 合并提交 `6d03c58d88a5ec2a694a0b075ad006aeecf24a81` 已推送 origin/develop。`make test`、三个 Go 模块 build / vet、`make build-web` 与前端五项检查通过；前端 193 文件 / 2312 项测试通过，lint 保留 21 个既有 warning。SQLite 3.50.4、MySQL 8.0.46、PostgreSQL 15.19 均完成真实性能指标、新建、生产版本升级和重复迁移验证，探针数据保留。
+- 部署前为生产 PostgreSQL 保留 root-only、mode 0600 的 custom-format 备份 `/data/metis-ai-cloud/backups/pre-deploy-6d03c58d88a5ec2a694a0b075ad006aeecf24a81-20261011T1310+0800.dump`，并用 `pg_restore --list` 验证可读。应用 release 可独立回滚；数据库仅在事故决策后先恢复到独立数据库验证，再计划停机切换，应用回滚不等于数据库回滚。
+- 使用固定 develop SHA 触发 Deploy Run `38113885477`，首次执行成功。独立 SSH 确认 ECS current 与镜像 OCI revision 均为目标 SHA，镜像 digest 为 `sha256:67f052750a14cafac8b7bdd5993c1be4ce0219e536ca734406e6d2d6d0195cf0`；app/PostgreSQL/Redis healthy、restart=0、OOM=false，持久目录 inode 未变，迁移失败日志为 0，本机与公网 HTTPS `/api/status` 均成功。
+- 未执行真实 Provider 付费请求、支付、认证、计费结算或退款端到端验收；本部署结果记录后续仅更新文档，运行代码与已部署 SHA 保持一致。
+
 ### 保留 fork 视频能力并同步任务插件与性能指标上游变更
 
 - 同步目标 `upstream/main@0f38a14a5` 的 9 个提交，合入任务插件受限 `utils.fetch`、Hailuo 签名文件获取、xAI 按输出分辨率结算、channel 级 TLS 跳过开关、近期性能指标历史、上传允许域名显示及主题修复。
 - 4 个冲突按调用链语义合并：任务测试保留 fork 的视频超分私有交付回归并补入 Hailuo 获取测试；视频代理仅对可信同源任务插件请求保留例外，同时采用 channel 配置感知的 HTTP client；JavaScript 工具同时保留 Volc 签名导出与上游调用上下文；Doubao 保留 Dreamina 模型、2K 边界和参考视频 15 秒预扣，并接入 `duration=-1` 自动时长及最长时长预扣。
 - 独立审查确认未丢失任一侧功能，未混入未跟踪文件，未修改 License / attribution、GitHub Actions、部署配置或实际 Secret。`make test`、前端五项、三个 Go 模块的独立 build / vet 均通过；前端全量复跑为 193 文件 / 2296 项通过，lint 保留 21 个既有 warning。
 - 性能指标查询在 SQLite 3.50.4、MySQL 8.0.46、PostgreSQL 15.19 上通过真实数据库回归；三个数据库均完成新建、从生产 release 二进制升级及候选二进制重复启动的迁移幂等验证，探针数据保留。前端首次全量测试在未改动的焦点断言上出现 1 项偶发失败，单文件及全量新进程复跑均通过；单独运行的既有 service 测试因未初始化 `OptionMap` 在合并前后同样 panic，不影响全量 `make test`。
-- 本记录仅覆盖 main 上游同步的本地验证；远端 CI、develop 同步、部署、生产运行态和真实 Provider / 支付 / 认证端到端在本阶段尚未完成。
+- 该上游同步随后已完成 develop 合并、部署和生产运行态核验；真实 Provider / 支付 / 认证 / 计费端到端仍未执行。
 
 ## 2026-10-10
 

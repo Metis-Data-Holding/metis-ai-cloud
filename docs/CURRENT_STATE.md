@@ -1,12 +1,14 @@
 # Metis AI Cloud 当前状态
 
-> 最后更新：2026-10-11（本次仅核验 main 上游同步；下述部署与业务验收记录仍为历史记录）
+> 最后更新：2026-10-11（本次 main → develop 同步与部署已验证；其他日期的部署与业务验收记录保留为历史证据）
 > 当前 Milestone：Seedance 2.0 内部视频超分
 > 当前目标：内部超分代码已部署，继续进行 BytePlus VOD 真实联调和成本评估
 
 本文档是项目当前状态的单一快照，采用覆盖式维护。长期背景见 [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)，执行历史与重要决策分别见 [`../WORKLOG.md`](../WORKLOG.md) 和 [`DECISIONS.md`](DECISIONS.md)。
 
 ## 1. 当前摘要
+
+- 分支同步与部署（2026-10-11）：以 `develop@bde5e68c7` 为基线合入 `main@f6fb620c8`，保留 develop 的 H3、Wan、内部超分与 task plugin 定制，并吸收上游任务插件、xAI 分辨率计费、channel 级 TLS 和性能指标更新。两个冲突按文档快照与任务插件调用链语义合并，经独立审查未丢失任一侧功能，未修改 License / attribution、部署配置或实际 Secret。合并提交 `6d03c58d88a5ec2a694a0b075ad006aeecf24a81` 已由固定完整 SHA 触发 Deploy Run `38113885477`，首次执行成功；云端后端/前端验证、linux/amd64 镜像发布、ECS 激活与公网 HTTPS 检查通过。独立 SSH 确认 current 与 OCI revision 均为该 SHA，镜像 digest 为 `sha256:67f052750a14cafac8b7bdd5993c1be4ce0219e536ca734406e6d2d6d0195cf0`；三容器 healthy、restart=0、OOM=false，持久目录 inode 未变，迁移失败日志为 0，本机与公网 `/api/status` 成功。`make test`、三 Go 模块 build / vet、前端五项检查（193 文件 / 2312 项测试）与 `make build-web` 通过；SQLite 3.50.4、MySQL 8.0.46、PostgreSQL 15.19 的真实查询、新建、生产版本升级和重复迁移验证通过。部署前 PostgreSQL custom-format 备份已按 root-only mode 0600 保留并验证可读。未验证真实 Provider、支付、认证、计费结算或退款端到端；本部署结果记录仅更新文档，运行代码与已部署 SHA 一致。
 
 - 分支同步与部署（2026-10-10）：以 `develop@451756f7b` 为基线合入 `main@4b3f1e522`，保留 develop 的 H3、Wan、内部超分与 task plugin 定制，并吸收 main 的结构化国际化消息与 Responses 转换修复。唯一内容冲突为本状态文件，按快照语义保留双方有效记录；15 个自动合并文件经独立三方语义审查，未丢失任一侧功能，未修改 License / attribution、部署配置或实际 Secret。合并提交 `3f8ea27df6e3efeb432dc1ea28153d3e17c0f471` 已由 develop 固定完整 SHA 触发 Deploy Run `38018944811`，首次执行成功；云端后端/前端验证、linux/amd64 镜像发布、ECS 激活与公网 HTTPS 检查通过。独立 SSH 确认 current 与镜像 OCI revision 均为该 SHA，镜像 digest 为 `sha256:e9b402c8aa2d3846e6f15e81454bee61c6bf5d75d06c6f7cd64eb4595149272a`；app/PostgreSQL/Redis healthy、restart=0、OOM=false，公网 `/api/status` 返回 HTTP 200、TLS 校验成功且 `success=true`。本地 `make test`、三 Go 模块 build / vet、前端五项检查（193 文件 / 2301 项测试）与 `make build-web` 通过；未改变数据库 schema、ORM / driver 或 migration。未验证真实 Provider、付费计费、退款、登录或视频生成端到端；本部署结果记录仅更新文档，运行代码与已部署 SHA 一致。
 
@@ -18,7 +20,7 @@
 
 - 项目：`metis-ai-cloud`，来源于 New API fork。
 - Wan 超分（2026-09-17）：`alibaba/wan-3.0` 与 `alibaba/wan-3.0-prime` 复用后台超分配置，1080P 可选 480P / 720P 源视频；未启用或低分辨率请求保持原样。服务端使用当前渠道凭据读取原片，暂存为短期签名地址供既有 BytePlus VOD 工作流拉取，完成后复用成片交付、管理员原片保留及清理流程。2026-09-17 核验 ECS 已部署 `b0f02a4d7`，包含 Wan 超分；发现仅存在于渠道的模型因未保存元数据而隐藏超分入口，已修复查询前提并补充回归，入口修复待部署。未提交付费生成，尚未做生产端到端验收。
-- 上游同步（2026-10-11）：本次同步目标为 `upstream/main` 的 `0f38a14a5e8e322ea741478b0e49878be3130e1d`（9 个上游提交）。4 个冲突按语义合并：任务测试保留 fork 的视频超分私有交付回归并补入 Hailuo 获取测试；视频代理仅对可信同源任务插件请求保留例外，同时采用 channel 配置感知 HTTP client；JavaScript 工具同时保留 Volc 签名导出与上游调用上下文；Doubao 保留 Dreamina 模型、2K 边界和参考视频 15 秒预扣，并接入 `duration=-1` 自动时长。`make test`、前端五项、三个 Go 模块的独立 build / vet 均通过；前端全量新进程复跑为 193 文件 / 2296 项通过，lint 保留 21 个既有 warning。性能指标查询及新建、生产版本升级、重复迁移已在 SQLite 3.50.4、MySQL 8.0.46、PostgreSQL 15.19 上验证并保留探针数据。前端首次全量测试有 1 项未改动焦点断言偶发失败，单文件与全量复跑均通过；单独运行的既有 service 测试在合并前后均因未初始化 `OptionMap` panic。未验证远端 CI、develop 同步、部署、生产运行态或真实 Provider / 支付 / 认证端到端。
+- 上游同步（2026-10-11）：本次同步目标为 `upstream/main` 的 `0f38a14a5e8e322ea741478b0e49878be3130e1d`（9 个上游提交）。4 个冲突按语义合并：任务测试保留 fork 的视频超分私有交付回归并补入 Hailuo 获取测试；视频代理仅对可信同源任务插件请求保留例外，同时采用 channel 配置感知 HTTP client；JavaScript 工具同时保留 Volc 签名导出与上游调用上下文；Doubao 保留 Dreamina 模型、2K 边界和参考视频 15 秒预扣，并接入 `duration=-1` 自动时长。`make test`、前端五项、三个 Go 模块的独立 build / vet 均通过；前端全量新进程复跑为 193 文件 / 2296 项通过，lint 保留 21 个既有 warning。性能指标查询及新建、生产版本升级、重复迁移已在 SQLite 3.50.4、MySQL 8.0.46、PostgreSQL 15.19 上验证并保留探针数据。前端首次全量测试有 1 项未改动焦点断言偶发失败，单文件与全量复跑均通过；单独运行的既有 service 测试在合并前后均因未初始化 `OptionMap` panic。develop 同步、部署与生产运行态已按本节首项完成；真实 Provider / 支付 / 认证 / 计费端到端仍未执行。
 - Step 0：已完成 AI 开发协作与上下文基础设施。
 - 内部视频超分（2026-09-13）：后台模型开关、480P / 720P 源分辨率、原片保留、1080P / 4K Fast 工作流与私有交付已完成代码和本地模拟验证；后端/前端测试、构建及模型层三数据库回归通过。2026-09-14 已随提交 `f166e170adc9c787b5585d75ef4cb89b977bfb48` 部署至 ECS（Run `34798127592`），包含默认播放域名预检与私有失败诊断修复，容器与公网健康检查通过，VOD 环境变量已注入且持久目录可写。用户真实任务已到达成片播放信息阶段后失败并退款；只读 VOD 查询确认工作流有 4K 增强输出，但空间缺少播放域名。播放域名 `video-play.metisdata.ai` 的 DNS only CNAME、HTTPS 证书绑定、VOD 调度与默认域名已完成；2026-09-14 从 ECS 使用现有历史增强素材验证 `GetPlayInfo` 返回 HTTPS MP4，范围下载返回 206 且 MP4 文件头正确。证书到期日为 2027-03-31。未新增付费任务，完整生成到交付链路尚未重新验收，该部署版本尚不读取 2K 配置。
 - 当前阶段：BytePlus ECS 公网部署、Cloudflare HTTPS、持久化、自动发布 / 回滚、Singapore Local Model Provider 和 Usage / Billing 闭环均已完成真实验收。
@@ -85,11 +87,11 @@ Step 0 → BytePlus ECS → Cloudflare DNS / HTTPS → ECS 到 Singapore 网络�
 
 | 项目 | 当前状态 | 说明 |
 |---|---|---|
-| 本地仓库 | ✅ | main `4b3f1e522` 已完整合入 develop `3f8ea27df` 并部署；保留 develop 独有 H3/Wan/超分能力 |
+| 本地仓库 | ✅ | main `f6fb620c8` 已完整合入 develop `6d03c58d8` 并部署；保留 develop 独有 H3/Wan/超分能力 |
 | BytePlus ECS | ✅ | app、PostgreSQL、Redis 均为 healthy；应用仅监听 `127.0.0.1:3000` |
 | Cloudflare DNS | ✅ | `many-models.metisdata.ai` 已通过 Tunnel Published application route 生效 |
 | HTTPS | ✅ | Universal SSL Active；公网首页与 `/api/status` 均返回 HTTP 200，TLS 校验通过 |
-| GitHub Actions 发布 | ✅ | 2026-10-10 Deploy Run `38018944811` 成功部署 `3f8ea27df`；固定镜像、ECS current 及公网健康已独立核对 |
+| GitHub Actions 发布 | ✅ | 2026-10-11 Deploy Run `38113885477` 成功部署 `6d03c58d8`；固定镜像、ECS current 及公网健康已独立核对 |
 | Singapore Local Model | ✅ Gemma 闭环已验证 | LM Studio 提供 OpenAI-compatible API；平台非流式、Streaming、Usage、Billing、权限边界和停服恢复均已验证 |
 | ECS → Singapore 网络 | ✅ | Tailscale 固定私网链路已验证；不使用 exit node 或 subnet route，Tailscale 不接管 ECS DNS |
 | 公网 Demo | ✅ 核心闭环已建立 | 管理员已初始化为对外营业模式；Playground 与限模型 API Token 均已完成真实模型调用 |
