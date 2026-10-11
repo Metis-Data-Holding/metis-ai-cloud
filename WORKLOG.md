@@ -387,3 +387,16 @@
 - 使用 develop 触发 Deploy Run `37721324912`，ref 固定该完整 SHA；首次执行成功，无部署失败或重试。云端后端验证、前端类型检查及 190 文件 / 2285 项测试、linux/amd64 镜像发布、ECS 激活和公网 HTTPS 均通过。
 - 2026-10-08 11:26（Asia/Shanghai）独立 SSH 核对 current 与镜像 OCI revision 均为目标 SHA；镜像 digest 为 `sha256:24057ccb4d0fd6289ca4b24fe308c866ac1d6d8e404b15e205cfcb124eb7c0b8`，平台 linux/amd64。三个容器 healthy，app restart=0、OOM=false，PostgreSQL/Redis 容器 ID 与部署前一致，本机及公网 `/api/status` success=true。
 - 未执行真实付费模型、视频超分、登录、计费或退款端到端验收。审查提出 main 上游工具价格币种疑点（CNY 来源与 $/1K calls 界面/接口注释不一致，结算未见换算），未擅自改动价格，需单独核对实际配置。本验收记录仅文档变化，不再次发布同一份运行代码。
+
+
+### 2026-10-11 Qwen-Image-2.1 内部 Images API 接入验收
+
+- 用户要求：复用现有生图 API 接入 4090 Qwen-Image-2.1，仅内部评估，不做 Playground；完成真实生图、图片获取和失败处理后合并 develop 并推送。实现按 Ponytail 最小 diff 和 Matt Pocock 公共接口测试原则进行。
+- 新插件 `qwen-image-21` 声明模型 `qwen-image-2.1`，使用已验收 BF16 UNet、Qwen3-VL、VAE 与 QwenImage21Cache；固定单图 1024×1024、25 步、CFG 1、Euler/simple，可指定非负安全整数 seed。支持 URL/Base64；不支持图片编辑、批量及其他尺寸，请求在提交前拒绝。
+- 增加 `image-artifacts@1` 显式 capability，使异步 Images renderer 复用已有签名 task artifact URL；旧图片插件不新增网关地址配置要求，Responses 投影保持原样。复用现有轮询、失败退款、图片代理和 Base64 下载，无新存储或数据库变更。
+- 真实环境：本机独立 SQLite + Linux ARM64 网关容器，仅监听 `127.0.0.1:13091`；经 SSH 本地转发访问 4090 ComfyUI。内部测试价格 `tier("internal_eval", u("image_count") * 0.001)` 仅用于验证额度，非官方价格或实际对外收费。
+- URL 生图 HTTP 200、15.16 秒，PNG 1024×1024、1971315 字节；Base64 HTTP 200、6.29 秒，解码后 SHA-256 均为 `093b6792a086106876c870ce588d0550c50f63f437489ff642e5bc89b1c84b75`。同 seed 重复请求使用 ComfyUI 缓存，不可将该时延视作纯推理 benchmark。已目视确认橘猫、蓝杯和窗边光照。
+- 四项非法参数（n=2、非字符串 prompt、布尔 seed、2048 尺寸）均 HTTP 400，任务数及钱包/Token 额度不变。成功图片无签名访问 HTTP 401、伪造签名 HTTP 404；合法签名正常获取。
+- 通过隔离故障代理仅将输出文件名前缀改为超过文件系统限制，真实 ComfyUI `SaveImageAdvanced` 发生 `OSError`，API 返回 HTTP 400 / `image_generation_failed`；任务 FAILURE、quota=0，预扣500额度全额退回，钱包及Token前后均一致。上游不可达时 HTTP 500 / `do_request_failed`，现有异步退款完成后额度及任务数不变；图片获取返回错误。故障代理已停止，渠道恢复后原PNG再次HTTP 200。
+- 隔离网关 Base64 自取图片使用现有 SSRF 策略：防护开启，私网许可同时限定 IP 白名单 `127.0.0.1/32` 和端口 `13091`，域名解析亦受IP过滤；仅适用于本次隔离实例，未修改共享/生产策略。生产配置应保证 TaskPublicAddress 同时可被客户端与网关访问；下载失败仍沿用现有 URL 回退语义。
+- 已通过 `make test`（根模块、relaykit、tokenkit）、根模块 `GOWORK=off go vet ./...` / `go build ./...`、Linux ARM64 构建、聚焦插件/runtime/controller/task adaptor测试、Go格式、JS语法和JSON解析检查；独立审查无当前Qwen链路阻塞问题，已明确capability仅适用于异步任务。未安装专用JSON Schema验证器，契约约束另由插件注册测试覆盖。未修改前端，构建复用既有 web/dist，不将其描述为本次前端构建。没有数据库行为变更，未执行三数据库迁移矩阵。未部署公网服务，也未开通生产模型渠道。

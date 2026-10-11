@@ -80,7 +80,7 @@ func TestBuiltInVendorPluginsDeclareNativeRoutesAndLegacyChannelTypes(t *testing
 }
 
 func TestBuiltInTaskPluginResponsesAndUsageContracts(t *testing.T) {
-	taskPluginKeys := []string{"alibaba", "doubao", "google", "hailuo", "jimeng", "kling", "minimax-h3", "openrouter-wan", "sora", "sunoapi", "vertex-ai", "vidu", "xai"}
+	taskPluginKeys := []string{"alibaba", "doubao", "google", "hailuo", "jimeng", "kling", "minimax-h3", "openrouter-wan", "qwen-image-21", "sora", "sunoapi", "vertex-ai", "vidu", "xai"}
 	generation := jsplugin.DefaultRegistry.Generation()
 	require.NotNil(t, generation)
 
@@ -117,6 +117,14 @@ func TestBuiltInTaskPluginResponsesAndUsageContracts(t *testing.T) {
 				require.Equal(t, []string{"alibaba/wan-3.0", "alibaba/wan-3.0-prime"}, plugin.Meta.Models)
 				require.Len(t, plugin.Meta.Protocols, 1)
 				assert.Equal(t, "openai_video", plugin.Meta.Protocols[0].Name)
+				return
+			}
+			if key == "qwen-image-21" {
+				require.Equal(t, "none", plugin.Meta.Auth.Type)
+				require.Equal(t, []string{"qwen-image-2.1"}, plugin.Meta.Models)
+				require.Contains(t, plugin.Meta.RequiredCapabilities, jsplugin.CapabilityImageArtifacts)
+				require.Len(t, plugin.Meta.Protocols, 1)
+				assert.Equal(t, "openai_image", plugin.Meta.Protocols[0].Name)
 				return
 			}
 

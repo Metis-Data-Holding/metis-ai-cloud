@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -1182,6 +1183,9 @@ func taskPluginProtocolRendererContext(
 	}
 	if pinned.Plugin == nil {
 		return nil, errors.New("task artifact projection is unavailable")
+	}
+	if pinned.Protocol == pluginruntime.ProtocolOpenAIImage && !slices.Contains(pinned.Plugin.Meta.RequiredCapabilities, pluginruntime.CapabilityImageArtifacts) {
+		return rendererContext, nil
 	}
 
 	artifacts, err := taskjsplugin.New(pinned.Plugin).ListArtifacts(task)

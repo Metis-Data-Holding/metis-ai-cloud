@@ -1662,6 +1662,62 @@ func imageProtocolTestOutcome(info *relaycommon.RelayInfo, status model.TaskStat
 	return &taskSubmissionOutcome{Result: &relay.TaskSubmitResult{}, Task: task, RelayInfo: info}
 }
 
+func TestTaskPluginProtocolRendererContextGatesImageArtifactsByCapability(t *testing.T) {
+	capabilityPlugin := compilePluginProtocolTestEndpoint(t, "image-artifacts", `
+		export const meta = {apiVersion:1,key:"image-artifacts",name:"Image Artifacts",version:"1.0.0",author:{name:"Test"},models:["image-model"],fetchMode:"per_task",requiredCapabilities:["image-artifacts@1"],protocols:["openai_image"]};
+		export function listArtifacts() { return [{key:"image",type:"image",mimeType:"image/png"}]; }
+	`)
+	capabilityPlugin.Plugin.Meta.RequiredCapabilities = []string{pluginruntime.CapabilityImageArtifacts}
+	capabilityPlugin.Protocol = pluginruntime.ProtocolOpenAIImage
+	task := &model.Task{TaskID: "task_image_artifact", Status: model.TaskStatusSuccess}
+	request := pluginruntime.ProtocolRequestContext{
+		RouteRequestContext: pluginruntime.RouteRequestContext{Path: "/v1/images/generations", Method: http.MethodPost, Body: map[string]any{"kind": "json", "value": map[string]any{"prompt": "cat"}}},
+		Protocol:            pluginruntime.ProtocolOpenAIImage,
+		Operation:           "generate",
+		Model:               "image-model",
+	}
+	projected, err := taskPluginProtocolRendererContext(request, capabilityPlugin, task, func(taskID, artifactKey string) (string, error) {
+		return "https://gateway.example/v1/tasks/" + taskID + "/artifacts/" + artifactKey + "/content?access=cap", nil
+	})
+	require.NoError(t, err)
+	artifacts, ok := projected["artifacts"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "https://gateway.example/v1/tasks/task_image_artifact/artifacts/image/content?access=cap", artifacts["image"].(map[string]any)["url"])
+
+	legacy := imageProtocolTestEndpoint(t)
+	legacy.Protocol = pluginruntime.ProtocolOpenAIImage
+	legacyProjected, err := taskPluginProtocolRendererContext(request, legacy, task, func(string, string) (string, error) {
+		return "https://gateway.example/legacy", nil
+	})
+	require.NoError(t, err)
+	assert.NotContains(t, legacyProjected, "artifacts")
+}
+
+func TestServeTaskPluginImageProtocolRendersSignedArtifactURL(t *testing.T) {
+	pinned := compilePluginProtocolTestEndpoint(t, "image-artifacts", `
+		export function listArtifacts() { return [{key:"image",type:"image",mimeType:"image/png"}]; }
+		export const protocols = {openai_image: {
+			render: function(ctx) { return {data:[{url:ctx.artifacts.image.url}]}; }
+		}};
+	`)
+	pinned.Protocol = pluginruntime.ProtocolOpenAIImage
+	pinned.Plugin.Meta.RequiredCapabilities = []string{pluginruntime.CapabilityImageArtifacts}
+	pinned.Plugin.Meta.Protocols = []pluginruntime.ProtocolClaim{{Name: pluginruntime.ProtocolOpenAIImage}}
+	c, recorder := newImageProtocolTestContext("")
+	deps := pluginProtocolTestDeps()
+	deps.artifactContentURL = func(taskID, artifactKey string) (string, error) {
+		return "https://gateway.example/v1/tasks/" + taskID + "/artifacts/" + artifactKey + "/content?access=cap", nil
+	}
+	deps.submit = func(_ *gin.Context, info *relaycommon.RelayInfo) (*taskSubmissionOutcome, *dto.TaskError) {
+		task := &model.Task{TaskID: "task_image_artifact", Platform: constant.TaskPlatform(pinned.Plugin.Meta.Key), UserId: info.UserId, ChannelId: 3, Status: model.TaskStatusSuccess, CreatedAt: 1_710_000_000}
+		task.SetData(map[string]any{"prompt-1": map[string]any{"outputs": map[string]any{}}})
+		return &taskSubmissionOutcome{Task: task, RelayInfo: info}, nil
+	}
+	serveTaskPluginImageProtocol(c, pinned, deps)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	assert.Contains(t, recorder.Body.String(), "https://gateway.example/v1/tasks/task_image_artifact/artifacts/image/content?access=cap")
+}
+
 // The OpenAI Images protocol answers synchronously: an immediate result is
 // rendered by the plugin, `created` is host-filled, and response_format
 // b64_json inlines each URL while keeping the URL.
