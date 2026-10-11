@@ -19,6 +19,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	relaychannel "github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/system_setting"
@@ -98,7 +99,7 @@ func VideoProxy(c *gin.Context) {
 				adaptor, adaptorErr := initTaskArtifactAdaptor(task)
 				if adaptorErr == nil {
 					if provider, ok := adaptor.(relaychannel.TaskContentRequestProvider); ok {
-						descriptor, adaptorErr = provider.BuildContentRequest(task, artifact.Key, relaychannel.TaskArtifactClientRequest{
+						descriptor, adaptorErr = provider.BuildContentRequest(c.Request.Context(), task, artifact.Key, relaychannel.TaskArtifactClientRequest{
 							Method:  c.Request.Method,
 							Headers: taskArtifactClientHeaders(c.Request.Header),
 						})
@@ -108,7 +109,7 @@ func VideoProxy(c *gin.Context) {
 					}
 				}
 				if adaptorErr != nil {
-					logger.LogWarn(c.Request.Context(), common.LogText("Failed to resolve plugin video content for task %s", taskID))
+					logger.LogWarn(c.Request.Context(), common.LogText("Failed to resolve plugin video content for task %s: %v", taskID, adaptorErr))
 					descriptor = nil
 				}
 				break
@@ -222,7 +223,8 @@ func proxyTaskMedia(c *gin.Context, task *model.Task, descriptor *relaychannel.T
 			message: "Artifact channel is unavailable", err: err,
 		}
 	}
-	proxy := strings.TrimSpace(channel.GetSetting().Proxy)
+	setting := channel.GetSetting()
+	proxy := strings.TrimSpace(setting.Proxy)
 	var trustedProviderOrigin *url.URL
 	providerBaseURL, parseErr := url.Parse(strings.TrimSpace(channel.GetBaseURL()))
 	if descriptor.TrustedProviderOrigin &&
@@ -245,7 +247,7 @@ func proxyTaskMedia(c *gin.Context, task *model.Task, descriptor *relaychannel.T
 		client = service.GetHttpClient()
 	}
 	if proxy != "" {
-		client, err = service.GetHttpClientWithProxy(proxy)
+		client, err = service.GetHttpClientWithProxySettings(proxy, setting)
 		if err != nil {
 			return &taskMediaProxyError{
 				status: http.StatusInternalServerError, code: "artifact_internal_error",
@@ -409,20 +411,11 @@ func doTaskMediaRequest(client *http.Client, request *http.Request, responseHead
 }
 
 func applyTaskMediaRequestHeaders(destination http.Header, headers map[string]string) error {
-	if len(headers) > 64 {
+	if jsplugin.ValidateRequestHeaders(headers) != nil {
 		return errTaskMediaRequestRejected
 	}
 	for name, value := range headers {
-		name = strings.TrimSpace(name)
-		if !httpguts.ValidHeaderFieldName(name) || !httpguts.ValidHeaderFieldValue(value) || len(value) > 8192 {
-			return errTaskMediaRequestRejected
-		}
-		switch strings.ToLower(name) {
-		case "host", "content-length", "accept-encoding", "connection", "proxy-connection", "keep-alive",
-			"proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade":
-			return errTaskMediaRequestRejected
-		}
-		destination.Set(name, value)
+		destination.Set(strings.TrimSpace(name), value)
 	}
 	return nil
 }
