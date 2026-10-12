@@ -432,7 +432,11 @@
 
 - 实现结果：新增 `/pg/tasks/:key` 登录会话提交/查询和所有者限定制品读取；前端仅展示当前分组可用 Qwen，种子0保留、非法输入阻止提交、状态/内容错误重试、图片下载、切页签保留任务。没有改数据库结构、插件或计费核心。
 - 最小复用说明：VideoComposer 绑定视频帧/音频/时长，无法直接用于图片；图片组件组合相同 PromptInput、ModelGroupSelector、ErrorState 与基础组件，沿用布局与主题。没有新增依赖。
-- 验证：`make test`（根、relaykit、tokenkit）、根 `GOWORK=off go vet ./...`、前端 `bun run test`（200文件2352项）、typecheck、lint、format:check、build 均通过；最终小改动另重跑图片及页签16项测试通过。lint仅保留仓库既有warning。
+- 验证：`make test`（根、relaykit、tokenkit）、根 `GOWORK=off go vet ./...`、前端 `bun run test`（200文件2352项）、typecheck、lint、format:check、build 均通过；最终小改动另重跑图片及页签17项测试通过。lint仅保留仓库既有warning。
 - Astra low 独立审查发现 Enter 提交时公共输入组件原生reset导致内容丢失，已修复并补失败保留/再次提交回归；最终审查无剩余阻塞。新增认证入口遵循上述OWASP会话和授权控制，测试覆盖PAT/未登录拒绝、组权限与管理员跨所有者拒绝；未进行全站安全审计。
 
-- 首次发布记录：Run 38210925776 因传入缩短提交号而在checkout失败，未触及线上；改用完整SHA后Run 38211107571成功部署968257241。页面实测发现模型列表为空：`mergeTaskPluginEndpointTypes` 仅补Responses/Video而漏Image协议。已补 `/v1/images/generations` 的 `image-generation` 投影一行及已有回归测试，红绿验证通过；不修改渠道/价格/模型metadata或数据库行为。待修复版重新部署验收。
+- 首次发布记录：Run 38210925776 因传入缩短提交号而在checkout失败，未触及线上；改用完整SHA后Run 38211107571成功部署968257241。页面实测发现模型列表为空：`mergeTaskPluginEndpointTypes` 仅补Responses/Video而漏Image协议。已补 `/v1/images/generations` 的 `image-generation` 投影一行及已有回归测试，红绿验证通过；不修改渠道/价格/模型metadata或数据库行为。修复版部署及验收结果见下。
+
+- 最终发布：功能及修复已合并并推送 develop，完整代码提交 `ebd688376ac111695c6b8a42fc20646a499735fb`；[Deploy Run 38212953110](https://github.com/Metis-Data-Holding/metis-ai-cloud/actions/runs/38212953110) 成功。ECS current 与提交一致，三个容器 healthy、restart=0/OOM=false。云端完整前端测试200文件2353项通过，后端检查与构建部署成功。
+- 线上页面验收：用户登录后在图片页签选择default分组、qwen-image-2.1，提交橘猫/蓝围巾/窗边热茶提示词，seed=202610121447、单张1024×1024。任务 `task_GeNv1vQk5tE6EEmlPWVfq84f2nn9qxLx` 状态SUCCESS、失败原因为空、quota=0；数据库提交至完成62秒（任务端到端时间，非纯GPU推理）。页面预览成功，点击下载获得PNG，sips确认1024×1024。生成期间输入和提交禁用，切换视频页签再返回保留任务与参数；非法seed=-1阻止提交。
+- 验收边界：失败状态、查询/制品重试、权限隔离通过自动化测试；本次没有在线上注入4090故障，没有新增刷新后任务历史恢复能力。保持内部评估范围，未启动Mac网关或SSH中转。
