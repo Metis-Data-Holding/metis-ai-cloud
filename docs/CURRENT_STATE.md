@@ -1,12 +1,14 @@
 # Metis AI Cloud 当前状态
 
-> 最后更新：2026-10-11（本次 main → develop 同步与部署已验证；其他日期的部署与业务验收记录保留为历史证据）
+> 最后更新：2026-10-12（Qwen Images API 功能已从 develop 部署；4090 私网接入和线上生图尚未验收）
 > 当前 Milestone：Seedance 2.0 内部视频超分
 > 当前目标：内部超分代码已部署，继续进行 BytePlus VOD 真实联调和成本评估
 
 本文档是项目当前状态的单一快照，采用覆盖式维护。长期背景见 [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)，执行历史与重要决策分别见 [`../WORKLOG.md`](../WORKLOG.md) 和 [`DECISIONS.md`](DECISIONS.md)。
 
 ## 1. 当前摘要
+
+- Qwen 功能上线与测试方式调整（2026-10-12）：`develop@31f1a3f75bd777d61e0219b75b0a1000ff64ce6b` 已经 Deploy Run `38186778323` 成功发布；独立核对 ECS current/镜像 revision 一致，三个容器 healthy、应用 restart=0/OOM=false，持久目录 inode 未变，迁移失败匹配为0，本机及公网 HTTPS 状态正常。按用户要求停止并删除 Mac 测试容器、临时脚本/凭据/数据库，本机13091及18191无监听；图片和验收报告保留。后续项目联调通过 develop 部署到线上开展，不再启动 Mac 网关及本机SSH转发生图链路。生产尚无 Qwen 渠道；4090 Tailscale 在线，但 ComfyUI 仅监听其回环8191，ECS直连该端口超时，需要先配置受限私网入口后再进行线上生图验收。
 
 - Qwen-Image-2.1 内部评估（2026-10-11）：新增 `qwen-image-21` ComfyUI task plugin，将 4090 上的 BF16 工作流接入 `/v1/images/generations`，复用任务轮询、结算和签名图片代理；仅支持单张 1024×1024，25 步 Euler/simple，未做 Playground。隔离本机网关已完成真实生图、URL 与 Base64 取图、参数拒绝、图片访问校验、ComfyUI 执行失败退款和上游不可达验收。URL 请求耗时 15.16 秒，重复同 seed 的 Base64 请求 6.29 秒（存在缓存，均为网关端到端耗时，非纯推理性能）；两种方式得到相同 PNG。未开通公网/生产渠道，未执行部署；模型仅供内部研究评估，Wan 3.0 继续暂缓。
 

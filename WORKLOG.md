@@ -400,3 +400,13 @@
 - 通过隔离故障代理仅将输出文件名前缀改为超过文件系统限制，真实 ComfyUI `SaveImageAdvanced` 发生 `OSError`，API 返回 HTTP 400 / `image_generation_failed`；任务 FAILURE、quota=0，预扣500额度全额退回，钱包及Token前后均一致。上游不可达时 HTTP 500 / `do_request_failed`，现有异步退款完成后额度及任务数不变；图片获取返回错误。故障代理已停止，渠道恢复后原PNG再次HTTP 200。
 - 隔离网关 Base64 自取图片使用现有 SSRF 策略：防护开启，私网许可同时限定 IP 白名单 `127.0.0.1/32` 和端口 `13091`，域名解析亦受IP过滤；仅适用于本次隔离实例，未修改共享/生产策略。生产配置应保证 TaskPublicAddress 同时可被客户端与网关访问；下载失败仍沿用现有 URL 回退语义。
 - 已通过 `make test`（根模块、relaykit、tokenkit）、根模块 `GOWORK=off go vet ./...` / `go build ./...`、Linux ARM64 构建、聚焦插件/runtime/controller/task adaptor测试、Go格式、JS语法和JSON解析检查；独立审查无当前Qwen链路阻塞问题，已明确capability仅适用于异步任务。未安装专用JSON Schema验证器，契约约束另由插件注册测试覆盖。未修改前端，构建复用既有 web/dist，不将其描述为本次前端构建。没有数据库行为变更，未执行三数据库迁移矩阵。未部署公网服务，也未开通生产模型渠道。
+
+
+### 2026-10-12 develop 部署与 Mac 测试环境清理
+
+- 用户明确要求：停止本机服务、剔除本机经SSH访问4090的相关测试代码，后续通过develop部署线上测试，并推送部署develop。核查可部署源码不含13091/18191、host.docker.internal或Mac SSH依赖；保留通用Qwen插件。
+- 已停止并删除 `qwen21-api-eval` 容器，清除本次临时脚本、测试凭据、SQLite库及后端二进制；确认本机13091、18191无监听且无相关SSH转发进程。保留生成PNG和无凭据验收报告，不删除4090模型或ComfyUI。此前本机测试命令不再适用。
+- 发布固定提交 `31f1a3f75bd777d61e0219b75b0a1000ff64ce6b`，Deploy Run `38186778323` 首次成功，云端后端/前端检查、linux/amd64镜像构建、ECS激活及公网HTTPS检查均成功。镜像digest为 `sha256:71776976ce7ad65ec968aeef7f0a79be4d8f0bab8f41660dd815b27e2921869b`。
+- 部署前备份保存于ECS `/data/metis-ai-cloud/backups/pre-qwen-20261012/postgres.dump`，1933720字节、权限0600，`pg_restore --list`验证通过，未下载数据库或输出凭据。部署后独立SSH确认current和OCI revision一致，三个项目容器healthy、应用restart=0/OOM=false；PostgreSQL/Redis/app-data目录inode保持5505031/5505032/5505029；迁移失败日志匹配为0，本机和公网/api/status均success=true。
+- 线上访问4090仍有独立前置条件：Tailscale节点在线，但ComfyUI启动参数为 `--listen 127.0.0.1 --port 8191`，ECS到其Tailscale地址8191端口连接超时。生产TaskPublicAddress/ServerAddress已配置公网网关，Qwen渠道数量为0。没有擅自开放ComfyUI公网端口或创建对外渠道；需受限私网入口、内部渠道/分组和受限Token后再验收线上真实生图。
+- 本记录仅文档更新，运行代码与已部署功能提交一致；未执行线上Qwen真实生成或计费验收，不将此前Mac隔离验收当作生产验收。
