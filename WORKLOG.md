@@ -434,3 +434,5 @@
 - 最小复用说明：VideoComposer 绑定视频帧/音频/时长，无法直接用于图片；图片组件组合相同 PromptInput、ModelGroupSelector、ErrorState 与基础组件，沿用布局与主题。没有新增依赖。
 - 验证：`make test`（根、relaykit、tokenkit）、根 `GOWORK=off go vet ./...`、前端 `bun run test`（200文件2352项）、typecheck、lint、format:check、build 均通过；最终小改动另重跑图片及页签16项测试通过。lint仅保留仓库既有warning。
 - Astra low 独立审查发现 Enter 提交时公共输入组件原生reset导致内容丢失，已修复并补失败保留/再次提交回归；最终审查无剩余阻塞。新增认证入口遵循上述OWASP会话和授权控制，测试覆盖PAT/未登录拒绝、组权限与管理员跨所有者拒绝；未进行全站安全审计。
+
+- 首次发布记录：Run 38210925776 因传入缩短提交号而在checkout失败，未触及线上；改用完整SHA后Run 38211107571成功部署968257241。页面实测发现模型列表为空：`mergeTaskPluginEndpointTypes` 仅补Responses/Video而漏Image协议。已补 `/v1/images/generations` 的 `image-generation` 投影一行及已有回归测试，红绿验证通过；不修改渠道/价格/模型metadata或数据库行为。待修复版重新部署验收。

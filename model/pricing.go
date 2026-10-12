@@ -215,6 +215,7 @@ func mergeTaskPluginEndpointTypes(modelEndpoints map[string][]string, generation
 	}{
 		{"/v1/responses", "openai_responses", constant.EndpointTypeOpenAIResponse},
 		{"/v1/videos", "openai_video", constant.EndpointTypeOpenAIVideo},
+		{"/v1/images/generations", "openai_image", constant.EndpointTypeImageGeneration},
 	}
 	for modelName, endpoints := range modelEndpoints {
 		lookupModel := modelName

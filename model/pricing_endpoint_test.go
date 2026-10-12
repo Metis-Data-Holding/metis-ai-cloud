@@ -25,9 +25,13 @@ export const meta = {
   channelTypes: [54],
   models: ["video-model"],
   fetchMode: "per_task",
-  protocols: [{name: "openai_responses", supports: ["sync"]}, "openai_video"],
+  protocols: [{name: "openai_responses", supports: ["sync"]}, "openai_video", "openai_image"],
 };
 export const protocols = {
+  openai_image: {
+    decodeRequest: function(ctx) { return {kind: "submit", model: ctx.model, requestBody: ctx.body.value}; },
+    render: function(ctx, task) { return task; },
+  },
   openai_responses: {
     decodeRequest: function(ctx) { return {kind: "submit", model: ctx.model, requestBody: ctx.body.value}; },
     renderFinal: function(ctx, task) { return task; },
@@ -55,6 +59,7 @@ export function buildContentRequest() { return {}; }
 	assert.Equal(t, []string{
 		string(constant.EndpointTypeOpenAIResponse),
 		string(constant.EndpointTypeOpenAIVideo),
+		string(constant.EndpointTypeImageGeneration),
 	}, endpoints["video-model"])
 	assert.Equal(t, []string{string(constant.EndpointTypeOpenAI)}, endpoints["chat-model"])
 	_, found := registry.Generation().LookupEndpoint(http.MethodPost, "/v1/videos", "video-model")
