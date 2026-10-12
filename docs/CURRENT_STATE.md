@@ -1,12 +1,14 @@
 # Metis AI Cloud 当前状态
 
-> 最后更新：2026-10-12（Qwen Images API 功能已从 develop 部署；4090 私网接入和线上生图尚未验收）
+> 最后更新：2026-10-12（Qwen Images API 功能已从 develop 部署；4090 私网接入已验收，线上生图尚未验收）
 > 当前 Milestone：Seedance 2.0 内部视频超分
 > 当前目标：内部超分代码已部署，继续进行 BytePlus VOD 真实联调和成本评估
 
 本文档是项目当前状态的单一快照，采用覆盖式维护。长期背景见 [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)，执行历史与重要决策分别见 [`../WORKLOG.md`](../WORKLOG.md) 和 [`DECISIONS.md`](DECISIONS.md)。
 
 ## 1. 当前摘要
+
+- 4090 私网接入（2026-10-12）：复用5090的Tailscale直连方式。4090新增仅绑定Tailscale IPv4的8191→回环8191转发，ComfyUI继续保持WSL回环监听；该端口专用Windows防火墙允许ECS来源，并显式阻断其他IPv4来源，既有Tailscale宽泛放行规则不再扩大该端口权限。已从ECS实际应用容器验证 `/system_stats`、`/queue` 和UNET模型枚举，识别RTX4090与Qwen BF16权重。无需Mac中转或应用重新部署；仍待创建内部渠道和线上真实生图验收。
 
 - Qwen 功能上线与测试方式调整（2026-10-12）：`develop@31f1a3f75bd777d61e0219b75b0a1000ff64ce6b` 已经 Deploy Run `38186778323` 成功发布；独立核对 ECS current/镜像 revision 一致，三个容器 healthy、应用 restart=0/OOM=false，持久目录 inode 未变，迁移失败匹配为0，本机及公网 HTTPS 状态正常。按用户要求停止并删除 Mac 测试容器、临时脚本/凭据/数据库，本机13091及18191无监听；图片和验收报告保留。后续项目联调通过 develop 部署到线上开展，不再启动 Mac 网关及本机SSH转发生图链路。生产尚无 Qwen 渠道；4090 Tailscale 在线，但 ComfyUI 仅监听其回环8191，ECS直连该端口超时，需要先配置受限私网入口后再进行线上生图验收。
 

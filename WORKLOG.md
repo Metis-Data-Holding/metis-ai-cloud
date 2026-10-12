@@ -410,3 +410,12 @@
 - 部署前备份保存于ECS `/data/metis-ai-cloud/backups/pre-qwen-20261012/postgres.dump`，1933720字节、权限0600，`pg_restore --list`验证通过，未下载数据库或输出凭据。部署后独立SSH确认current和OCI revision一致，三个项目容器healthy、应用restart=0/OOM=false；PostgreSQL/Redis/app-data目录inode保持5505031/5505032/5505029；迁移失败日志匹配为0，本机和公网/api/status均success=true。
 - 线上访问4090仍有独立前置条件：Tailscale节点在线，但ComfyUI启动参数为 `--listen 127.0.0.1 --port 8191`，ECS到其Tailscale地址8191端口连接超时。生产TaskPublicAddress/ServerAddress已配置公网网关，Qwen渠道数量为0。没有擅自开放ComfyUI公网端口或创建对外渠道；需受限私网入口、内部渠道/分组和受限Token后再验收线上真实生图。
 - 本记录仅文档更新，运行代码与已部署功能提交一致；未执行线上Qwen真实生成或计费验收，不将此前Mac隔离验收当作生产验收。
+
+
+### 2026-10-12 4090 复用5090 Tailscale接入方式
+
+- 只读确认线上5090 ComfyUI渠道使用Tailscale私网8888端口，ECS应用容器访问成功；4090已在同一tailnet，但Qwen ComfyUI仅监听Windows/WSL回环8191。
+- 在4090新增持久Windows v4tov4 portproxy：Tailscale IPv4的8191转到127.0.0.1:8191；未改变ComfyUI启动参数、5090配置、其他服务或Mac本地测试环境。未开放公网监听。
+- Windows已有Tailscale全端口放行规则，因此新增 `Metis-Qwen21-ECS-Allow` 和 `Metis-Qwen21-ECS-Only-Block`，仅针对该本地地址/TCP8191，允许ECS IPv4并以互补地址范围阻断其他来源。所有防火墙profile启用，两条规则均已在ActiveStore核对生效。
+- 从线上实际app容器验证system_stats/queue/object_info：ComfyUI0.39.0、NVIDIA RTX4090、空队列、Qwen2.1 BF16 UNet存在。未提交生成任务，未修改渠道/价格/令牌；尚未执行其他tailnet设备的反向拒绝测试或整机重启恢复验收。
+- 回滚仅需删除上述指定端口的portproxy及两条具名规则；保留原ComfyUI、Tailscale和既有规则。应用代码没有变化，无需重新构建部署。
