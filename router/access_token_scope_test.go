@@ -131,6 +131,9 @@ func TestAccessTokenRouteRulesCoverEveryDashboardRoute(t *testing.T) {
 	for _, key := range []string{
 		"POST /api/playground/video-reference-files",
 		"GET /api/task/:task_id/original",
+		"POST /pg/tasks/:key",
+		"GET /pg/tasks/:key",
+		"GET /pg/tasks/:key/artifacts/:artifact_key/content",
 		"POST /pg/videos",
 		"GET /pg/videos/:task_id",
 		"GET /pg/videos/:task_id/content",

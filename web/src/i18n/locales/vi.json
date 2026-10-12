@@ -7410,6 +7410,17 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Image generation": "Tạo ảnh",
+    "Describe the image you want to create": "Mô tả ảnh bạn muốn tạo",
+    "Generate image": "Tạo ảnh",
+    "Download image": "Tải ảnh xuống",
+    "Generating image": "Đang tạo ảnh",
+    "Loading image": "Đang tải ảnh",
+    "Image generation failed": "Tạo ảnh thất bại",
+    "Unable to submit image task": "Không thể gửi tác vụ tạo ảnh",
+    "No image models available in this group": "Nhóm này không có mô hình ảnh khả dụng",
+    "Seed must be a non-negative safe integer": "Seed phải là số nguyên an toàn không âm",
+    "Unsupported Playground image model": "Mô hình ảnh Playground không được hỗ trợ"
   }
 }

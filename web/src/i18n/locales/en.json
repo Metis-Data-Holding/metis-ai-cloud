@@ -7410,6 +7410,17 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Image generation": "Image generation",
+    "Describe the image you want to create": "Describe the image you want to create",
+    "Generate image": "Generate image",
+    "Download image": "Download image",
+    "Generating image": "Generating image",
+    "Loading image": "Loading image",
+    "Image generation failed": "Image generation failed",
+    "Unable to submit image task": "Unable to submit image task",
+    "No image models available in this group": "No image models available in this group",
+    "Seed must be a non-negative safe integer": "Seed must be a non-negative safe integer",
+    "Unsupported Playground image model": "Unsupported Playground image model"
   }
 }

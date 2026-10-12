@@ -18,12 +18,14 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { AiVideoIcon, BubbleChatIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
+import { ImageIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { PlaygroundChat } from './components/chat/playground-chat'
+import { ImagePlayground } from './components/image/image-playground'
 import { PlaygroundInput } from './components/input/playground-input'
 import { VideoPlayground } from './components/video/video-playground'
 import {
@@ -33,7 +35,7 @@ import {
   usePlaygroundState,
 } from './hooks'
 
-type PlaygroundMode = 'chat' | 'video'
+type PlaygroundMode = 'chat' | 'video' | 'image'
 
 function ChatPlayground() {
   const {
@@ -132,13 +134,15 @@ function ChatPlayground() {
 export function Playground() {
   const { t } = useTranslation()
   const [mode, setMode] = useState<PlaygroundMode>('chat')
+  const [imageVisited, setImageVisited] = useState(false)
 
   return (
     <Tabs
       value={mode}
       onValueChange={(value) => {
-        if (value === 'chat' || value === 'video') {
+        if (value === 'chat' || value === 'video' || value === 'image') {
           setMode(value)
+          if (value === 'image') setImageVisited(true)
         }
       }}
       className='size-full min-h-0 gap-0 overflow-hidden'
@@ -149,6 +153,10 @@ export function Playground() {
             <HugeiconsIcon icon={BubbleChatIcon} strokeWidth={2} />
             {t('Chat')}
           </TabsTrigger>
+          <TabsTrigger value='image'>
+            <ImageIcon aria-hidden='true' />
+            {t('Image generation')}
+          </TabsTrigger>
           <TabsTrigger value='video'>
             <HugeiconsIcon icon={AiVideoIcon} strokeWidth={2} />
             {t('Video generation')}
@@ -157,6 +165,13 @@ export function Playground() {
       </div>
       <TabsContent value='chat' className='min-h-0 overflow-hidden'>
         <ChatPlayground />
+      </TabsContent>
+      <TabsContent
+        value='image'
+        keepMounted
+        className='flex min-h-0 overflow-hidden data-[hidden]:hidden'
+      >
+        {imageVisited ? <ImagePlayground /> : null}
       </TabsContent>
       <TabsContent value='video' className='flex min-h-0 overflow-hidden'>
         <VideoPlayground />

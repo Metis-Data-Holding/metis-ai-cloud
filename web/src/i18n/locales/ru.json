@@ -7410,6 +7410,17 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Image generation": "Генерация изображений",
+    "Describe the image you want to create": "Опишите изображение, которое хотите создать",
+    "Generate image": "Создать изображение",
+    "Download image": "Скачать изображение",
+    "Generating image": "Генерация изображения",
+    "Loading image": "Загрузка изображения",
+    "Image generation failed": "Ошибка генерации изображения",
+    "Unable to submit image task": "Не удалось отправить задачу генерации",
+    "No image models available in this group": "В этой группе нет доступных моделей изображений",
+    "Seed must be a non-negative safe integer": "Seed должен быть неотрицательным безопасным целым числом",
+    "Unsupported Playground image model": "Эта модель изображений Playground не поддерживается"
   }
 }

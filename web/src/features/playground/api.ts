@@ -333,3 +333,52 @@ export async function getUserGroups(): Promise<GroupOption[]> {
     desc: info.desc,
   }))
 }
+
+export type ImageTask = {
+  task_id: string
+  status: string
+  fail_reason?: string
+}
+
+export async function submitImageGeneration(
+  group: string,
+  request: {
+    model: string
+    prompt: string
+    n: number
+    size: string
+    seed?: number
+  }
+): Promise<ImageTask> {
+  const response = await api.post('/pg/tasks/qwen-image-21', request, {
+    params: { group },
+    skipErrorHandler: true,
+  })
+  if (
+    !response.data ||
+    typeof response.data.task_id !== 'string' ||
+    !response.data.task_id.trim()
+  ) {
+    throw createServerError(
+      response.data,
+      i18next.t('Unable to submit image task')
+    )
+  }
+  return response.data
+}
+
+export async function getImageTask(taskId: string): Promise<ImageTask> {
+  const response = await api.get(`/pg/tasks/${encodeURIComponent(taskId)}`, {
+    disableDuplicate: true,
+    skipErrorHandler: true,
+  })
+  return response.data
+}
+
+export async function getImageContent(taskId: string): Promise<Blob> {
+  const response = await api.get(
+    `/pg/tasks/${encodeURIComponent(taskId)}/artifacts/image/content`,
+    { disableDuplicate: true, responseType: 'blob', skipErrorHandler: true }
+  )
+  return response.data
+}

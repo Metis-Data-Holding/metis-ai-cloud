@@ -7410,6 +7410,17 @@
     "Zhipu": "智谱",
     "Zhipu GLM": "智谱GLM",
     "Zhipu V4": "智谱 V4",
-    "Zoom": "缩放"
+    "Zoom": "缩放",
+    "Image generation": "图片生成",
+    "Describe the image you want to create": "描述你想生成的图片",
+    "Generate image": "生成图片",
+    "Download image": "下载图片",
+    "Generating image": "正在生成图片",
+    "Loading image": "正在加载图片",
+    "Image generation failed": "图片生成失败",
+    "Unable to submit image task": "无法提交图片任务",
+    "No image models available in this group": "此分组没有可用的图片模型",
+    "Seed must be a non-negative safe integer": "种子必须是非负安全整数",
+    "Unsupported Playground image model": "不支持此 Playground 图片模型"
   }
 }

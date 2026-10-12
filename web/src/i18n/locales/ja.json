@@ -7410,6 +7410,17 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V 4",
-    "Zoom": "ズーム"
+    "Zoom": "ズーム",
+    "Image generation": "画像生成",
+    "Describe the image you want to create": "生成する画像を説明してください",
+    "Generate image": "画像を生成",
+    "Download image": "画像をダウンロード",
+    "Generating image": "画像を生成中",
+    "Loading image": "画像を読み込み中",
+    "Image generation failed": "画像生成に失敗しました",
+    "Unable to submit image task": "画像タスクを送信できません",
+    "No image models available in this group": "このグループで利用できる画像モデルはありません",
+    "Seed must be a non-negative safe integer": "シードは非負の安全な整数である必要があります",
+    "Unsupported Playground image model": "この Playground 画像モデルはサポートされていません"
   }
 }

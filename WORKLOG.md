@@ -419,3 +419,18 @@
 - Windows已有Tailscale全端口放行规则，因此新增 `Metis-Qwen21-ECS-Allow` 和 `Metis-Qwen21-ECS-Only-Block`，仅针对该本地地址/TCP8191，允许ECS IPv4并以互补地址范围阻断其他来源。所有防火墙profile启用，两条规则均已在ActiveStore核对生效。
 - 从线上实际app容器验证system_stats/queue/object_info：ComfyUI0.39.0、NVIDIA RTX4090、空队列、Qwen2.1 BF16 UNet存在。未提交生成任务，未修改渠道/价格/令牌；尚未执行其他tailnet设备的反向拒绝测试或整机重启恢复验收。
 - 回滚仅需删除上述指定端口的portproxy及两条具名规则；保留原ComfyUI、Tailscale和既有规则。应用代码没有变化，无需重新构建部署。
+
+
+## 2026-10-12 Playground 生图开发范围
+
+- 用户授权：复用现有能力开发 Playground 生图，页面与聊天及视频生成保持统一；测试后合并 develop、推送并部署线上。
+- 方案：在现有 Playground 增加图片页签，首期支持当前用户分组可访问的 Qwen-Image-2.1，单张 1024×1024、提示词与种子；复用异步任务提交、状态查询和图片制品，避免同步生图长连接。沿用页面模型分组选择器及 PromptInput，不新增依赖。
+- 验证范围：请求与参数边界、登录会话与分组权限、任务所有者隔离、重复提交阻止、终态停止轮询、错误重试、图片预览下载及聊天/视频页签回归；部署后通过线上登录页面验收。
+- 安全依据：OWASP ASVS 5.0.0、Authentication Cheat Sheet 与 Session Management Cheat Sheet。新增入口沿用现有 Authorization 登录会话，拒绝个人访问令牌；制品入口额外校验任务所有者，避免继承管理端跨用户读取权限。本次不改变登录凭据、会话生命周期或计费核心，不宣称全站 ASVS 合规。
+- 已核实的前置结果：线上 Qwen Images API 已成功生成并获取图片，任务 SUCCESS、image_count=1、实际 quota=0；当前部署版本 3b99d582e52ed0b2a02b3b82beeffaa75db5c14b，三容器 healthy。
+- 技能：Ponytail 最小改动；Matt Pocock codebase-design 与 tdd，按用户可见行为和 HTTP 接口测试；使用 Astra low 子 Agent 探索与实现。
+
+- 实现结果：新增 `/pg/tasks/:key` 登录会话提交/查询和所有者限定制品读取；前端仅展示当前分组可用 Qwen，种子0保留、非法输入阻止提交、状态/内容错误重试、图片下载、切页签保留任务。没有改数据库结构、插件或计费核心。
+- 最小复用说明：VideoComposer 绑定视频帧/音频/时长，无法直接用于图片；图片组件组合相同 PromptInput、ModelGroupSelector、ErrorState 与基础组件，沿用布局与主题。没有新增依赖。
+- 验证：`make test`（根、relaykit、tokenkit）、根 `GOWORK=off go vet ./...`、前端 `bun run test`（200文件2352项）、typecheck、lint、format:check、build 均通过；最终小改动另重跑图片及页签16项测试通过。lint仅保留仓库既有warning。
+- Astra low 独立审查发现 Enter 提交时公共输入组件原生reset导致内容丢失，已修复并补失败保留/再次提交回归；最终审查无剩余阻塞。新增认证入口遵循上述OWASP会话和授权控制，测试覆盖PAT/未登录拒绝、组权限与管理员跨所有者拒绝；未进行全站安全审计。

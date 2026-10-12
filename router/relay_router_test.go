@@ -101,6 +101,9 @@ func TestRelayRouterRegistersPlaygroundVideoRoutes(t *testing.T) {
 	for _, expected := range []string{
 		"GET /v1/video-reference-files/:file_id/content",
 		"HEAD /v1/video-reference-files/:file_id/content",
+		"POST /pg/tasks/:key",
+		"GET /pg/tasks/:key",
+		"GET /pg/tasks/:key/artifacts/:artifact_key/content",
 		"POST /pg/videos",
 		"GET /pg/videos/:task_id",
 		"GET /pg/videos/:task_id/content",
@@ -145,4 +148,18 @@ func setupRelayRouterTestDB(t *testing.T) {
 			require.NoError(t, os.Unsetenv("SQL_DSN"))
 		}
 	})
+}
+
+func TestPlaygroundImageRoutesRejectUnauthenticatedRequests(t *testing.T) {
+	engine := gin.New()
+	SetRelayRouter(engine)
+	for _, route := range []struct{ method, path string }{
+		{http.MethodPost, "/pg/tasks/qwen-image-21"},
+		{http.MethodGet, "/pg/tasks/task-1"},
+		{http.MethodGet, "/pg/tasks/task-1/artifacts/image/content"},
+	} {
+		response := httptest.NewRecorder()
+		engine.ServeHTTP(response, httptest.NewRequest(route.method, route.path, nil))
+		assert.Equal(t, http.StatusUnauthorized, response.Code)
+	}
 }

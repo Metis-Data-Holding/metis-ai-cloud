@@ -16,9 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, test, vi } from 'vitest'
+
+import { api } from '@/lib/api'
 
 import { Playground } from '..'
 
@@ -88,4 +91,47 @@ describe('Playground mode navigation', () => {
       'overflow-hidden'
     )
   })
+})
+
+test('retains the image prompt when returning from the chat tab', async () => {
+  const user = userEvent.setup()
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  const adapter = api.defaults.adapter
+  api.defaults.adapter = async (config) => ({
+    config,
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+    data: {
+      success: true,
+      data: config.url?.includes('self/groups')
+        ? { default: { desc: 'Default', ratio: 1 } }
+        : ['qwen-image-2.1'],
+    },
+  })
+  try {
+    render(
+      <QueryClientProvider client={client}>
+        <Playground />
+      </QueryClientProvider>
+    )
+    await user.click(screen.getByRole('tab', { name: 'Image generation' }))
+    await user.type(
+      screen.getByRole('textbox', { name: 'Prompt' }),
+      'Keep this image prompt'
+    )
+    await user.click(screen.getByRole('tab', { name: 'Chat' }))
+    expect(
+      screen.queryByRole('textbox', { name: 'Prompt' })
+    ).not.toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: 'Image generation' }))
+    expect(screen.getByRole('textbox', { name: 'Prompt' })).toHaveValue(
+      'Keep this image prompt'
+    )
+  } finally {
+    client.clear()
+    api.defaults.adapter = adapter
+  }
 })

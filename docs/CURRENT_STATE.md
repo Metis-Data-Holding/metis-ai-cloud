@@ -1,12 +1,15 @@
 # Metis AI Cloud 当前状态
 
-> 最后更新：2026-10-12（Qwen Images API 功能已从 develop 部署；4090 私网接入已验收，线上生图尚未验收）
+> 最后更新：2026-10-12（Playground 生图实现与本地验证完成，待 develop 发布及页面验收）
 > 当前 Milestone：Seedance 2.0 内部视频超分
 > 当前目标：内部超分代码已部署，继续进行 BytePlus VOD 真实联调和成本评估
 
 本文档是项目当前状态的单一快照，采用覆盖式维护。长期背景见 [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)，执行历史与重要决策分别见 [`../WORKLOG.md`](../WORKLOG.md) 和 [`DECISIONS.md`](DECISIONS.md)。
 
 ## 1. 当前摘要
+
+- Playground 生图（2026-10-12）：增加与聊天/视频同风格的图片页签，首期支持当前分组可用的 Qwen-Image-2.1，单张 1024×1024、提示词和种子。复用登录会话、异步任务与制品代理，支持状态轮询、失败重试、预览下载及切换页签保留任务；后端限定插件/模型并按所有者限制制品读取。根/relaykit/tokenkit 测试、根 vet、前端 200 文件/2352 测试、typecheck/lint/format/build 通过，独立审查无剩余阻塞。待 develop 发布和线上页面验收。
+- Qwen 线上 API 验收（2026-10-12）：内部渠道已创建，真实任务 SUCCESS、图片获取 HTTP 200、image_count=1、quota=0；模型仍仅限内部评估。下文早期未创建渠道/未验收表述为历史阶段记录。
 
 - 4090 私网接入（2026-10-12）：复用5090的Tailscale直连方式。4090新增仅绑定Tailscale IPv4的8191→回环8191转发，ComfyUI继续保持WSL回环监听；该端口专用Windows防火墙允许ECS来源，并显式阻断其他IPv4来源，既有Tailscale宽泛放行规则不再扩大该端口权限。已从ECS实际应用容器验证 `/system_stats`、`/queue` 和UNET模型枚举，识别RTX4090与Qwen BF16权重。无需Mac中转或应用重新部署；仍待创建内部渠道和线上真实生图验收。
 

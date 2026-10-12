@@ -75,8 +75,14 @@ func SetRelayRouter(router *gin.Engine) {
 	{
 		playgroundRouter.POST("/chat/completions", middleware.Distribute(), controller.Playground)
 
+		playgroundTaskRouter := playgroundRouter.Group("/tasks")
+		playgroundTaskRouter.Use(middleware.PlaygroundTaskAuth())
+		playgroundTaskRouter.POST("/:key", middleware.PlaygroundImageSubmitOnly(), middleware.ModelRequestRateLimit(), middleware.PrepareTaskPluginSubmit(), middleware.Distribute(), controller.RelayTask)
+		playgroundTaskRouter.GET("/:key", controller.GetTask)
+		playgroundTaskRouter.GET("/:key/artifacts/:artifact_key/content", middleware.PlaygroundTaskOwnerOnly(), controller.TaskArtifactContent)
+
 		playgroundVideoRouter := playgroundRouter.Group("/videos")
-		playgroundVideoRouter.Use(middleware.PlaygroundVideoAuth(), middleware.RewritePlaygroundVideoPath())
+		playgroundVideoRouter.Use(middleware.PlaygroundTaskAuth(), middleware.RewritePlaygroundVideoPath())
 		playgroundVideoRouter.POST("",
 			middleware.PinTaskPluginEndpoint(),
 			middleware.TaskPluginEndpointOnly(middleware.ModelRequestRateLimit()),
