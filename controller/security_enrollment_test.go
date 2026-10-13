@@ -41,21 +41,6 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-func reopenSecurityTestSQLite(t *testing.T, db *gorm.DB, path string) *gorm.DB {
-	t.Helper()
-	connection, err := db.DB()
-	require.NoError(t, err)
-	require.NoError(t, connection.Close())
-	// Match the production SQLite concurrency settings for security mutations.
-	// BEGIN IMMEDIATE serializes read-then-write transactions so a concurrent
-	// request observes the committed auth-version change instead of both
-	// requests failing with SQLITE_BUSY_SNAPSHOT.
-	dsn := path + "?_pragma=busy_timeout(30000)&_pragma=journal_mode(WAL)&_txlock=immediate"
-	db, err = gorm.Open(sqlite.Open(dsn), &gorm.Config{})
-	require.NoError(t, err)
-	return db
-}
-
 func setupSecurityEnrollmentTest(t *testing.T) (*model.User, service.AuthIdentity) {
 	t.Helper()
 	require.NoError(t, i18n.Init())
@@ -70,12 +55,18 @@ func setupSecurityEnrollmentTest(t *testing.T) (*model.User, service.AuthIdentit
 		dialect = "sqlite"
 	}
 	dsn := os.Getenv("TEST_" + strings.ToUpper(dialect) + "_DSN")
-	db, dbPath := newAuditTestDatabase(t, dialect, dsn)
-	logDB, logDBPath := newAuditTestDatabase(t, dialect, dsn)
+	var db *gorm.DB
 	if dialect == "sqlite" {
-		db = reopenSecurityTestSQLite(t, db, dbPath)
-		logDB = reopenSecurityTestSQLite(t, logDB, logDBPath)
+		// Match common.SQLitePath: take the writer lock before transaction reads.
+		// Deferred transactions can fail to upgrade their read lock when concurrent
+		// proof consumption overlaps account deletion or session revocation.
+		var err error
+		db, err = gorm.Open(sqlite.Open(t.TempDir()+"/security.db?_pragma=busy_timeout(30000)&_pragma=journal_mode(WAL)&_txlock=immediate"), &gorm.Config{})
+		require.NoError(t, err)
+	} else {
+		db, _ = newAuditTestDatabase(t, dialect, dsn)
 	}
+	logDB, _ := newAuditTestDatabase(t, dialect, dsn)
 	db.Logger = logger.Default.LogMode(logger.Silent)
 	logDB.Logger = logger.Default.LogMode(logger.Silent)
 	versionQuery := "SELECT VERSION()"
