@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -173,6 +174,9 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 	if _, err := a.buildSubmit(c, info); err != nil {
 		return service.TaskErrorWrapperLocal(err, "plugin_request_invalid", http.StatusBadRequest)
 	}
+	if err := a.validateMiniMaxH3ReferenceAudio(c); err != nil {
+		return service.TaskErrorWrapperLocal(err, "plugin_request_invalid", http.StatusBadRequest)
+	}
 	if err := service.ApplyVideoSuperResolution(c, a.plugin.Meta.Key, info.OriginModelName, info.UpstreamModelName, a.submit.Body); err != nil {
 		return service.TaskErrorWrapperLocal(err, "video_super_resolution_not_configured", http.StatusBadRequest)
 	}
@@ -185,6 +189,100 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 		}
 	}
 	return nil
+}
+
+func (a *TaskAdaptor) validateMiniMaxH3ReferenceAudio(c *gin.Context) error {
+	if a.plugin.Meta.Key != "minimax-h3" || c == nil || c.Request == nil || !strings.Contains(c.GetHeader("Content-Type"), "multipart/form-data") {
+		return nil
+	}
+	form, err := common.ParseMultipartFormReusable(c)
+	if err != nil {
+		return err
+	}
+	defer form.RemoveAll()
+
+	totalDuration := 0.0
+	for index := range 3 {
+		for _, header := range form.File["reference_audio_"+strconv.Itoa(index)] {
+			file, err := header.Open()
+			if err != nil {
+				return fmt.Errorf("reference audio is invalid: %w", err)
+			}
+			prefix := make([]byte, 12)
+			n, readErr := io.ReadFull(file, prefix)
+			if readErr != nil && !errors.Is(readErr, io.ErrUnexpectedEOF) {
+				file.Close()
+				return fmt.Errorf("reference audio is invalid: %w", readErr)
+			}
+			contentType, _, _ := mime.ParseMediaType(header.Header.Get("Content-Type"))
+			extension := ""
+			switch {
+			case n >= 12 && string(prefix[:4]) == "RIFF" && string(prefix[8:12]) == "WAVE" && (contentType == "audio/wav" || contentType == "audio/x-wav") && validWAVPayload(file, prefix):
+				extension = ".wav"
+			case n >= 3 && (string(prefix[:3]) == "ID3" || prefix[0] == 0xff && prefix[1]&0xe0 == 0xe0) && contentType == "audio/mpeg":
+				extension = ".mp3"
+			}
+			if extension == "" {
+				file.Close()
+				return fmt.Errorf("reference audio must be a valid MP3 or WAV file")
+			}
+			if _, err = file.Seek(0, io.SeekStart); err != nil {
+				file.Close()
+				return fmt.Errorf("reference audio is invalid: %w", err)
+			}
+			duration, durationErr := common.GetAudioDuration(c.Request.Context(), file, extension)
+			closeErr := file.Close()
+			if durationErr != nil {
+				return fmt.Errorf("reference audio must be a valid MP3 or WAV file: %w", durationErr)
+			}
+			if closeErr != nil {
+				return fmt.Errorf("reference audio is invalid: %w", closeErr)
+			}
+			if duration < 2 || duration > 15 {
+				return fmt.Errorf("reference audio must be between 2 and 15 seconds")
+			}
+			totalDuration += duration
+		}
+	}
+	if totalDuration > 15 {
+		return fmt.Errorf("reference audio must total no more than 15 seconds")
+	}
+	return nil
+}
+
+func validWAVPayload(file io.ReadSeeker, prefix []byte) bool {
+	const maxChunks = 1024
+
+	fileSize, err := file.Seek(0, io.SeekEnd)
+	if err != nil {
+		return false
+	}
+	riffEnd := int64(binary.LittleEndian.Uint32(prefix[4:8])) + 8
+	if riffEnd < 12 || riffEnd != fileSize {
+		return false
+	}
+	for chunks, offset := 0, int64(12); offset+8 <= riffEnd; chunks++ {
+		if chunks >= maxChunks {
+			return false
+		}
+		if _, err = file.Seek(offset, io.SeekStart); err != nil {
+			return false
+		}
+		header := make([]byte, 8)
+		if _, err = io.ReadFull(file, header); err != nil {
+			return false
+		}
+		size := int64(binary.LittleEndian.Uint32(header[4:]))
+		payloadEnd := offset + 8 + size
+		if payloadEnd > riffEnd {
+			return false
+		}
+		if string(header[:4]) == "data" {
+			return true
+		}
+		offset = payloadEnd + size%2
+	}
+	return false
 }
 
 func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInfo) map[string]float64 {

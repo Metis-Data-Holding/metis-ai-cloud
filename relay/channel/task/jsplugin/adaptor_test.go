@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -570,6 +572,44 @@ type multipartTestFile struct {
 	content     []byte
 }
 
+func referenceAudioWAV(seconds int) []byte {
+	const sampleRate = 8000
+	dataSize := seconds * sampleRate * 2
+	data := make([]byte, 44+dataSize)
+	copy(data, "RIFF")
+	binary.LittleEndian.PutUint32(data[4:], uint32(36+dataSize))
+	copy(data[8:], "WAVEfmt ")
+	binary.LittleEndian.PutUint32(data[16:], 16)
+	binary.LittleEndian.PutUint16(data[20:], 1)
+	binary.LittleEndian.PutUint16(data[22:], 1)
+	binary.LittleEndian.PutUint32(data[24:], sampleRate)
+	binary.LittleEndian.PutUint32(data[28:], sampleRate*2)
+	binary.LittleEndian.PutUint16(data[32:], 2)
+	binary.LittleEndian.PutUint16(data[34:], 16)
+	copy(data[36:], "data")
+	binary.LittleEndian.PutUint32(data[40:], uint32(dataSize))
+	return data
+}
+
+func referenceAudioWAVWithJunkChunks(seconds, count int) []byte {
+	base := referenceAudioWAV(seconds)
+	data := make([]byte, 0, len(base)+count*8)
+	data = append(data, base[:36]...)
+	for range count {
+		data = append(data, 'J', 'U', 'N', 'K', 0, 0, 0, 0)
+	}
+	data = append(data, base[36:]...)
+	binary.LittleEndian.PutUint32(data[4:], uint32(len(data)-8))
+	return data
+}
+
+func referenceAudioWAVWithUnclaimedPCM(seconds int) []byte {
+	data := referenceAudioWAV(seconds)
+	binary.LittleEndian.PutUint32(data[4:], 36)
+	binary.LittleEndian.PutUint32(data[40:], 0)
+	return data
+}
+
 func newMultipartFilesContext(t *testing.T, files []multipartTestFile) *gin.Context {
 	t.Helper()
 	var input bytes.Buffer
@@ -588,6 +628,67 @@ func newMultipartFilesContext(t *testing.T, files []multipartTestFile) *gin.Cont
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", bytes.NewReader(input.Bytes()))
 	c.Request.Header.Set("Content-Type", writer.FormDataContentType())
 	return c
+}
+
+func TestMiniMaxH3ReferenceAudioValidation(t *testing.T) {
+	source, err := plugins.Source("minimax-h3")
+	require.NoError(t, err)
+	plugin, err := pluginruntime.NewRegistry().RegisterFactory(source, pluginruntime.Options{Key: "minimax-h3"})
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name        string
+		files       []multipartTestFile
+		wantContain string
+	}{
+		{name: "valid", files: []multipartTestFile{{field: "reference_audio_0", filename: "voice.wav", contentType: "audio/wav", content: referenceAudioWAV(2)}}},
+		{name: "valid upper boundary", files: []multipartTestFile{{field: "reference_audio_0", filename: "voice.wav", contentType: "audio/wav", content: referenceAudioWAV(15)}}},
+		{name: "invalid content", files: []multipartTestFile{{field: "reference_audio_0", filename: "voice.wav", contentType: "audio/wav", content: []byte("not audio")}}, wantContain: "valid MP3 or WAV"},
+		{name: "truncated wav", files: []multipartTestFile{{field: "reference_audio_0", filename: "voice.wav", contentType: "audio/wav", content: referenceAudioWAV(2)[:44]}}, wantContain: "valid MP3 or WAV"},
+		{name: "pcm outside riff container", files: []multipartTestFile{{field: "reference_audio_0", filename: "voice.wav", contentType: "audio/wav", content: referenceAudioWAVWithUnclaimedPCM(2)}}, wantContain: "valid MP3 or WAV"},
+		{name: "too many wav chunks", files: []multipartTestFile{{field: "reference_audio_0", filename: "voice.wav", contentType: "audio/wav", content: referenceAudioWAVWithJunkChunks(2, 1024)}}, wantContain: "valid MP3 or WAV"},
+		{name: "mime mismatch", files: []multipartTestFile{{field: "reference_audio_0", filename: "voice.mp3", contentType: "audio/mpeg", content: referenceAudioWAV(2)}}, wantContain: "valid MP3 or WAV"},
+		{name: "too short", files: []multipartTestFile{{field: "reference_audio_0", filename: "voice.wav", contentType: "audio/wav", content: referenceAudioWAV(1)}}, wantContain: "between 2 and 15 seconds"},
+		{name: "too long", files: []multipartTestFile{{field: "reference_audio_0", filename: "voice.wav", contentType: "audio/wav", content: referenceAudioWAV(16)}}, wantContain: "between 2 and 15 seconds"},
+		{name: "total too long", files: []multipartTestFile{
+			{field: "reference_audio_0", filename: "first.wav", contentType: "audio/wav", content: referenceAudioWAV(8)},
+			{field: "reference_audio_1", filename: "second.wav", contentType: "audio/wav", content: referenceAudioWAV(8)},
+		}, wantContain: "total no more than 15 seconds"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			adaptor := New(plugin)
+			info := &relaycommon.RelayInfo{
+				OriginModelName: "minimax-h3-fl2va",
+				ChannelMeta: &relaycommon.ChannelMeta{
+					ChannelBaseUrl:    "http://127.0.0.1:8188",
+					UpstreamModelName: "minimax-h3-fl2va",
+				},
+				TaskRelayInfo: &relaycommon.TaskRelayInfo{PublicTaskID: "task-audio"},
+			}
+			adaptor.Init(info)
+			c := newMultipartFilesContext(t, tc.files)
+			request := map[string]any{"prompt": "follow the voice", "duration": 5, "resolution": "768p", "ratio": "16:9", "generate_audio": true}
+			for index := range tc.files {
+				field := "reference_audio_" + strconv.Itoa(index)
+				request[field] = map[string]any{"__fileRef": "request_file:" + field}
+			}
+			c.Set("task_request", request)
+
+			taskErr := adaptor.ValidateRequestAndSetAction(c, info)
+			if tc.wantContain == "" {
+				require.Nil(t, taskErr)
+				prepareRequests, err := adaptor.prepareRequests(info)
+				require.NoError(t, err)
+				require.Len(t, prepareRequests, 1)
+				_, err = buildDescriptorBody(c, prepareRequests[0])
+				require.NoError(t, err)
+				return
+			}
+			require.NotNil(t, taskErr)
+			assert.Equal(t, "plugin_request_invalid", taskErr.Code)
+			assert.Contains(t, taskErr.Message, tc.wantContain)
+		})
+	}
 }
 
 func TestTaskAdaptorDoesNotEmitInjectedMultipartDispositionHeaders(t *testing.T) {
