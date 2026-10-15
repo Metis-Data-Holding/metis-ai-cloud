@@ -171,7 +171,12 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 		}
 	}
 	if _, err := a.buildSubmit(c, info); err != nil {
-		return service.TaskErrorWrapperLocal(err, "plugin_request_invalid", http.StatusBadRequest)
+		// utils.fetch failures in the build hook name the host fetched: the
+		// channel base URL or one of the plugin's allowed hosts, which an
+		// installed plugin may point at private hosts.
+		taskErr := service.TaskErrorWrapper(err, "plugin_request_invalid", http.StatusBadRequest, append(common.UpstreamAddresses(c), a.plugin.Meta.AllowedHosts...)...)
+		taskErr.LocalError = true
+		return taskErr
 	}
 	if err := service.ApplyVideoSuperResolution(c, a.plugin.Meta.Key, info.OriginModelName, info.UpstreamModelName, a.submit.Body); err != nil {
 		return service.TaskErrorWrapperLocal(err, "video_super_resolution_not_configured", http.StatusBadRequest)
@@ -658,7 +663,7 @@ func (a *TaskAdaptor) ParseResponse(c *gin.Context, resp *http.Response, info *r
 		}
 	}
 	if err != nil {
-		failure := service.TaskErrorWrapper(err, "read_response_body_failed", http.StatusBadGateway)
+		failure := service.TaskErrorWrapper(err, "read_response_body_failed", http.StatusBadGateway, common.UpstreamAddresses(c)...)
 		failure.NoRetry = streaming
 		return nil, failure
 	}
@@ -673,7 +678,7 @@ func (a *TaskAdaptor) ParseResponse(c *gin.Context, resp *http.Response, info *r
 			resp.StatusCode,
 			time.Since(started).Milliseconds(),
 		)
-		return nil, service.TaskErrorWrapper(err, "plugin_submit_response_failed", http.StatusBadGateway)
+		return nil, service.TaskErrorWrapper(err, "plugin_submit_response_failed", http.StatusBadGateway, common.UpstreamAddresses(c)...)
 	}
 	if object, ok := value.(map[string]any); ok {
 		if _, forbidden := object["clientResponse"]; forbidden {
@@ -692,7 +697,7 @@ func (a *TaskAdaptor) ParseResponse(c *gin.Context, resp *http.Response, info *r
 			resp.StatusCode,
 			time.Since(started).Milliseconds(),
 		)
-		return nil, service.TaskErrorWrapper(err, "plugin_submit_response_invalid", http.StatusBadGateway)
+		return nil, service.TaskErrorWrapper(err, "plugin_submit_response_invalid", http.StatusBadGateway, common.UpstreamAddresses(c)...)
 	}
 	var taskData []byte
 	if parsed.TaskData != nil {
@@ -701,7 +706,7 @@ func (a *TaskAdaptor) ParseResponse(c *gin.Context, resp *http.Response, info *r
 			if err == nil {
 				err = fmt.Errorf("task data exceeds size limit")
 			}
-			return nil, service.TaskErrorWrapper(err, "plugin_submit_response_invalid", http.StatusBadGateway)
+			return nil, service.TaskErrorWrapper(err, "plugin_submit_response_invalid", http.StatusBadGateway, common.UpstreamAddresses(c)...)
 		}
 	}
 	pluginState, _ := encodeReturnedPluginState(value)
