@@ -1,6 +1,7 @@
 package common
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -37,11 +38,14 @@ func (info *RelayInfo) CountBillableToolCall(itemType string, functionName strin
 	if info == nil {
 		return
 	}
+	if itemType == dto.BuildInCallWebSearchCall && info.SuppressWebSearchBilling {
+		return
+	}
 	info.ensureBuiltInTools()
 
 	switch itemType {
 	case dto.BuildInCallWebSearchCall:
-		info.incrementBillableToolCall(resolveWebSearchToolName(info.ResponsesUsageInfo.BuiltInTools))
+		info.incrementBillableToolCall(cmp.Or(info.WebSearchBillingKey, resolveWebSearchToolName(info.ResponsesUsageInfo.BuiltInTools)))
 	case dto.BuildInCallFileSearchCall:
 		info.incrementBillableToolCall(dto.BuildInToolFileSearch)
 	case dto.BuildInCallFunctionCall, dto.BuildInCallToolUse:
