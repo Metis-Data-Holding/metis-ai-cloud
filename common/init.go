@@ -181,6 +181,15 @@ func positiveUserSessionEnv(name string, fallback int) int {
 	return value
 }
 
+func positiveDurationMinuteEnv(name string, fallback int) int {
+	value := positiveUserSessionEnv(name, fallback)
+	if int64(value) > math.MaxInt64/int64(time.Minute) {
+		SysError(LogText("%s is too large, using default value: %d", name, fallback))
+		return fallback
+	}
+	return value
+}
+
 func initConstantEnv() {
 	constant.StreamingTimeout = GetEnvOrDefault("STREAMING_TIMEOUT", 300)
 	constant.DifyDebug = GetEnvOrDefaultBool("DIFY_DEBUG", true)
@@ -198,7 +207,7 @@ func initConstantEnv() {
 	constant.TaskPluginEnabled = GetEnvOrDefaultBool("TASK_PLUGIN_ENABLED", true)
 	constant.AzureDefaultAPIVersion = GetEnvOrDefaultString("AZURE_DEFAULT_API_VERSION", "2025-04-01-preview")
 	constant.NotifyLimitCount = GetEnvOrDefault("NOTIFY_LIMIT_COUNT", 2)
-	constant.NotificationLimitDurationMinute = GetEnvOrDefault("NOTIFICATION_LIMIT_DURATION_MINUTE", 10)
+	constant.NotificationLimitDurationMinute = positiveDurationMinuteEnv("NOTIFICATION_LIMIT_DURATION_MINUTE", 10)
 	// GenerateDefaultToken 是否生成初始令牌，默认关闭。
 	constant.GenerateDefaultToken = GetEnvOrDefaultBool("GENERATE_DEFAULT_TOKEN", false)
 	// 是否启用错误日志

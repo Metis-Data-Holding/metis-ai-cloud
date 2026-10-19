@@ -1,10 +1,22 @@
 package common
 
 import (
+	"math"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestPositiveDurationMinuteEnvRejectsOverflow(t *testing.T) {
+	const name = "NOTIFICATION_LIMIT_DURATION_MINUTE"
+	t.Setenv(name, strconv.FormatInt(math.MaxInt64/int64(time.Minute)+1, 10))
+	assert.Equal(t, 10, positiveDurationMinuteEnv(name, 10))
+
+	t.Setenv(name, "60")
+	assert.Equal(t, 60, positiveDurationMinuteEnv(name, 10))
+}
 
 func TestInitUserSessionSettingsUsesPositiveFallbacksAndClampsWindow(t *testing.T) {
 	previousActiveLimit := UserSessionActiveLimit
