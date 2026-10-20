@@ -2,6 +2,16 @@
 
 本文档按日期记录项目已完成的关键工作。保持简洁，不记录完整执行过程、测试报告、Git 状态、当前 TODO 或 Secret。当前状态见 [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md)，重要决策见 `docs/DECISIONS.md`。
 
+## 2026-10-20
+
+### 同步 Resend 邮件与流式保活，修复协议错误出口
+
+- 合入 `upstream/main@32e587406` 的 Resend 邮件和 Claude 请求准备/重试保活更新，无文本冲突，保留 fork 的视频超分及设置校验。
+- Resend 失败日志仅保留固定文案与 HTTP 状态，避免第三方响应或 transport error 回显凭据、验证码和重置令牌；新增回归先复现泄漏再验证修复。适用依据为 OWASP ASVS 5.0.0 与 Authentication、Session Management、Logging Cheat Sheet 的敏感信息日志限制；未更改认证令牌生命周期或会话机制，不将本次局部验证表述为全面合规认证。
+- 流错误按客户端协议输出：Gemini 使用整数错误码，Responses 使用带连续序号的 `error` 事件，禁止混入 Chat 的 `[DONE]`。已发终态不追加兜底错误，正常 `error → response.failed` 仍完整透传；官方 OpenAI Go SDK 可解码新增错误出口。
+- main 候选通过 `make test`、前端 typecheck/test/lint/format/build（216 文件、2490 项测试）、`make build-web`，以及 root/relaykit/tokenkit 独立 build/vet。设置变化仅新增内存默认值和写入前业务校验，未改 schema、SQL、driver 或事务；本次未执行三数据库迁移矩阵。
+- 本条记录覆盖同步候选本地验证；develop 推送及 ECS 固定 SHA 发布以本轮自动化运行记录为准。未验证真实 Resend 邮件送达或 Provider、支付、认证业务端到端。
+
 ## 2026-10-11
 
 ### 保留 fork 视频能力并同步任务插件与性能指标上游变更
