@@ -95,13 +95,22 @@ func TestAuditLogSortIndexDatabaseMatrix(t *testing.T) {
 					}
 					index, ok := byName["idx_audit_time_event"]
 					require.True(t, ok, "migration must create the audit ordering index")
+					var columns []string
 					if dialect == "postgres" {
-						var definition string
-						require.NoError(t, db.Raw("SELECT indexdef FROM pg_indexes WHERE schemaname = current_schema() AND tablename = ? AND indexname = ?", "audit_sort_test_audit_logs", "idx_audit_time_event").Scan(&definition).Error)
-						assert.Contains(t, definition, "(created_at, event_id)")
+						// GORM's PostgreSQL GetIndexes does not preserve index key order.
+						require.NoError(t, db.Raw(`
+SELECT attribute.attname
+FROM pg_catalog.pg_index AS index_meta
+CROSS JOIN LATERAL unnest(index_meta.indkey) WITH ORDINALITY AS index_column(attnum, ordinal_position)
+JOIN pg_catalog.pg_attribute AS attribute
+  ON attribute.attrelid = index_meta.indrelid AND attribute.attnum = index_column.attnum
+WHERE index_meta.indexrelid = to_regclass(?)
+ORDER BY index_column.ordinal_position
+`, index.Name()).Scan(&columns).Error)
 					} else {
-						assert.Equal(t, []string{"created_at", "event_id"}, index.Columns())
+						columns = index.Columns()
 					}
+					assert.Equal(t, []string{"created_at", "event_id"}, columns)
 					for _, original := range originalIndexes {
 						preserved, ok := byName[original.Name()]
 						require.True(t, ok, "existing index %s must remain", original.Name())

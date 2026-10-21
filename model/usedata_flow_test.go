@@ -1,9 +1,11 @@
 package model
 
 import (
+	"net/http/httptest"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
@@ -139,40 +141,46 @@ func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {
 	CacheQuotaDataLock.Unlock()
 
 	LogQuotaData(QuotaDataLogParams{
-		UserID:    1,
-		Username:  "alice",
-		ModelName: "gpt-a",
-		CreatedAt: 3661,
-		UseGroup:  "vip",
-		TokenID:   11,
-		ChannelID: 1,
-		NodeName:  "node-a",
-		Quota:     100,
-		TokenUsed: 40,
+		UserID:              1,
+		Username:            "alice",
+		ModelName:           "gpt-a",
+		CreatedAt:           3661,
+		UseGroup:            "vip",
+		TokenID:             11,
+		ChannelID:           1,
+		NodeName:            "node-a",
+		Quota:               100,
+		TokenUsed:           40,
+		CacheReadTokens:     10,
+		CacheCreationTokens: 20,
 	})
 	LogQuotaData(QuotaDataLogParams{
-		UserID:    1,
-		Username:  "alice",
-		ModelName: "gpt-a",
-		CreatedAt: 3700,
-		UseGroup:  "vip",
-		TokenID:   11,
-		ChannelID: 1,
-		NodeName:  "node-a",
-		Quota:     50,
-		TokenUsed: 20,
+		UserID:              1,
+		Username:            "alice",
+		ModelName:           "gpt-a",
+		CreatedAt:           3700,
+		UseGroup:            "vip",
+		TokenID:             11,
+		ChannelID:           1,
+		NodeName:            "node-a",
+		Quota:               50,
+		TokenUsed:           20,
+		CacheReadTokens:     5,
+		CacheCreationTokens: 7,
 	})
 	LogQuotaData(QuotaDataLogParams{
-		UserID:    1,
-		Username:  "alice",
-		ModelName: "gpt-a",
-		CreatedAt: 3700,
-		UseGroup:  "default",
-		TokenID:   11,
-		ChannelID: 1,
-		NodeName:  "node-a",
-		Quota:     25,
-		TokenUsed: 10,
+		UserID:              1,
+		Username:            "alice",
+		ModelName:           "gpt-a",
+		CreatedAt:           3700,
+		UseGroup:            "default",
+		TokenID:             11,
+		ChannelID:           1,
+		NodeName:            "node-a",
+		Quota:               25,
+		TokenUsed:           10,
+		CacheReadTokens:     -1,
+		CacheCreationTokens: -1,
 	})
 
 	SaveQuotaDataCache()
@@ -188,6 +196,42 @@ func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {
 	require.Equal(t, 2, rows[0].Count)
 	require.Equal(t, 150, rows[0].Quota)
 	require.Equal(t, 60, rows[0].TokenUsed)
+	require.Equal(t, int64(15), rows[0].CacheReadTokens)
+	require.Equal(t, int64(27), rows[0].CacheCreationTokens)
 	require.Equal(t, "default", rows[1].UseGroup)
 	require.Equal(t, 25, rows[1].Quota)
+	require.Zero(t, rows[1].CacheReadTokens)
+	require.Zero(t, rows[1].CacheCreationTokens)
+}
+
+func TestRecordConsumeLogExportsCacheTokensToQuotaData(t *testing.T) {
+	truncateTables(t)
+	previousDataExportEnabled := common.DataExportEnabled
+	common.DataExportEnabled = true
+	t.Cleanup(func() { common.DataExportEnabled = previousDataExportEnabled })
+	CacheQuotaDataLock.Lock()
+	CacheQuotaData = make(map[string]*QuotaData)
+	CacheQuotaDataLock.Unlock()
+
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Set("username", "alice")
+	other := NewLogOther()
+	other.SetPublic("cache_tokens", 13)
+	other.SetPublic("cache_write_tokens", 21)
+	RecordConsumeLog(ctx, 1, RecordConsumeLogParams{
+		PromptTokens:     100,
+		CompletionTokens: 20,
+		ModelName:        "gpt-a",
+		Quota:            50,
+		Group:            "vip",
+		Other:            other,
+	})
+	SaveQuotaDataCache()
+
+	rows, err := GetQuotaDataByUserId(1, 0, common.GetTimestamp()+1)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.Equal(t, 120, rows[0].TokenUsed)
+	require.Equal(t, int64(13), rows[0].CacheReadTokens)
+	require.Equal(t, int64(21), rows[0].CacheCreationTokens)
 }

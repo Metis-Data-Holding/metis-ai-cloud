@@ -319,7 +319,13 @@ func updateBatchTasks(ctx context.Context, adaptor BatchTaskPollingAdaptor, chan
 	// The channel type tells plugin adaptors whether the upstream is another
 	// New API gateway, the same signal submission derives from the request.
 	info := &relaycommon.RelayInfo{}
-	info.ChannelMeta = &relaycommon.ChannelMeta{ChannelType: ch.Type, ChannelId: ch.Id, ChannelBaseUrl: baseURL, ChannelSetting: ch.GetSetting()}
+	info.ChannelMeta = &relaycommon.ChannelMeta{
+		ChannelType:     ch.Type,
+		ChannelId:       ch.Id,
+		ChannelBaseUrl:  baseURL,
+		ChannelSetting:  ch.GetSetting(),
+		HeadersOverride: ch.GetHeaderOverride(),
+	}
 	info.ApiKey = ch.Key
 	adaptor.Init(info)
 	resp, err := adaptor.FetchBatchTasks(baseURL, ch.Key, tasks, proxy)
@@ -491,10 +497,11 @@ func updateVideoTasks(ctx context.Context, platform constant.TaskPlatform, chann
 	}
 	info := &relaycommon.RelayInfo{}
 	info.ChannelMeta = &relaycommon.ChannelMeta{
-		ChannelType:    cacheGetChannel.Type,
-		ChannelId:      cacheGetChannel.Id,
-		ChannelBaseUrl: cacheGetChannel.GetBaseURL(),
-		ChannelSetting: cacheGetChannel.GetSetting(),
+		ChannelType:     cacheGetChannel.Type,
+		ChannelId:       cacheGetChannel.Id,
+		ChannelBaseUrl:  cacheGetChannel.GetBaseURL(),
+		ChannelSetting:  cacheGetChannel.GetSetting(),
+		HeadersOverride: cacheGetChannel.GetHeaderOverride(),
 	}
 	info.ApiKey = cacheGetChannel.Key
 	adaptor.Init(info)
@@ -592,20 +599,38 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		logger.LogDebug(ctx, "updateVideoSingleTask taskResult: %+v", taskResult)
 	}
 
-	parsedStatus := model.TaskStatus(taskResult.Status)
-	if parsedStatus == model.TaskStatusUnknown || parsedStatus == "" || !knownPollStatus(parsedStatus) {
-		return recordPollFailure(ctx, adaptor, task, snap.Status, pollClassUnrecognized, resp.StatusCode, unrecognizedPollDetail(taskResult.Reason, responseBody))
-	}
-	if classifyPollHTTP(resp.StatusCode) == pollClassOtherClient && isNonTerminalPollStatus(parsedStatus) {
-		return recordPollFailure(ctx, adaptor, task, snap.Status, pollClassUnrecognized, resp.StatusCode, unrecognizedPollDetail(taskResult.Reason, responseBody))
-	}
-
 	if isVideoSuperResolutionPipelineTask(task) {
 		if err := captureVideoSuperResolutionGeneration(ctx, adaptor, task, taskResult, snap.Status, baseURL, key, proxy); err != nil {
 			return recordPollFailure(ctx, adaptor, task, snap.Status, pollClassTransport, 0, "")
 		}
 		return nil
 	}
+	return applyVideoTaskResult(ctx, adaptor, task, taskResult, responseBody, resp.StatusCode, snap.Status)
+}
+
+// ApplyVideoTaskResult 应用已解析的轮询结果，避免已获取上游响应的调用方再次请求。
+func ApplyVideoTaskResult(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task, taskResult *relaycommon.TaskInfo, responseBody []byte, statusCode int) error {
+	return applyVideoTaskResult(ctx, adaptor, task, taskResult, responseBody, statusCode, task.Status)
+}
+
+func applyVideoTaskResult(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task, taskResult *relaycommon.TaskInfo, responseBody []byte, statusCode int, fromStatus model.TaskStatus) error {
+	snap := task.Snapshot()
+	switch classifyPollHTTP(statusCode) {
+	case pollClassNotFound:
+		return failTaskFromPoll(ctx, adaptor, task, fromStatus, "Upstream task not found")
+	case pollClassAuth:
+		return recordPollFailure(ctx, adaptor, task, fromStatus, pollClassAuth, statusCode, "")
+	case pollClassTransient:
+		return recordPollFailure(ctx, adaptor, task, fromStatus, pollClassTransient, statusCode, "")
+	}
+	parsedStatus := model.TaskStatus(taskResult.Status)
+	if parsedStatus == model.TaskStatusUnknown || parsedStatus == "" || !knownPollStatus(parsedStatus) {
+		return recordPollFailure(ctx, adaptor, task, fromStatus, pollClassUnrecognized, statusCode, unrecognizedPollDetail(taskResult.Reason, responseBody))
+	}
+	if classifyPollHTTP(statusCode) == pollClassOtherClient && isNonTerminalPollStatus(parsedStatus) {
+		return recordPollFailure(ctx, adaptor, task, fromStatus, pollClassUnrecognized, statusCode, unrecognizedPollDetail(taskResult.Reason, responseBody))
+	}
+
 	task.Data = redactVideoResponseBody(responseBody)
 	if len(taskResult.PluginState) > 0 {
 		task.PrivateData.PluginState = taskResult.PluginState
@@ -645,8 +670,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		}
 		shouldFinalizeBilling = true
 	case model.TaskStatusFailure:
-		logger.LogJson(ctx, common.LogText("Task %s failed", taskId), task)
-		task.Status = model.TaskStatusFailure
+		logger.LogJson(ctx, common.LogText("Task %s failed", task.TaskID), task)
 		task.Progress = taskcommon.ProgressComplete
 		if task.FinishTime == 0 {
 			task.FinishTime = now
@@ -661,8 +685,8 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	}
 
 	isDone := task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure
-	if isDone && snap.Status != task.Status {
-		won, err := task.UpdateWithStatus(snap.Status)
+	if isDone && fromStatus != task.Status {
+		won, err := task.UpdateWithStatus(fromStatus)
 		if err != nil {
 			logger.LogError(ctx, common.LogText("UpdateWithStatus failed for task %s: %s", task.TaskID, err.Error()))
 			shouldFinalizeBilling = false
@@ -671,11 +695,10 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 			shouldFinalizeBilling = false
 		}
 	} else if !snap.Equal(task.Snapshot()) {
-		if _, err := task.UpdateWithStatus(snap.Status); err != nil {
+		if _, err := task.UpdateWithStatus(fromStatus); err != nil {
 			logger.LogError(ctx, common.LogText("Failed to update task %s: %s", task.TaskID, err.Error()))
 		}
 	} else {
-		// No changes, skip update
 		logger.LogDebug(ctx, "No update needed for task %s", task.TaskID)
 	}
 
