@@ -57,6 +57,21 @@ type migrationDecimalV3 struct {
 	Price float64 `gorm:"type:decimal(12,6);not null;default:1.25"`
 }
 
+type quotaDataBeforeCacheTokens struct {
+	Id        int
+	UserID    int    `gorm:"index"`
+	Username  string `gorm:"index:idx_qdt_model_user_name,priority:2;size:64;default:''"`
+	ModelName string `gorm:"index:idx_qdt_model_user_name,priority:1;size:64;default:''"`
+	CreatedAt int64  `gorm:"bigint;index:idx_qdt_created_at,priority:2"`
+	UseGroup  string `gorm:"index;size:64;default:''"`
+	TokenID   int    `gorm:"index;default:0"`
+	ChannelID int    `gorm:"index;default:0"`
+	NodeName  string `gorm:"index;size:64;default:''"`
+	TokenUsed int    `gorm:"default:0"`
+	Count     int    `gorm:"default:0"`
+	Quota     int    `gorm:"default:0"`
+}
+
 func TestMigrationSchemaStability(t *testing.T) {
 	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
 		t.Run(dialect, func(t *testing.T) {
@@ -126,6 +141,58 @@ func TestMigrationSchemaStability(t *testing.T) {
 				} {
 					assert.Error(t, db.Table(table).Create(&duplicate).Error)
 				}
+			})
+
+			t.Run("quota_data_cache_token_columns", func(t *testing.T) {
+				const table = "migration_quota_data_test"
+				tableDB := db.Table(table).Session(&gorm.Session{})
+				t.Cleanup(func() { _ = db.Migrator().DropTable(table) })
+
+				require.NoError(t, tableDB.AutoMigrate(&quotaDataBeforeCacheTokens{}))
+				legacy := quotaDataBeforeCacheTokens{
+					Id: 1, UserID: 7, Username: "alice", ModelName: "gpt-a", CreatedAt: 3600,
+					UseGroup: "vip", TokenID: 11, ChannelID: 3, NodeName: "node-a",
+					TokenUsed: 120, Count: 2, Quota: 50,
+				}
+				require.NoError(t, tableDB.Create(&legacy).Error)
+				require.NoError(t, tableDB.AutoMigrate(&QuotaData{}))
+				assert.True(t, tableDB.Migrator().HasColumn(&QuotaData{}, "cache_read_tokens"))
+				assert.True(t, tableDB.Migrator().HasColumn(&QuotaData{}, "cache_creation_tokens"))
+
+				var upgraded QuotaData
+				require.NoError(t, tableDB.First(&upgraded, 1).Error)
+				assert.Equal(t, legacy.UserID, upgraded.UserID)
+				assert.Equal(t, legacy.TokenUsed, upgraded.TokenUsed)
+				assert.Zero(t, upgraded.CacheReadTokens)
+				assert.Zero(t, upgraded.CacheCreationTokens)
+
+				recorder.reset()
+				require.NoError(t, tableDB.AutoMigrate(&QuotaData{}))
+				assert.Empty(t, recorder.schemaMutations())
+				require.NoError(t, tableDB.Create(&QuotaData{
+					Id: 2, UserID: 7, Username: "alice", ModelName: "gpt-a", CreatedAt: 3600,
+					CacheReadTokens: 13, CacheCreationTokens: 21,
+				}).Error)
+				var totals struct {
+					CacheReadTokens     int64
+					CacheCreationTokens int64
+				}
+				require.NoError(t, tableDB.Select(
+					"sum(cache_read_tokens) as cache_read_tokens, sum(cache_creation_tokens) as cache_creation_tokens",
+				).Scan(&totals).Error)
+				assert.Equal(t, int64(13), totals.CacheReadTokens)
+				assert.Equal(t, int64(21), totals.CacheCreationTokens)
+
+				require.NoError(t, db.Migrator().DropTable(table))
+				require.NoError(t, tableDB.AutoMigrate(&QuotaData{}))
+				recorder.reset()
+				require.NoError(t, tableDB.AutoMigrate(&QuotaData{}))
+				assert.Empty(t, recorder.schemaMutations())
+				require.NoError(t, tableDB.Create(&QuotaData{Id: 1, UserID: 9, CreatedAt: 7200}).Error)
+				var fresh QuotaData
+				require.NoError(t, tableDB.First(&fresh, 1).Error)
+				assert.Zero(t, fresh.CacheReadTokens)
+				assert.Zero(t, fresh.CacheCreationTokens)
 			})
 
 			t.Run("unique_constraint_changes", func(t *testing.T) {

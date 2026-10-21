@@ -208,6 +208,29 @@ func seedPollingTask(t *testing.T, channelID int, publicID string, upstreamID st
 	return task
 }
 
+func TestApplyVideoTaskResultKeepsTransientFailurePending(t *testing.T) {
+	truncate(t)
+	task := seedPollingTask(t, 0, "task_transient_failure", "upstream_transient_failure")
+	task.Quota = 1000
+	require.NoError(t, model.DB.Model(task).Update("quota", task.Quota).Error)
+
+	err := ApplyVideoTaskResult(
+		context.Background(),
+		&taskPollingFetchAdaptor{},
+		task,
+		relaycommon.FailTaskInfo("rate limited"),
+		[]byte(`{"error":{"code":429,"message":"rate limited"}}`),
+		http.StatusTooManyRequests,
+	)
+	require.NoError(t, err)
+
+	var stored model.Task
+	require.NoError(t, model.DB.First(&stored, task.ID).Error)
+	assert.Equal(t, model.TaskStatus(model.TaskStatusInProgress), stored.Status)
+	assert.Equal(t, 1000, stored.Quota)
+	assert.Equal(t, 1, stored.PrivateData.PollFailures)
+}
+
 func TestUpdateVideoTasksDefaultSleepWaitsBetweenTasks(t *testing.T) {
 	truncate(t)
 
@@ -243,6 +266,7 @@ func TestPollingPassesExecutingChannelTypeToAdaptor(t *testing.T) {
 	const channelID = 112
 	baseURL := "https://gateway.example"
 	gateway := &model.Channel{Id: channelID, Type: constant.ChannelTypeNewAPI, Name: "gateway", Key: "sk-gateway", Status: common.ChannelStatusEnabled, BaseURL: &baseURL}
+	gateway.HeaderOverride = common.GetPointer(`{"X-API-Key":"{api_key}"}`)
 	gateway.SetOtherSettings(dto.ChannelOtherSettings{DisableTaskPollingSleep: true})
 	require.NoError(t, model.DB.Create(gateway).Error)
 	task := seedPollingTask(t, channelID, "task_gateway", "upstream_gateway")
@@ -259,6 +283,7 @@ func TestPollingPassesExecutingChannelTypeToAdaptor(t *testing.T) {
 	assert.Equal(t, constant.ChannelTypeNewAPI, meta.ChannelType, "the adaptor derives the upstream kind from the channel type")
 	assert.Equal(t, channelID, meta.ChannelId)
 	assert.Equal(t, baseURL, meta.ChannelBaseUrl)
+	assert.Equal(t, map[string]any{"X-API-Key": "{api_key}"}, meta.HeadersOverride)
 
 	batch := &batchPollingAdaptor{}
 	require.NoError(t, UpdateBatchTasks(context.Background(), batch, taskChannels, tasks))
@@ -267,6 +292,7 @@ func TestPollingPassesExecutingChannelTypeToAdaptor(t *testing.T) {
 	assert.Equal(t, constant.ChannelTypeNewAPI, meta.ChannelType)
 	assert.Equal(t, channelID, meta.ChannelId)
 	assert.Equal(t, baseURL, meta.ChannelBaseUrl)
+	assert.Equal(t, map[string]any{"X-API-Key": "{api_key}"}, meta.HeadersOverride)
 }
 
 func TestDispatchPlatformUpdateUsesFetchMode(t *testing.T) {
