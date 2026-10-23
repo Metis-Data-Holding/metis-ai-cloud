@@ -100,13 +100,22 @@ func Distribute() func(c *gin.Context) {
 		if pinned || shouldSelectChannel {
 			usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
 			var selectErr *service.ChannelSelectError
-			channel, _, selectErr = service.SelectChannelForRequest(c, modelRequest.Model, &service.RetryParam{
-				Ctx:         c,
-				ModelName:   modelRequest.Model,
-				TokenGroup:  usingGroup,
-				RequestPath: c.Request.URL.Path,
-				Retry:       common.GetPointer(0),
-			})
+			if value, exists := c.Get(contextKeyTaskPluginEndpointSelection); exists && !pinned {
+				if selected, ok := value.(taskPluginEndpointSelection); ok && selected.Model == modelRequest.Model && selected.Channel != nil && selected.Channel.Status == common.ChannelStatusEnabled {
+					if matches, _ := model.ChannelSatisfiesFilters(selected.Channel, modelRequest.Model, constraints.Filters); matches {
+						channel = selected.Channel
+					}
+				}
+			}
+			if channel == nil {
+				channel, _, selectErr = service.SelectChannelForRequest(c, modelRequest.Model, &service.RetryParam{
+					Ctx:         c,
+					ModelName:   modelRequest.Model,
+					TokenGroup:  usingGroup,
+					RequestPath: c.Request.URL.Path,
+					Retry:       common.GetPointer(0),
+				})
+			}
 			if selectErr != nil {
 				if selectErr.FilterKind == taskdto.FilterTaskPluginIdentity {
 					logTaskPluginChannelDecision(c, selectErr.Channel, modelRequest.Model, "channel_rejected", "identity_mismatch")
@@ -122,7 +131,12 @@ func Distribute() func(c *gin.Context) {
 			}
 		}
 		common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
-		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
+		if setupErr := SetupContextForSelectedChannel(c, channel, modelRequest.Model); setupErr != nil {
+			if _, prepared := c.Get(contextKeyTaskPluginEndpointPreparations); prepared {
+				abortWithOpenAiMessage(c, setupErr.StatusCode, setupErr.Error(), setupErr.GetErrorCode())
+				return
+			}
+		}
 		c.Next()
 		if channel != nil && c.Writer != nil && c.Writer.Status() < http.StatusBadRequest {
 			service.RecordChannelAffinity(c, channel.Id)
@@ -567,6 +581,27 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 		if value, exists := c.Get(jsplugin.ContextKeyPinnedEndpoint); exists {
 			if pinned, ok := value.(jsplugin.PinnedEndpoint); ok && candidate.Plugin != nil && candidate.Plugin != pinned.Plugin {
 				previousPlugin := pinned.Plugin.Meta.Key
+				if value, prepared := c.Get(contextKeyTaskPluginEndpointPreparations); prepared {
+					preparations, valid := value.(map[*jsplugin.LoadedPlugin]taskPluginEndpointPreparation)
+					preparation, found := preparations[candidate.Plugin]
+					if !valid || !found {
+						return types.NewError(errors.New("selected task plugin request was not prepared"), types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
+					}
+					common.SetContextKey(c, constant.ContextKeyOriginTasks, []*model.Task(nil))
+					applyTaskPluginEndpointPreparation(c, pinned, preparation)
+					if intentErr := applyOriginTaskIntent(c, preparation.resolved, candidate.Plugin.Meta); intentErr != nil {
+						return types.NewErrorWithStatusCode(errors.New(intentErr.Message), types.ErrorCode(intentErr.Code), intentErr.StatusCode, types.ErrOptionWithSkipRetry())
+					}
+					if value, exists := common.GetContextKey(c, constant.ContextKeyOriginTasks); exists {
+						if tasks, valid := value.([]*model.Task); valid {
+							for _, task := range tasks {
+								if task != nil && task.ChannelId != channel.Id {
+									return types.NewErrorWithStatusCode(errors.New("origin task channel does not match the selected plugin channel"), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+								}
+							}
+						}
+					}
+				}
 				pinned.Plugin = candidate.Plugin
 				pinned.Protocol = candidate.Protocol
 				pinned.Operation = candidate.Operation

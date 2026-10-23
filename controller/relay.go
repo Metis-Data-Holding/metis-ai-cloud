@@ -248,7 +248,6 @@ func writeRelayStreamError(c *gin.Context, format types.RelayFormat, apiError *t
 	}
 	status.MarkFailed(string(apiError.GetErrorCode()), string(apiError.GetErrorType()), apiError.StatusCode)
 	upstreamURLs := common.UpstreamAddresses(c)
-	helper.ExtendWriteDeadline(c)
 	switch format {
 	case types.RelayFormatClaude:
 		_ = helper.ClaudeData(c, dto.ClaudeResponse{Type: "error", Error: apiError.ToClaudeError(upstreamURLs...)})
@@ -579,6 +578,9 @@ func executeTaskSubmissionWith(
 				taskErr = service.TaskErrorWrapperLocal(channelErr.Err, "get_channel_failed", channelErr.StatusCode)
 				break
 			}
+		}
+		if taskErr = relay.ApplyChannelPin(c, relayInfo); taskErr != nil {
+			break
 		}
 		diagnostics.attempt(retryParam.GetRetry()+1, channel, relayInfo.LockedChannel != nil)
 
