@@ -33,17 +33,36 @@ import (
 
 const contextKeyTaskPluginEndpointModel = "task_plugin_endpoint_model_request"
 
+const contextKeyTaskPluginEndpointSelection = "task_plugin_endpoint_channel_selection"
+
+const contextKeyTaskPluginEndpointPreparations = "task_plugin_endpoint_preparations"
+
+type taskPluginEndpointSelection struct {
+	Generation *pluginruntime.RoutingGeneration
+	Channel    *model.Channel
+	Model      string
+}
+
+type taskPluginEndpointPreparation struct {
+	binding         pluginruntime.ProtocolBinding
+	protocolContext pluginruntime.ProtocolRequestContext
+	resolved        map[string]any
+	requestBodyText json.RawMessage
+}
+
 var errTaskPluginUnsupportedMediaType = errors.New("unsupported task plugin media type")
 
 const taskPluginInvalidRouteResult = "plugin returned an invalid route result"
 
+// Text fields have no limit of their own: like a JSON body, they are bounded
+// by the request body limit, so a JSON request sent as a multipart field may
+// be as large as the same request sent as the body.
 const (
-	maxTaskPluginFormFields      = 256
-	maxTaskPluginMultipartParts  = 256
-	maxTaskPluginFiles           = 32
-	maxTaskPluginFieldNameBytes  = 256
-	maxTaskPluginFieldValueBytes = 1 << 20
-	maxTaskPluginFilenameBytes   = 255
+	maxTaskPluginFormFields     = 256
+	maxTaskPluginMultipartParts = 256
+	maxTaskPluginFiles          = 32
+	maxTaskPluginFieldNameBytes = 256
+	maxTaskPluginFilenameBytes  = 255
 )
 
 // PrepareTaskPluginRoute resolves and executes the pinned declarative route.
@@ -93,7 +112,11 @@ func PrepareTaskPluginRoute() gin.HandlerFunc {
 		}
 		bodyObject, _ := requestContext.Body.(map[string]any)
 		bodyKind, _ := bodyObject["kind"].(string)
-		if pinned.Route.Type == pluginruntime.RouteTypeQuery && bodyKind != string(pluginruntime.BodyNone) || pinned.Route.Type != pluginruntime.RouteTypeQuery && bodyKind != string(pluginruntime.BodyJSON) {
+		// Submit routes hand JSON and multipart bodies to the decoder, which
+		// rejects the kinds its vendor format does not use. A route scoped to
+		// models reads the model from a JSON body, so it takes JSON only.
+		submitBody := bodyKind == string(pluginruntime.BodyJSON) || bodyKind == string(pluginruntime.BodyMultipart) && len(pinned.Route.Models) == 0
+		if pinned.Route.Type == pluginruntime.RouteTypeQuery && bodyKind != string(pluginruntime.BodyNone) || pinned.Route.Type != pluginruntime.RouteTypeQuery && !submitBody {
 			logger.LogWarn(
 				c,
 				common.LogText("task_plugin subsystem=route event=prepare_rejected generation=%d plugin=%q stage=request_decode reason=body_kind_mismatch body_kind=%q",
@@ -101,7 +124,10 @@ func PrepareTaskPluginRoute() gin.HandlerFunc {
 					pinned.Plugin.Meta.Key,
 					bodyKind),
 			)
-			detail := "this route requires a JSON body"
+			detail := "this route requires a JSON or multipart body"
+			if len(pinned.Route.Models) > 0 {
+				detail = "this route requires a JSON body"
+			}
 			if pinned.Route.Type == pluginruntime.RouteTypeQuery {
 				detail = "unsupported request body for this operation"
 			}
@@ -321,12 +347,93 @@ func PrepareTaskPluginRoute() gin.HandlerFunc {
 	}
 }
 
+// RouteTaskPluginEndpoint selects between ordinary relay and plugin channels
+// before a plugin can validate or rewrite the client's request. Plugin calls
+// still prepare their candidates and origin-task pins before final distribution.
+func RouteTaskPluginEndpoint() gin.HandlerFunc {
+	pinEndpoint := PinTaskPluginEndpoint()
+	return func(c *gin.Context) {
+		generation := pluginruntime.DefaultRegistry.Generation()
+		request, err := getModelFromRequest(c)
+		if err != nil || generation == nil {
+			pinEndpoint(c)
+			return
+		}
+		endpoint, found := lookupTaskPluginEndpoint(generation, c.Request.Method, c.Request.URL.Path, request.Model)
+		if !found {
+			c.Set(contextKeyTaskPluginEndpointModel, *request)
+			c.Next()
+			return
+		}
+
+		filter := dto.ChannelFilter{Kind: dto.FilterTaskPluginEndpoint}
+		for _, candidate := range endpoint.Candidates {
+			filter.TaskPluginKeys = append(filter.TaskPluginKeys, candidate.Plugin.Meta.Key)
+			filter.TaskPluginChannelTypes = append(filter.TaskPluginChannelTypes, candidate.Plugin.Meta.ChannelTypes...)
+		}
+		constraints := service.GetChannelConstraints(c)
+		filterIndex := len(constraints.Filters)
+		constraints.AddFilter(filter)
+		constraints.AddFilter(dto.ChannelFilter{Kind: dto.FilterRequestPath, RequestPath: c.Request.URL.Path})
+		group := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+		channel, _, selectErr := service.SelectChannelForRequest(c, request.Model, &service.RetryParam{
+			Ctx: c, ModelName: request.Model, TokenGroup: group,
+			RequestPath: c.Request.URL.Path, Retry: common.GetPointer(0),
+		})
+		c.Set(contextKeyTaskPluginEndpointSelection, taskPluginEndpointSelection{
+			Generation: generation, Channel: channel, Model: request.Model,
+		})
+		if selectErr != nil {
+			// Keep the existing plugin diagnostics and canonical-model lookup
+			// when selection cannot resolve the client's original spelling.
+			pinEndpoint(c)
+			return
+		}
+		filter.Kind = dto.FilterTaskPluginIdentity
+		filter.TaskPluginKey = endpoint.Plugin.Meta.Key
+		if pluginChannel, _ := model.ChannelSatisfiesFilters(channel, request.Model, []dto.ChannelFilter{filter}); !pluginChannel {
+			constraints.Filters[filterIndex].TaskPluginRelayOnly = true
+			c.Set(pluginruntime.ContextKeyRelayEndpoint, endpoint)
+			c.Set(contextKeyTaskPluginEndpointModel, *request)
+			c.Next()
+			return
+		}
+		pinEndpoint(c)
+	}
+}
+
+func lookupTaskPluginEndpoint(generation *pluginruntime.RoutingGeneration, method, path, modelName string) (pluginruntime.PinnedEndpoint, bool) {
+	lookupModel, pinModel, mappedModel := modelName, modelName, ""
+	if declared, ok := generation.CanonicalModel(modelName); ok {
+		lookupModel, pinModel = declared, declared
+	} else if target, ok := model.ResolveTaskModelAlias(generation, modelName); ok {
+		if target.Declared == "" {
+			return pluginruntime.PinnedEndpoint{}, false
+		}
+		lookupModel, pinModel, mappedModel = target.Declared, target.Alias, target.Declared
+	}
+	candidates := generation.LookupEndpointCandidates(method, path, lookupModel)
+	if len(candidates) == 0 {
+		return pluginruntime.PinnedEndpoint{}, false
+	}
+	binding := candidates[0]
+	return pluginruntime.PinnedEndpoint{
+		Generation: generation, Plugin: binding.Plugin, Protocol: binding.Protocol,
+		Operation: binding.Operation, Model: pinModel, MappedModel: mappedModel, Candidates: candidates,
+	}, true
+}
+
 // PinTaskPluginEndpoint decides shared-endpoint ownership without executing
 // plugin code. Invalid or unidentifiable ordinary requests deliberately fall
 // through so the existing endpoint remains responsible for its validation.
 func PinTaskPluginEndpoint() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		generation := pluginruntime.DefaultRegistry.Generation()
+		if value, exists := c.Get(contextKeyTaskPluginEndpointSelection); exists {
+			if selected, ok := value.(taskPluginEndpointSelection); ok {
+				generation = selected.Generation
+			}
+		}
 		if generation == nil {
 			c.Next()
 			return
@@ -347,47 +454,22 @@ func PinTaskPluginEndpoint() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		lookupModel := claimedModel
-		pinModel := claimedModel
-		mappedModel := ""
-		rewriteTo := ""
-		if declared, ok := generation.CanonicalModel(claimedModel); ok {
-			lookupModel = declared
-			pinModel = declared
-			if claimedModel != declared {
-				rewriteTo = declared
-			}
-		} else if target, ok := model.ResolveTaskModelAlias(generation, claimedModel); ok {
-			if target.Declared == "" {
-				c.Set(contextKeyTaskPluginEndpointModel, *modelRequest)
-				c.Next()
-				return
-			}
-			lookupModel = target.Declared
-			pinModel = target.Alias
-			mappedModel = target.Declared
-			if claimedModel != target.Alias {
-				rewriteTo = target.Alias
-			}
-		}
-		binding, found := generation.LookupEndpoint(c.Request.Method, c.Request.URL.Path, lookupModel)
-		if !found || binding.Plugin == nil {
+		pinnedEndpoint, found := lookupTaskPluginEndpoint(generation, c.Request.Method, c.Request.URL.Path, claimedModel)
+		if !found {
 			c.Set(contextKeyTaskPluginEndpointModel, *modelRequest)
 			c.Next()
 			return
 		}
-		if rewriteTo != "" {
-			if rewriteErr := rewriteTaskPluginJSONModel(c, rewriteTo); rewriteErr != nil {
+		if claimedModel != pinnedEndpoint.Model {
+			if rewriteErr := rewriteTaskPluginJSONModel(c, pinnedEndpoint.Model); rewriteErr != nil {
 				abortWithOpenAiMessage(c, http.StatusBadRequest, "Invalid task protocol request")
 				return
 			}
 		}
-		modelRequest.Model = pinModel
+		modelRequest.Model = pinnedEndpoint.Model
 		c.Set(contextKeyTaskPluginEndpointModel, *modelRequest)
-		candidates := generation.LookupEndpointCandidates(c.Request.Method, c.Request.URL.Path, lookupModel)
-		if len(candidates) == 0 {
-			candidates = []pluginruntime.ProtocolBinding{binding}
-		}
+		candidates := pinnedEndpoint.Candidates
+		binding := candidates[0]
 		if definition, known := pluginruntime.HostProtocol(binding.Protocol); known && len(definition.DefinedModes()) > 0 {
 			stream, background := jsonBodyBoolFlags(c)
 			required := make([]string, 0, 2)
@@ -426,15 +508,10 @@ func PinTaskPluginEndpoint() gin.HandlerFunc {
 		}
 
 		pin := pluginruntime.PinnedPlugin{Generation: generation, Plugin: binding.Plugin}
-		pinnedEndpoint := pluginruntime.PinnedEndpoint{
-			Generation:  generation,
-			Plugin:      binding.Plugin,
-			Protocol:    binding.Protocol,
-			Operation:   binding.Operation,
-			Model:       pinModel,
-			MappedModel: mappedModel,
-			Candidates:  candidates,
-		}
+		pinnedEndpoint.Plugin = binding.Plugin
+		pinnedEndpoint.Protocol = binding.Protocol
+		pinnedEndpoint.Operation = binding.Operation
+		pinnedEndpoint.Candidates = candidates
 		c.Set(pluginruntime.ContextKeyPinnedPlugin, pin)
 		c.Set(pluginruntime.ContextKeyPinnedEndpoint, pinnedEndpoint)
 		logger.LogDebug(
@@ -445,7 +522,7 @@ func PinTaskPluginEndpoint() gin.HandlerFunc {
 			binding.Plugin.Meta.Version,
 			binding.Operation.Methods[0],
 			binding.Protocol,
-			pinModel,
+			pinnedEndpoint.Model,
 		)
 		c.Next()
 	}
@@ -618,8 +695,7 @@ func PrepareTaskPluginEndpoint() gin.HandlerFunc {
 			candidates = []pluginruntime.ProtocolBinding{{Plugin: pinned.Plugin, Protocol: pinned.Protocol, Operation: pinned.Operation, Model: pinned.Model}}
 		}
 		accepted := make([]pluginruntime.ProtocolBinding, 0, len(candidates))
-		var resolved map[string]any
-		var resolvedBodyText json.RawMessage
+		preparations := make(map[*pluginruntime.LoadedPlugin]taskPluginEndpointPreparation, len(candidates))
 		var failures []string
 		rejectedPlugins := make(map[string][]string)
 		for _, candidate := range candidates {
@@ -654,6 +730,11 @@ func PrepareTaskPluginEndpoint() gin.HandlerFunc {
 			} else if model != pinned.Model || (pinned.MappedModel == "" && !slices.Contains(candidate.Plugin.Meta.Models, model)) {
 				reason = "resolved_model_not_owned"
 				detail = fmt.Sprintf("model %q is not served by this plugin", model)
+			} else if action, present := result["action"]; present {
+				if _, valid := action.(string); !valid {
+					reason = "invalid_action"
+					detail = taskPluginInvalidRouteResult
+				}
 			}
 			if detail != "" {
 				logger.LogWarn(c, common.LogText("task_plugin subsystem=endpoint event=prepare_rejected generation=%d plugin=%q stage=parse_request reason=%s err=%q elapsed_ms=%d",
@@ -665,10 +746,9 @@ func PrepareTaskPluginEndpoint() gin.HandlerFunc {
 				continue
 			}
 			accepted = append(accepted, candidate)
-			if resolved == nil {
-				resolved = result
-				resolvedBodyText = requestBodyText
-				protocolContext = candidateContext
+			preparations[candidate.Plugin] = taskPluginEndpointPreparation{
+				binding: candidate, protocolContext: candidateContext,
+				resolved: result, requestBodyText: requestBodyText,
 			}
 		}
 		if len(accepted) == 0 {
@@ -681,47 +761,26 @@ func PrepareTaskPluginEndpoint() gin.HandlerFunc {
 			return
 		}
 		pinned.Candidates = accepted
-		pinned.Plugin = accepted[0].Plugin
-		pinned.Protocol = accepted[0].Protocol
-		pinned.Operation = accepted[0].Operation
+		selected := preparations[accepted[0].Plugin]
+		pinned.Plugin = selected.binding.Plugin
+		pinned.Protocol = selected.binding.Protocol
+		pinned.Operation = selected.binding.Operation
 		c.Set(pluginruntime.ContextKeyPinnedEndpoint, pinned)
-		c.Set(pluginruntime.ContextKeyPinnedPlugin, pluginruntime.PinnedPlugin{Generation: pinned.Generation, Plugin: pinned.Plugin})
-		c.Set(pluginruntime.ContextKeyProtocolRequest, protocolContext)
-		resolvedModel := pinned.Model
-
-		action := ""
-		if resolvedAction, present := resolved["action"]; present {
-			action, ok = resolvedAction.(string)
-			if !ok {
-				logger.LogWarn(
-					c,
-					common.LogText("task_plugin subsystem=endpoint event=prepare_rejected generation=%d plugin=%q stage=parse_request reason=invalid_action",
-						pinned.Generation.Number,
-						pinned.Plugin.Meta.Key),
-				)
-				abortWithOpenAiMessage(c, http.StatusBadRequest, taskPluginInvalidRouteResult)
-				return
+		if value, exists := c.Get(contextKeyTaskPluginEndpointSelection); exists {
+			if selection, valid := value.(taskPluginEndpointSelection); valid && selection.Channel != nil {
+				if candidate, matched := pinnedEndpointCandidateForChannel(c, selection.Channel, pinned.Plugin.Meta.Key); matched {
+					selected = preparations[candidate.Plugin]
+				}
 			}
 		}
-		_, bodyReplaced := resolved["requestBody"]
-		if normalizedBody, present := resolved["requestBody"]; present {
-			requestContext.RequestBody = normalizedBody
-		}
-		c.Set(pluginruntime.ContextKeyRouteRequest, requestContext)
-		c.Set("task_request", requestContext.RequestBody)
-		if resolvedBodyText != nil {
-			c.Set(pluginruntime.ContextKeyRequestBodyText, resolvedBodyText)
-		}
-		c.Set("resolved_task_model", resolvedModel)
-		c.Set("expected_task_plugin_key", pinned.Plugin.Meta.Key)
-		c.Set("task_plugin_key", pinned.Plugin.Meta.Key)
-		c.Set("platform", pinned.Plugin.Meta.Key)
+		pinned.Plugin = selected.binding.Plugin
+		pinned.Protocol = selected.binding.Protocol
+		pinned.Operation = selected.binding.Operation
+		c.Set(contextKeyTaskPluginEndpointPreparations, preparations)
+		applyTaskPluginEndpointPreparation(c, pinned, selected)
 		service.AppendTaskPluginIdentityFilter(c, pinned.Plugin.Meta.Key)
 		c.Set("relay_mode", relayconstant.RelayModeVideoSubmit)
-		if strings.TrimSpace(action) != "" {
-			c.Set("task_action", action)
-		}
-		if intentErr := applyOriginTaskIntent(c, resolved, pinned.Plugin.Meta); intentErr != nil {
+		if intentErr := applyOriginTaskIntent(c, selected.resolved, pinned.Plugin.Meta); intentErr != nil {
 			logger.LogWarn(
 				c,
 				common.LogText("task_plugin subsystem=endpoint event=prepare_rejected generation=%d plugin=%q stage=origin_task reason=%s",
@@ -732,6 +791,7 @@ func PrepareTaskPluginEndpoint() gin.HandlerFunc {
 			abortWithOpenAiMessage(c, intentErr.StatusCode, intentErr.Message, types.ErrorCode(intentErr.Code))
 			return
 		}
+		_, bodyReplaced := selected.resolved["requestBody"]
 		logger.LogDebug(
 			c,
 			"task_plugin subsystem=endpoint event=prepared generation=%d plugin=%q protocol=%q claimed_model=%q resolved_model=%q action_present=%t stream=%t request_body_replaced=%t elapsed_ms=%d",
@@ -739,14 +799,36 @@ func PrepareTaskPluginEndpoint() gin.HandlerFunc {
 			pinned.Plugin.Meta.Key,
 			pinned.Protocol,
 			pinned.Model,
-			resolvedModel,
-			action != "",
+			pinned.Model,
+			c.GetString("task_action") != "",
 			stream,
 			bodyReplaced,
 			time.Since(hookStarted).Milliseconds(),
 		)
 		c.Next()
 	}
+}
+
+func applyTaskPluginEndpointPreparation(c *gin.Context, pinned pluginruntime.PinnedEndpoint, preparation taskPluginEndpointPreparation) {
+	pinned.Plugin = preparation.binding.Plugin
+	pinned.Protocol = preparation.binding.Protocol
+	pinned.Operation = preparation.binding.Operation
+	requestContext := preparation.protocolContext.RouteRequestContext
+	if normalizedBody, present := preparation.resolved["requestBody"]; present {
+		requestContext.RequestBody = normalizedBody
+	}
+	action, _ := preparation.resolved["action"].(string)
+	c.Set(pluginruntime.ContextKeyPinnedEndpoint, pinned)
+	c.Set(pluginruntime.ContextKeyPinnedPlugin, pluginruntime.PinnedPlugin{Generation: pinned.Generation, Plugin: pinned.Plugin})
+	c.Set(pluginruntime.ContextKeyProtocolRequest, preparation.protocolContext)
+	c.Set(pluginruntime.ContextKeyRouteRequest, requestContext)
+	c.Set("task_request", requestContext.RequestBody)
+	c.Set(pluginruntime.ContextKeyRequestBodyText, preparation.requestBodyText)
+	c.Set("resolved_task_model", pinned.Model)
+	c.Set("expected_task_plugin_key", pinned.Plugin.Meta.Key)
+	c.Set("task_plugin_key", pinned.Plugin.Meta.Key)
+	c.Set("platform", pinned.Plugin.Meta.Key)
+	c.Set("task_action", action)
 }
 
 func buildTaskPluginRouteRequest(c *gin.Context) (pluginruntime.RouteRequestContext, error) {
@@ -888,13 +970,10 @@ func buildTaskPluginRouteRequest(c *gin.Context) (pluginruntime.RouteRequestCont
 					part.Close()
 					return requestContext, fmt.Errorf("request body exceeds %d fields", maxTaskPluginFormFields)
 				}
-				value, readErr := io.ReadAll(io.LimitReader(part, maxTaskPluginFieldValueBytes+1))
+				value, readErr := io.ReadAll(part)
 				part.Close()
 				if readErr != nil {
 					return requestContext, readErr
-				}
-				if len(value) > maxTaskPluginFieldValueBytes {
-					return requestContext, fmt.Errorf("request field %q exceeds %d bytes", name, maxTaskPluginFieldValueBytes)
 				}
 				if !utf8.Valid(value) {
 					return requestContext, fmt.Errorf("request field %q must be valid UTF-8", name)
@@ -990,9 +1069,6 @@ func validateTaskPluginFields(fields url.Values) error {
 			}
 			if !utf8.ValidString(value) {
 				return fmt.Errorf("request field %q must be valid UTF-8", name)
-			}
-			if len(value) > maxTaskPluginFieldValueBytes {
-				return fmt.Errorf("request field %q exceeds %d bytes", name, maxTaskPluginFieldValueBytes)
 			}
 		}
 	}

@@ -51,7 +51,7 @@ describe('Advanced Custom pass-through compatibility', () => {
     expect(validateAdvancedCustomConfig(config)).toBeNull()
   })
 
-  test('migrates legacy channel pass-through to supported routes on save', () => {
+  test('preserves channel-level pass-through without rewriting route settings', () => {
     const channel = channelSchema.parse({
       id: 1,
       name: 'Legacy Advanced Custom channel',
@@ -97,9 +97,9 @@ describe('Advanced Custom pass-through compatibility', () => {
     const savedSettings = JSON.parse(payload.settings || '{}')
     const routes = savedSettings.advanced_custom.advanced_routes
 
-    expect(savedSetting.pass_through_body_enabled).toBe(false)
-    expect(routes[0].pass_through_body_enabled).toBe(true)
-    expect(routes[1].pass_through_body_enabled).toBe(true)
+    expect(savedSetting.pass_through_body_enabled).toBe(true)
+    expect(routes[0].pass_through_body_enabled).toBeUndefined()
+    expect(routes[1].pass_through_body_enabled).toBeUndefined()
     expect(routes[2].pass_through_body_enabled).toBeUndefined()
     expect(routes[3].pass_through_body_enabled).toBeUndefined()
   })

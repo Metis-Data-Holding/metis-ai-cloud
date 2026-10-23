@@ -534,25 +534,6 @@ export function isAdvancedCustomPassThroughAllowed(
   return converter === 'none' || converter === 'jina_rerank_to_sglang'
 }
 
-export function migrateLegacyAdvancedCustomPassThrough(
-  config: AdvancedCustomConfig
-): AdvancedCustomConfig {
-  const normalized = normalizeAdvancedCustomConfig(config)
-  return {
-    advanced_routes: (normalized.advanced_routes || []).map((route) => {
-      const incomingPath = route.incoming_path?.trim() || ''
-      const converter = route.converter || 'none'
-      if (
-        isAdvancedCustomManagementPath(incomingPath) ||
-        !isAdvancedCustomPassThroughAllowed(converter)
-      ) {
-        return route
-      }
-      return { ...route, pass_through_body_enabled: true }
-    }),
-  }
-}
-
 export function getAdvancedCustomConverterOptions(
   incomingPath: string
 ): typeof ADVANCED_CUSTOM_CONVERTER_OPTIONS {

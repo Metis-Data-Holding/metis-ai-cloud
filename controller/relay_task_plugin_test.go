@@ -235,6 +235,38 @@ func TestExecuteTaskSubmissionPersistsPinnedPluginProvenance(t *testing.T) {
 	assert.Equal(t, "upstream-private", stored.PrivateData.UpstreamTaskID)
 }
 
+func TestExecuteTaskSubmissionRefreshesPluginOriginTasksBeforeAttempt(t *testing.T) {
+	events := make([]string, 0, 3)
+	database := setupTaskSubmissionDatabase(t, true, &events)
+	require.NoError(t, database.AutoMigrate(&model.Channel{}))
+	previousMemoryCache := common.MemoryCacheEnabled
+	common.MemoryCacheEnabled = false
+	t.Cleanup(func() { common.MemoryCacheEnabled = previousMemoryCache })
+	channel := model.Channel{Name: "origin provider", Type: constant.ChannelTypeTaskPlugin, Status: common.ChannelStatusEnabled}
+	require.NoError(t, database.Create(&channel).Error)
+	origin := &model.Task{TaskID: "origin-beta", ChannelId: channel.Id, Action: "remix", Status: model.TaskStatusSuccess}
+	c := taskSubmissionTestContext()
+	common.SetContextKey(c, constant.ContextKeyOriginTasks, []*model.Task{origin})
+	service.GetChannelConstraints(c).AddPin(dto.ChannelPin{ChannelId: channel.Id, Source: dto.PinSourceOriginTask, Rank: dto.PinRankOriginTask, RetryMode: dto.PinRetrySameChannel})
+	common.SetContextKey(c, constant.ContextKeyChannelId, channel.Id)
+	common.SetContextKey(c, constant.ContextKeyChannelType, channel.Type)
+	common.SetContextKey(c, constant.ContextKeyChannelName, channel.Name)
+	info := taskSubmissionRelayInfo(&taskSubmissionTestBilling{events: &events})
+	info.ChannelMeta = nil
+	info.LockedChannel = nil
+
+	outcome, taskErr := executeTaskSubmissionWith(c, info, func(_ *gin.Context, current *relaycommon.RelayInfo) (*relay.TaskSubmitResult, *dto.TaskError) {
+		require.Len(t, current.OriginTasks, 1)
+		assert.Equal(t, "origin-beta", current.OriginTasks[0].TaskID)
+		require.NotNil(t, current.LockedChannel)
+		assert.Equal(t, channel.Id, current.LockedChannel.(*model.Channel).Id)
+		return nil, &dto.TaskError{Code: "stop_after_assertions", Message: "stop", StatusCode: http.StatusBadRequest, LocalError: true, NoRetry: true}
+	})
+
+	assert.Nil(t, outcome)
+	require.NotNil(t, taskErr)
+}
+
 // A submit route declaring retainResult: false persists the task row for
 // billing but never writes the upstream snapshot for an immediate terminal
 // result, while the in-memory task still carries it for the presenter. An
