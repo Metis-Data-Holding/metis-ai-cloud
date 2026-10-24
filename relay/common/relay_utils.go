@@ -75,6 +75,9 @@ func isSensitiveURLQueryKey(key string) bool {
 		"api-key",
 		"apikey",
 		"x-api-key",
+		"x-goog-api-key",
+		"subscription-key",
+		"ocp-apim-subscription-key",
 		"access_token",
 		"refresh_token",
 		"id_token",
@@ -95,7 +98,8 @@ func isSensitiveURLQueryKey(key string) bool {
 	}
 	return strings.Contains(normalized, "token") ||
 		strings.Contains(normalized, "secret") ||
-		strings.Contains(normalized, "signature")
+		strings.Contains(normalized, "signature") ||
+		strings.Contains(normalized, "credential")
 }
 
 func GetAPIVersion(c *gin.Context) string {
