@@ -30,7 +30,7 @@ func TestSanitizeURLForLogMasksSensitiveQueryValues(t *testing.T) {
 }
 
 func TestSanitizeURLForLogMasksAWSAndSecretLikeQueryKeys(t *testing.T) {
-	rawURL := "https://example.test/path?X-Amz-Credential=credential&X-Amz-Signature=signature&session_token=session&client_secret=secret&model=gpt-test"
+	rawURL := "https://example.test/path?X-Amz-Credential=credential&X-Amz-Signature=signature&session_token=session&client_secret=secret&x-goog-api-key=google&subscription-key=azure&vendor_credential=vendor&model=gpt-test"
 
 	got := SanitizeURLForLog(rawURL)
 
@@ -38,6 +38,9 @@ func TestSanitizeURLForLogMasksAWSAndSecretLikeQueryKeys(t *testing.T) {
 	assert.NotContains(t, got, "X-Amz-Signature=signature")
 	assert.NotContains(t, got, "session_token=session")
 	assert.NotContains(t, got, "client_secret=secret")
+	assert.NotContains(t, got, "x-goog-api-key=google")
+	assert.NotContains(t, got, "subscription-key=azure")
+	assert.NotContains(t, got, "vendor_credential=vendor")
 	parsedURL, err := url.Parse(got)
 	require.NoError(t, err)
 	query := parsedURL.Query()
@@ -45,6 +48,9 @@ func TestSanitizeURLForLogMasksAWSAndSecretLikeQueryKeys(t *testing.T) {
 	assert.Equal(t, "***masked***", query.Get("X-Amz-Signature"))
 	assert.Equal(t, "***masked***", query.Get("session_token"))
 	assert.Equal(t, "***masked***", query.Get("client_secret"))
+	assert.Equal(t, "***masked***", query.Get("x-goog-api-key"))
+	assert.Equal(t, "***masked***", query.Get("subscription-key"))
+	assert.Equal(t, "***masked***", query.Get("vendor_credential"))
 	assert.Equal(t, "gpt-test", query.Get("model"))
 }
 
