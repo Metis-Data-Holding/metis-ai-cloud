@@ -47,6 +47,18 @@ func TestNewOpenAIChatBillingUsageRequiresTokenContent(t *testing.T) {
 	assert.Equal(t, BillingUsageSourceOAIChat, billingUsage.Source)
 	assert.Equal(t, BillingUsageSemanticOpenAI, billingUsage.Semantic)
 	assert.Equal(t, 1, billingUsage.OpenAIUsage.PromptTokens)
+
+	promptDetailsOnly := NewOpenAIChatBillingUsage(&Usage{
+		PromptTokensDetails: InputTokenDetails{CacheCreationInputTokens: 2},
+	})
+	require.NotNil(t, promptDetailsOnly)
+	assert.Equal(t, 2, promptDetailsOnly.OpenAIUsage.PromptTokensDetails.CacheCreationInputTokens)
+
+	inputDetailsOnly := NewOpenAIResponsesBillingUsage(&Usage{
+		InputTokensDetails: &InputTokenDetails{CacheCreationInputTokens: 3},
+	})
+	require.NotNil(t, inputDetailsOnly)
+	assert.Equal(t, 3, inputDetailsOnly.OpenAIUsage.InputTokensDetails.CacheCreationInputTokens)
 }
 
 func TestImageCacheDetailsSurviveUsageSnapshots(t *testing.T) {
