@@ -361,7 +361,7 @@
     "Added once per request. Set to 0 for usage-only billing.": "Ajoutés une fois par requête. Saisissez 0 pour facturer uniquement l’usage.",
     "Added successfully": "Ajouté avec succès",
     "Added to the usage cost. Set to 0 for no additional charge.": "Montant ajouté au coût d’usage. Saisissez 0 pour ne rien ajouter.",
-    "Additional charge": "Débit supplémentaire",
+    "Additional charge": "Supplément",
     "Additional Conditions": "Conditions supplémentaires",
     "Additional information": "Informations supplémentaires",
     "Additional Information": "Informations supplémentaires",
@@ -7527,6 +7527,19 @@
     "Set selected prices": "Ajuster les prix sélectionnés",
     "Show models with matching prices": "Afficher les modèles aux prix identiques",
     "The adjusted price is outside the supported range.": "Le prix ajusté dépasse la plage autorisée.",
-    "This expression cannot be adjusted automatically. Keep the source price or edit it manually.": "Cette expression ne peut pas être ajustée automatiquement. Conservez le prix source ou modifiez-la manuellement."
+    "This expression cannot be adjusted automatically. Keep the source price or edit it manually.": "Cette expression ne peut pas être ajustée automatiquement. Conservez le prix source ou modifiez-la manuellement.",
+    "Address format": "Format d’adresse",
+    "And {{count}} more models": "Et {{count}} autres modèles",
+    "Legacy addresses ({{count}})": "Anciennes adresses ({{count}})",
+    "No price set": "Aucun prix défini",
+    "Only served at the /{{key}} address": "Disponible uniquement sous /{{key}}",
+    "Plugin enabled": "Plugin activé",
+    "Price needs attention": "Prix à vérifier",
+    "Price status": "État du prix",
+    "Prices of these models need attention:": "Les prix de ces modèles sont à vérifier :",
+    "The plugin no longer offers this model": "Le plugin ne propose plus ce modèle",
+    "The price uses usage the plugin no longer provides": "Le prix utilise un usage que le plugin ne fournit plus",
+    "Vendor path": "Chemin du fournisseur",
+    "{{name}}: {{reason}}": "{{name}} : {{reason}}"
   }
 }

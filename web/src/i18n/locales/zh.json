@@ -361,7 +361,7 @@
     "Added once per request. Set to 0 for usage-only billing.": "每次请求额外收取一次；不收固定费用时填 0。",
     "Added successfully": "新增成功",
     "Added to the usage cost. Set to 0 for no additional charge.": "在用量费用基础上加收的金额，不加收时填 0。",
-    "Additional charge": "补扣",
+    "Additional charge": "加收费用",
     "Additional Conditions": "附加条件",
     "Additional information": "附加信息",
     "Additional Information": "附加信息",
@@ -7527,6 +7527,19 @@
     "Set selected prices": "批量设置已选价格",
     "Show models with matching prices": "显示价格相同的模型",
     "The adjusted price is outside the supported range.": "换算后的价格超出支持范围。",
-    "This expression cannot be adjusted automatically. Keep the source price or edit it manually.": "此表达式无法自动换算，请保持来源价格或手动编辑。"
+    "This expression cannot be adjusted automatically. Keep the source price or edit it manually.": "此表达式无法自动换算，请保持来源价格或手动编辑。",
+    "Address format": "地址形式",
+    "And {{count}} more models": "另外还有 {{count}} 个模型",
+    "Legacy addresses ({{count}})": "旧地址（{{count}}）",
+    "No price set": "还没设置价格",
+    "Only served at the /{{key}} address": "仅在 /{{key}} 下可用",
+    "Plugin enabled": "插件已启用",
+    "Price needs attention": "价格待处理",
+    "Price status": "价格状态",
+    "Prices of these models need attention:": "以下模型的价格需要处理：",
+    "The plugin no longer offers this model": "插件已不再提供这个模型",
+    "The price uses usage the plugin no longer provides": "价格用到了插件不再提供的用量",
+    "Vendor path": "厂商路径",
+    "{{name}}: {{reason}}": "{{name}}：{{reason}}"
   }
 }

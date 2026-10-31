@@ -361,7 +361,7 @@
     "Added once per request. Set to 0 for usage-only billing.": "Cộng một lần cho mỗi yêu cầu. Nhập 0 để chỉ tính phí theo mức sử dụng.",
     "Added successfully": "Thêm thành công",
     "Added to the usage cost. Set to 0 for no additional charge.": "Khoản cộng thêm vào chi phí sử dụng. Nhập 0 nếu không thu thêm.",
-    "Additional charge": "Khấu trừ bổ sung",
+    "Additional charge": "Phí bổ sung",
     "Additional Conditions": "Điều kiện bổ sung",
     "Additional information": "Thông tin bổ sung",
     "Additional Information": "Thông tin bổ sung",
@@ -7527,6 +7527,19 @@
     "Set selected prices": "Đặt giá đã chọn",
     "Show models with matching prices": "Hiển thị mô hình có giá trùng khớp",
     "The adjusted price is outside the supported range.": "Giá sau quy đổi nằm ngoài phạm vi hỗ trợ.",
-    "This expression cannot be adjusted automatically. Keep the source price or edit it manually.": "Không thể tự động quy đổi biểu thức này. Hãy giữ giá nguồn hoặc chỉnh sửa thủ công."
+    "This expression cannot be adjusted automatically. Keep the source price or edit it manually.": "Không thể tự động quy đổi biểu thức này. Hãy giữ giá nguồn hoặc chỉnh sửa thủ công.",
+    "Address format": "Định dạng địa chỉ",
+    "And {{count}} more models": "Và {{count}} mô hình khác",
+    "Legacy addresses ({{count}})": "Địa chỉ cũ ({{count}})",
+    "No price set": "Chưa đặt giá",
+    "Only served at the /{{key}} address": "Chỉ khả dụng dưới /{{key}}",
+    "Plugin enabled": "Đã bật plugin",
+    "Price needs attention": "Giá cần xử lý",
+    "Price status": "Trạng thái giá",
+    "Prices of these models need attention:": "Giá của các mô hình sau cần xử lý:",
+    "The plugin no longer offers this model": "Plugin không còn cung cấp mô hình này",
+    "The price uses usage the plugin no longer provides": "Giá dùng mức sử dụng mà plugin không còn cung cấp",
+    "Vendor path": "Đường dẫn nhà cung cấp",
+    "{{name}}: {{reason}}": "{{name}}: {{reason}}"
   }
 }

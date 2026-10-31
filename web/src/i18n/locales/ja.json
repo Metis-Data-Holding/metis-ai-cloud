@@ -361,7 +361,7 @@
     "Added once per request. Set to 0 for usage-only billing.": "リクエストごとに1回加算します。従量課金のみの場合は0を入力してください。",
     "Added successfully": "追加に成功しました",
     "Added to the usage cost. Set to 0 for no additional charge.": "使用量に応じた料金に加算する金額です。加算しない場合は0を入力してください。",
-    "Additional charge": "追加請求",
+    "Additional charge": "追加料金",
     "Additional Conditions": "追加条件",
     "Additional information": "追加情報",
     "Additional Information": "追加情報",
@@ -7527,6 +7527,19 @@
     "Set selected prices": "選択した価格を一括設定",
     "Show models with matching prices": "価格が同じモデルを表示",
     "The adjusted price is outside the supported range.": "換算後の価格が対応範囲を超えています。",
-    "This expression cannot be adjusted automatically. Keep the source price or edit it manually.": "この式は自動換算できません。取得元の価格を維持するか、手動で編集してください。"
+    "This expression cannot be adjusted automatically. Keep the source price or edit it manually.": "この式は自動換算できません。取得元の価格を維持するか、手動で編集してください。",
+    "Address format": "アドレスの形式",
+    "And {{count}} more models": "ほか {{count}} 個のモデル",
+    "Legacy addresses ({{count}})": "旧アドレス（{{count}}）",
+    "No price set": "価格が未設定です",
+    "Only served at the /{{key}} address": "/{{key}} の下でのみ利用できます",
+    "Plugin enabled": "プラグインを有効にしました",
+    "Price needs attention": "価格の対応が必要",
+    "Price status": "価格の状態",
+    "Prices of these models need attention:": "次のモデルの価格を確認してください：",
+    "The plugin no longer offers this model": "プラグインはこのモデルを提供しなくなりました",
+    "The price uses usage the plugin no longer provides": "価格が、プラグインで提供されなくなった使用量を使っています",
+    "Vendor path": "ベンダーのパス",
+    "{{name}}: {{reason}}": "{{name}}：{{reason}}"
   }
 }

@@ -7527,6 +7527,19 @@
     "Set selected prices": "Set selected prices",
     "Show models with matching prices": "Show models with matching prices",
     "The adjusted price is outside the supported range.": "The adjusted price is outside the supported range.",
-    "This expression cannot be adjusted automatically. Keep the source price or edit it manually.": "This expression cannot be adjusted automatically. Keep the source price or edit it manually."
+    "This expression cannot be adjusted automatically. Keep the source price or edit it manually.": "This expression cannot be adjusted automatically. Keep the source price or edit it manually.",
+    "Address format": "Address format",
+    "And {{count}} more models": "And {{count}} more models",
+    "Legacy addresses ({{count}})": "Legacy addresses ({{count}})",
+    "No price set": "No price set",
+    "Only served at the /{{key}} address": "Only served at the /{{key}} address",
+    "Plugin enabled": "Plugin enabled",
+    "Price needs attention": "Price needs attention",
+    "Price status": "Price status",
+    "Prices of these models need attention:": "Prices of these models need attention:",
+    "The plugin no longer offers this model": "The plugin no longer offers this model",
+    "The price uses usage the plugin no longer provides": "The price uses usage the plugin no longer provides",
+    "Vendor path": "Vendor path",
+    "{{name}}: {{reason}}": "{{name}}: {{reason}}"
   }
 }

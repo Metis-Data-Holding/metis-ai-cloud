@@ -361,7 +361,7 @@
     "Added once per request. Set to 0 for usage-only billing.": "Добавляется один раз за запрос. Укажите 0 для оплаты только за использование.",
     "Added successfully": "Успешно добавлено",
     "Added to the usage cost. Set to 0 for no additional charge.": "Сумма сверх стоимости использования. Укажите 0, если доплата не нужна.",
-    "Additional charge": "Дополнительное списание",
+    "Additional charge": "Доплата",
     "Additional Conditions": "Дополнительные условия",
     "Additional information": "Дополнительная информация",
     "Additional Information": "Дополнительная информация",
@@ -7527,6 +7527,19 @@
     "Set selected prices": "Настроить выбранные цены",
     "Show models with matching prices": "Показать модели с совпадающими ценами",
     "The adjusted price is outside the supported range.": "Цена после пересчёта выходит за допустимые пределы.",
-    "This expression cannot be adjusted automatically. Keep the source price or edit it manually.": "Это выражение нельзя пересчитать автоматически. Сохраните исходную цену или отредактируйте его вручную."
+    "This expression cannot be adjusted automatically. Keep the source price or edit it manually.": "Это выражение нельзя пересчитать автоматически. Сохраните исходную цену или отредактируйте его вручную.",
+    "Address format": "Формат адреса",
+    "And {{count}} more models": "И ещё моделей: {{count}}",
+    "Legacy addresses ({{count}})": "Старые адреса ({{count}})",
+    "No price set": "Цена не задана",
+    "Only served at the /{{key}} address": "Доступно только по адресу /{{key}}",
+    "Plugin enabled": "Плагин включён",
+    "Price needs attention": "Цена требует внимания",
+    "Price status": "Статус цены",
+    "Prices of these models need attention:": "Цены этих моделей требуют внимания:",
+    "The plugin no longer offers this model": "Плагин больше не предоставляет эту модель",
+    "The price uses usage the plugin no longer provides": "Цена использует данные об использовании, которые плагин больше не передаёт",
+    "Vendor path": "Путь поставщика",
+    "{{name}}: {{reason}}": "{{name}}: {{reason}}"
   }
 }
