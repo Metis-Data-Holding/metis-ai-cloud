@@ -113,6 +113,11 @@ type TaskContentRequest struct {
 	Body                  []byte
 	Credentialless        bool
 	TrustedProviderOrigin bool
+	// ContentPath, when set, locates the artifact's bytes as a base64 string
+	// in the JSON reply instead of the reply being the artifact; MimeType is
+	// then its media type.
+	ContentPath []any
+	MimeType    string
 }
 
 type TaskContentRequestProvider interface {

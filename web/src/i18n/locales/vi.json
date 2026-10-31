@@ -341,7 +341,7 @@
     "Additional Information": "Thông tin bổ sung",
     "Additional Limit": "Hạn mức bổ sung",
     "Additional Limits": "Các hạn mức bổ sung",
-    "Additional charge": "Khấu trừ bổ sung",
+    "Additional charge": "Phí bổ sung",
     "Additional information": "Thông tin bổ sung",
     "Additional metered capability": "Tính năng tính phí theo mức dùng bổ sung",
     "Additional request domains": "Miền truy cập bổ sung",
@@ -7495,6 +7495,19 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 Công ty của bạn. Mọi quyền được bảo lưu.",
     "、": ", ",
     "，": ", ",
-    "，and ": " và "
+    "，and ": " và ",
+    "Address format": "Định dạng địa chỉ",
+    "And {{count}} more models": "Và {{count}} mô hình khác",
+    "Legacy addresses ({{count}})": "Địa chỉ cũ ({{count}})",
+    "No price set": "Chưa đặt giá",
+    "Only served at the /{{key}} address": "Chỉ khả dụng dưới /{{key}}",
+    "Plugin enabled": "Đã bật plugin",
+    "Price needs attention": "Giá cần xử lý",
+    "Price status": "Trạng thái giá",
+    "Prices of these models need attention:": "Giá của các mô hình sau cần xử lý:",
+    "The plugin no longer offers this model": "Plugin không còn cung cấp mô hình này",
+    "The price uses usage the plugin no longer provides": "Giá dùng mức sử dụng mà plugin không còn cung cấp",
+    "Vendor path": "Đường dẫn nhà cung cấp",
+    "{{name}}: {{reason}}": "{{name}}: {{reason}}"
   }
 }

@@ -341,7 +341,7 @@
     "Additional Information": "Дополнительная информация",
     "Additional Limit": "Доп. лимит",
     "Additional Limits": "Дополнительные лимиты",
-    "Additional charge": "Дополнительное списание",
+    "Additional charge": "Доплата",
     "Additional information": "Дополнительная информация",
     "Additional metered capability": "Дополнительная зарезервированная ёмкость (metered)",
     "Additional request domains": "Дополнительные домены",
@@ -7495,6 +7495,19 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 Ваша Компания. Все права защищены.",
     "、": ", ",
     "，": ", ",
-    "，and ": " и "
+    "，and ": " и ",
+    "Address format": "Формат адреса",
+    "And {{count}} more models": "И ещё моделей: {{count}}",
+    "Legacy addresses ({{count}})": "Старые адреса ({{count}})",
+    "No price set": "Цена не задана",
+    "Only served at the /{{key}} address": "Доступно только по адресу /{{key}}",
+    "Plugin enabled": "Плагин включён",
+    "Price needs attention": "Цена требует внимания",
+    "Price status": "Статус цены",
+    "Prices of these models need attention:": "Цены этих моделей требуют внимания:",
+    "The plugin no longer offers this model": "Плагин больше не предоставляет эту модель",
+    "The price uses usage the plugin no longer provides": "Цена использует данные об использовании, которые плагин больше не передаёт",
+    "Vendor path": "Путь поставщика",
+    "{{name}}: {{reason}}": "{{name}}: {{reason}}"
   }
 }

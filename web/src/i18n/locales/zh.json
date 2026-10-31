@@ -341,7 +341,7 @@
     "Additional Information": "附加信息",
     "Additional Limit": "附加额度",
     "Additional Limits": "附加额度",
-    "Additional charge": "补扣",
+    "Additional charge": "加收费用",
     "Additional information": "附加信息",
     "Additional metered capability": "附加计费能力",
     "Additional request domains": "额外访问域名",
@@ -7495,6 +7495,19 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 您的公司。保留所有权利。",
     "、": "、",
     "，": "，",
-    "，and ": "，并"
+    "，and ": "，并",
+    "Address format": "地址形式",
+    "And {{count}} more models": "另外还有 {{count}} 个模型",
+    "Legacy addresses ({{count}})": "旧地址（{{count}}）",
+    "No price set": "还没设置价格",
+    "Only served at the /{{key}} address": "仅在 /{{key}} 下可用",
+    "Plugin enabled": "插件已启用",
+    "Price needs attention": "价格待处理",
+    "Price status": "价格状态",
+    "Prices of these models need attention:": "以下模型的价格需要处理：",
+    "The plugin no longer offers this model": "插件已不再提供这个模型",
+    "The price uses usage the plugin no longer provides": "价格用到了插件不再提供的用量",
+    "Vendor path": "厂商路径",
+    "{{name}}: {{reason}}": "{{name}}：{{reason}}"
   }
 }

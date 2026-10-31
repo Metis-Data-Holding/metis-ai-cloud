@@ -341,7 +341,7 @@
     "Additional Information": "追加情報",
     "Additional Limit": "追加上限",
     "Additional Limits": "追加上限",
-    "Additional charge": "追加請求",
+    "Additional charge": "追加料金",
     "Additional information": "追加情報",
     "Additional metered capability": "追加の従量制機能",
     "Additional request domains": "追加のアクセス先ドメイン",
@@ -7495,6 +7495,19 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 Your Company. 全著作権所有。",
     "、": "、",
     "，": "、",
-    "，and ": "、"
+    "，and ": "、",
+    "Address format": "アドレスの形式",
+    "And {{count}} more models": "ほか {{count}} 個のモデル",
+    "Legacy addresses ({{count}})": "旧アドレス（{{count}}）",
+    "No price set": "価格が未設定です",
+    "Only served at the /{{key}} address": "/{{key}} の下でのみ利用できます",
+    "Plugin enabled": "プラグインを有効にしました",
+    "Price needs attention": "価格の対応が必要",
+    "Price status": "価格の状態",
+    "Prices of these models need attention:": "次のモデルの価格を確認してください：",
+    "The plugin no longer offers this model": "プラグインはこのモデルを提供しなくなりました",
+    "The price uses usage the plugin no longer provides": "価格が、プラグインで提供されなくなった使用量を使っています",
+    "Vendor path": "ベンダーのパス",
+    "{{name}}: {{reason}}": "{{name}}：{{reason}}"
   }
 }
