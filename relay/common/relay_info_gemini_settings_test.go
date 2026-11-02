@@ -1,11 +1,13 @@
 package common
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRelayInfoConvOptionsUsesNormalizedGeminiSafetySettings(t *testing.T) {
@@ -53,6 +55,62 @@ func TestRelayInfoConvOptionsGeminiJSONSchemaSupport(t *testing.T) {
 			info := &RelayInfo{ChannelMeta: &ChannelMeta{ChannelType: tt.channelType}}
 
 			assert.Equal(t, tt.want, info.ConvOptions().Gemini.SupportsJSONSchemaModel(tt.model))
+		})
+	}
+}
+
+// Vertex AI rejects functionResponse.id. Only the ids are removed; inline data
+// and every other member keep their bytes and order.
+func TestRemoveGeminiDisabledFieldsDropsFunctionResponseIDs(t *testing.T) {
+	settings := model_setting.GetGeminiSettings()
+	original := settings.RemoveFunctionResponseIdEnabled
+	t.Cleanup(func() {
+		settings.RemoveFunctionResponseIdEnabled = original
+	})
+	settings.RemoveFunctionResponseIdEnabled = true
+
+	input := `{"contents":[{"role":"user","parts":[{"inlineData":{"mimeType":"image/png","data":"iVBO<&>"}}]},{"role":"user","parts":[{"text":"x"},{"functionResponse":{"id":"call_1","name":"f","response":{"n":1.50}}},{"function_response":{"name":"g","id":"call_2"}}]}],"generationConfig":{"temperature":0.0}}`
+
+	out, err := RemoveGeminiDisabledFields([]byte(input))
+
+	require.NoError(t, err)
+	assert.Equal(t, `{"contents":[{"role":"user","parts":[{"inlineData":{"mimeType":"image/png","data":"iVBO<&>"}}]},{"role":"user","parts":[{"text":"x"},{"functionResponse":{"name":"f","response":{"n":1.50}}},{"function_response":{"name":"g"}}]}],"generationConfig":{"temperature":0.0}}`, string(out))
+}
+
+func TestRemoveGeminiDisabledFieldsRejectsDuplicateContents(t *testing.T) {
+	settings := model_setting.GetGeminiSettings()
+	original := settings.RemoveFunctionResponseIdEnabled
+	t.Cleanup(func() {
+		settings.RemoveFunctionResponseIdEnabled = original
+	})
+	settings.RemoveFunctionResponseIdEnabled = true
+
+	input := `{"contents":[{"parts":[{"text":"first"}]}],"contents":[{"parts":[{"functionResponse":{"id":"call_1","name":"f"}}]}]}`
+
+	_, err := RemoveGeminiDisabledFields([]byte(input))
+
+	require.ErrorContains(t, err, `duplicate JSON field "contents"`)
+}
+
+func TestRemoveGeminiDisabledFieldsRejectsDuplicateAncestors(t *testing.T) {
+	settings := model_setting.GetGeminiSettings()
+	original := settings.RemoveFunctionResponseIdEnabled
+	t.Cleanup(func() {
+		settings.RemoveFunctionResponseIdEnabled = original
+	})
+	settings.RemoveFunctionResponseIdEnabled = true
+
+	for _, tc := range []struct {
+		name  string
+		input string
+		field string
+	}{
+		{"parts", `{"contents":[{"parts":[{"text":"safe"}],"parts":[{"functionResponse":{"id":"call_1","name":"f"}}]}]}`, "parts"},
+		{"functionResponse", `{"contents":[{"parts":[{"functionResponse":{"name":"safe"},"functionResponse":{"id":"call_1","name":"f"}}]}]}`, "functionResponse"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := RemoveGeminiDisabledFields([]byte(tc.input))
+			require.ErrorContains(t, err, fmt.Sprintf(`duplicate JSON field %q`, tc.field))
 		})
 	}
 }
