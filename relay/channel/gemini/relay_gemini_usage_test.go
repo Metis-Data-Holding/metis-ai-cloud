@@ -494,6 +494,33 @@ func TestGeminiChatHandlerMissingUsageMetadataBuildsEstimatedBillingUsage(t *tes
 	require.True(t, common.GetContextKeyBool(c, constant.ContextKeyLocalCountTokens))
 }
 
+func TestGeminiEmbeddingHandlerUsesUpstreamUsageMetadata(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/embeddings", nil)
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "gemini-embedding-001",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "gemini-embedding-001",
+		},
+	}
+	info.SetEstimatePromptTokens(99)
+	body := []byte(`{"embeddings":[{"values":[0.1]}],"usageMetadata":{"promptTokenCount":10,"promptTokenDetails":[{"modality":"TEXT","tokenCount":7},{"modality":"AUDIO","tokenCount":3}]}}`)
+	resp := &http.Response{Body: io.NopCloser(bytes.NewReader(body))}
+
+	usage, newAPIError := GeminiEmbeddingHandler(c, info, resp)
+	require.Nil(t, newAPIError)
+	require.NotNil(t, usage)
+	assert.Equal(t, 10, usage.PromptTokens)
+	assert.Equal(t, 7, usage.PromptTokensDetails.TextTokens)
+	assert.Equal(t, 3, usage.PromptTokensDetails.AudioTokens)
+	require.NotNil(t, usage.BillingUsage)
+	require.NotNil(t, usage.BillingUsage.GeminiUsageMetadata)
+	assert.Equal(t, 10, usage.BillingUsage.GeminiUsageMetadata.PromptTokenCount)
+}
+
 func TestGeminiStreamHandlerPromptOnlyUsageMetadataEstimatesCompletionTokens(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

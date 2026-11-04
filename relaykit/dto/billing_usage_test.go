@@ -142,6 +142,47 @@ func TestCanonicalGeminiUsageClampsNegativeCompletionFromTotalMinusPrompt(t *tes
 	assert.Equal(t, 0, usage.CompletionTokens)
 }
 
+func TestGeminiUsageMetadataDropsInvalidBreakdownKeepsValidModalities(t *testing.T) {
+	billing := NewGeminiChatBillingUsage(&GeminiUsageMetadata{
+		PromptTokenCount:     10,
+		CandidatesTokenCount: 4,
+		PromptTokensDetails: []GeminiPromptTokensDetails{
+			{Modality: "TEXT", TokenCount: 7},
+			{Modality: "AUDIO", TokenCount: 3},
+		},
+		CandidatesTokensDetails: []GeminiPromptTokensDetails{
+			{Modality: "TEXT", TokenCount: 4},
+		},
+	})
+
+	require.NotNil(t, billing)
+	canonical, ok := billing.CanonicalUsage()
+	require.True(t, ok)
+	assert.Equal(t, 7, canonical.PromptTokensDetails.TextTokens)
+	assert.Equal(t, 3, canonical.PromptTokensDetails.AudioTokens)
+	assert.Equal(t, 4, canonical.CompletionTokenDetails.TextTokens)
+
+	invalid := NewGeminiChatBillingUsage(&GeminiUsageMetadata{
+		PromptTokenCount:     10,
+		CandidatesTokenCount: 4,
+		PromptTokensDetails: []GeminiPromptTokensDetails{
+			{Modality: "TEXT", TokenCount: 12},
+			{Modality: "AUDIO", TokenCount: -1},
+		},
+		CandidatesTokensDetails: []GeminiPromptTokensDetails{
+			{Modality: "AUDIO", TokenCount: 5},
+		},
+	})
+	require.NotNil(t, invalid)
+	canonical, ok = invalid.CanonicalUsage()
+	require.True(t, ok)
+	assert.Equal(t, 10, canonical.PromptTokensDetails.TextTokens)
+	assert.Zero(t, canonical.PromptTokensDetails.AudioTokens)
+	assert.Zero(t, canonical.CompletionTokenDetails.AudioTokens)
+	assert.Empty(t, invalid.GeminiUsageMetadata.PromptTokensDetails)
+	assert.Empty(t, invalid.GeminiUsageMetadata.CandidatesTokensDetails)
+}
+
 func TestCanonicalOpenAIUsageMergesInputTokenDetailsFieldwise(t *testing.T) {
 	usage, ok := NewOpenAIResponsesBillingUsage(&Usage{
 		PromptTokens: 10,

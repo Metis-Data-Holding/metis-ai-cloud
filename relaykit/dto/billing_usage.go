@@ -210,15 +210,15 @@ func CloneBillingUsageWithEstimatedCompletion(usage *BillingUsage, completionTok
 }
 
 func newGeminiChatBillingUsage(metadata *GeminiUsageMetadata, estimated bool) *BillingUsage {
-	if !HasGeminiUsageMetadataTokens(metadata) {
+	normalized := NormalizeGeminiUsageMetadata(metadata)
+	if !HasGeminiUsageMetadataTokens(&normalized) {
 		return nil
 	}
-	usageMetadata := cloneGeminiUsageMetadata(*metadata)
 	return &BillingUsage{
 		Source:              BillingUsageSourceGeminiChat,
 		Semantic:            BillingUsageSemanticGemini,
 		Estimated:           estimated,
-		GeminiUsageMetadata: &usageMetadata,
+		GeminiUsageMetadata: &normalized,
 	}
 }
 
@@ -230,7 +230,7 @@ func CloneBillingUsage(usage *BillingUsage) *BillingUsage {
 	clone.OpenAIUsage = cloneOpenAIUsage(usage.OpenAIUsage)
 	clone.ClaudeUsage = cloneClaudeUsage(usage.ClaudeUsage)
 	if usage.GeminiUsageMetadata != nil {
-		metadata := cloneGeminiUsageMetadata(*usage.GeminiUsageMetadata)
+		metadata := NormalizeGeminiUsageMetadata(usage.GeminiUsageMetadata)
 		clone.GeminiUsageMetadata = &metadata
 	}
 	return &clone
@@ -333,7 +333,7 @@ func (usage *BillingUsage) canonicalClaudeUsage() *Usage {
 }
 
 func (usage *BillingUsage) canonicalGeminiUsage() *Usage {
-	metadata := usage.GeminiUsageMetadata
+	metadata := NormalizeGeminiUsageMetadata(usage.GeminiUsageMetadata)
 	promptTokens := metadata.PromptTokenCount + metadata.ToolUsePromptTokenCount
 	canonical := &Usage{
 		PromptTokens:     promptTokens,
@@ -422,6 +422,44 @@ func cloneGeminiUsageMetadata(metadata GeminiUsageMetadata) GeminiUsageMetadata 
 	metadata.CandidatesTokensDetails = append([]GeminiPromptTokensDetails{}, metadata.CandidatesTokensDetails...)
 	metadata.BillingUsage = nil
 	return metadata
+}
+
+// NormalizeGeminiUsageMetadata keeps provider-reported totals authoritative while
+// rejecting modality breakdowns that cannot describe those totals. A malformed
+// breakdown must not create negative or over-counted billable modality tokens;
+// dropping only that breakdown preserves valid top-level usage and other groups.
+func NormalizeGeminiUsageMetadata(metadata *GeminiUsageMetadata) GeminiUsageMetadata {
+	if metadata == nil {
+		return GeminiUsageMetadata{}
+	}
+	normalized := cloneGeminiUsageMetadata(*metadata)
+	normalized.PromptTokenCount = max(normalized.PromptTokenCount, 0)
+	normalized.ToolUsePromptTokenCount = max(normalized.ToolUsePromptTokenCount, 0)
+	normalized.CandidatesTokenCount = max(normalized.CandidatesTokenCount, 0)
+	normalized.TotalTokenCount = max(normalized.TotalTokenCount, 0)
+	normalized.ThoughtsTokenCount = max(normalized.ThoughtsTokenCount, 0)
+	normalized.CachedContentTokenCount = max(normalized.CachedContentTokenCount, 0)
+	normalized.PromptTokensDetails = normalizeGeminiTokenDetails(normalized.PromptTokensDetails, normalized.PromptTokenCount)
+	normalized.ToolUsePromptTokensDetails = normalizeGeminiTokenDetails(normalized.ToolUsePromptTokensDetails, -1)
+	normalized.CandidatesTokensDetails = normalizeGeminiTokenDetails(normalized.CandidatesTokensDetails, normalized.CandidatesTokenCount)
+	return normalized
+}
+
+func normalizeGeminiTokenDetails(details []GeminiPromptTokensDetails, total int) []GeminiPromptTokensDetails {
+	if len(details) == 0 {
+		if details != nil {
+			return []GeminiPromptTokensDetails{}
+		}
+		return nil
+	}
+	sum := 0
+	for _, detail := range details {
+		if detail.TokenCount < 0 || (total >= 0 && detail.TokenCount > total-sum) {
+			return nil
+		}
+		sum += detail.TokenCount
+	}
+	return details
 }
 
 func HasGeminiUsageMetadataTokens(metadata *GeminiUsageMetadata) bool {

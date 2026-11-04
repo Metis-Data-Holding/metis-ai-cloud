@@ -701,6 +701,33 @@ func respPtr[T any](value T) *T {
 	return &value
 }
 
+func TestConvertGeminiResponseDropsInvalidModalityBreakdown(t *testing.T) {
+	response := &dto.GeminiChatResponse{
+		UsageMetadata: dto.GeminiUsageMetadata{
+			PromptTokenCount:     10,
+			CandidatesTokenCount: 4,
+			TotalTokenCount:      14,
+			PromptTokensDetails: []dto.GeminiPromptTokensDetails{
+				{Modality: "TEXT", TokenCount: 12},
+				{Modality: "AUDIO", TokenCount: -1},
+			},
+			CandidatesTokensDetails: []dto.GeminiPromptTokensDetails{
+				{Modality: "AUDIO", TokenCount: 5},
+			},
+		},
+	}
+	converted, err := ConvertResponse(nil, nil, types.RelayFormatOpenAI, response)
+	require.NoError(t, err)
+	require.NotNil(t, converted.Usage)
+	assert.Equal(t, 10, converted.Usage.PromptTokens)
+	assert.Equal(t, 10, converted.Usage.PromptTokensDetails.TextTokens)
+	assert.Zero(t, converted.Usage.PromptTokensDetails.AudioTokens)
+	assert.Zero(t, converted.Usage.CompletionTokenDetails.AudioTokens)
+	require.NotNil(t, converted.Usage.BillingUsage)
+	assert.Empty(t, converted.Usage.BillingUsage.GeminiUsageMetadata.PromptTokensDetails)
+	assert.Empty(t, converted.Usage.BillingUsage.GeminiUsageMetadata.CandidatesTokensDetails)
+}
+
 func TestConvertResponseToResponsesRestoresRecordedCustomTools(t *testing.T) {
 	info := &convmeta.Values{ResponsesTools: &convmeta.ResponsesToolState{CustomToolNames: map[string]struct{}{"exec": {}}}}
 	chatMessage := dto.Message{Role: "assistant"}
