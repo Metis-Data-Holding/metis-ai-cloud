@@ -20,6 +20,8 @@ func UsageFromGeminiMetadata(metadata *dto.GeminiUsageMetadata, fallbackPromptTo
 		usage.PromptTokensDetails.TextTokens = fallbackPromptTokens
 		return usage
 	}
+	normalizedMetadata := dto.NormalizeGeminiUsageMetadata(metadata)
+	metadata = &normalizedMetadata
 
 	promptTokens := metadata.PromptTokenCount + metadata.ToolUsePromptTokenCount
 	if promptTokens <= 0 && fallbackPromptTokens > 0 {
