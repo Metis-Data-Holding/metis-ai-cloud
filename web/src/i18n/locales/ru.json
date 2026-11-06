@@ -7224,7 +7224,6 @@
     "Vertex AI Key Format": "Формат ключа Vertex AI",
     "Vertex AI Project ID": "ID проекта Vertex AI",
     "e.g., my-project-123": "напр. my-project-123",
-    "Vertex AI keys for batch adding cannot be empty": "Ключи Vertex AI для пакетного добавления не могут быть пустыми",
     "Vertex AI service account key must be valid JSON": "Ключ сервисного аккаунта Vertex AI должен быть допустимым JSON",
     "Video": "Видео",
     "Video {{number}}": "Видео {{number}}",
@@ -7544,6 +7543,24 @@
     "The plugin no longer offers this model": "Плагин больше не предоставляет эту модель",
     "The price uses usage the plugin no longer provides": "Цена использует данные об использовании, которые плагин больше не передаёт",
     "Vendor path": "Путь поставщика",
-    "{{name}}: {{reason}}": "{{name}}: {{reason}}"
+    "{{name}}: {{reason}}": "{{name}}: {{reason}}",
+    "{{count}} unsaved price changes": "Несохранённых изменений цен: {{count}}",
+    "Confirm and save": "Подтвердить и сохранить",
+    "Confirm price changes": "Подтвердите изменение цен",
+    "Models needing price updates: {{modelCount}}": "Модели, требующие обновления цен: {{modelCount}}",
+    "Modified": "Изменено",
+    "New prices apply to requests as soon as you save. {{count}} models change.": "Новые цены применяются к запросам сразу после сохранения. Изменяется моделей: {{count}}.",
+    "Pending deletion": "Ожидает удаления",
+    "Price after saving": "Цена после сохранения",
+    "Pricing changes needed": "Необходимые изменения цен",
+    "Review prices": "Проверить цены",
+    "Saved price": "Сохранённая цена",
+    "Select this plugin below and reconfigure its price using the current billing fields, then save.": "Выберите этот плагин ниже, настройте цену заново с учётом текущих полей тарификации и сохраните изменения.",
+    "Select this plugin below, remove its saved price, then save.": "Выберите этот плагин ниже, удалите сохранённую цену и сохраните изменения.",
+    "Select this plugin below, set a price for this model, then save.": "Выберите этот плагин ниже, задайте цену для модели и сохраните изменения.",
+    "Show all models": "Показать все модели",
+    "These models have missing or outdated plugin prices. Select a model to see what needs to change.": "Цены плагинов для этих моделей не заданы или устарели. Выберите модель, чтобы увидеть необходимые изменения.",
+    "Undo changes": "Вернуть как было",
+    "Unsaved price changes": "Несохранённые изменения цен"
   }
 }

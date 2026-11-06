@@ -7224,7 +7224,6 @@
     "Vertex AI Key Format": "Vertex AI Key Format",
     "Vertex AI Project ID": "Vertex AI Project ID",
     "e.g., my-project-123": "e.g., my-project-123",
-    "Vertex AI keys for batch adding cannot be empty": "Vertex AI keys for batch adding cannot be empty",
     "Vertex AI service account key must be valid JSON": "Vertex AI service account key must be valid JSON",
     "Video": "Video",
     "Video {{number}}": "Video {{number}}",
@@ -7544,6 +7543,24 @@
     "The plugin no longer offers this model": "The plugin no longer offers this model",
     "The price uses usage the plugin no longer provides": "The price uses usage the plugin no longer provides",
     "Vendor path": "Vendor path",
-    "{{name}}: {{reason}}": "{{name}}: {{reason}}"
+    "{{name}}: {{reason}}": "{{name}}: {{reason}}",
+    "{{count}} unsaved price changes": "{{count}} unsaved price changes",
+    "Confirm and save": "Confirm and save",
+    "Confirm price changes": "Confirm price changes",
+    "Models needing price updates: {{modelCount}}": "Models needing price updates: {{modelCount}}",
+    "Modified": "Modified",
+    "New prices apply to requests as soon as you save. {{count}} models change.": "New prices apply to requests as soon as you save. {{count}} models change.",
+    "Pending deletion": "Pending deletion",
+    "Price after saving": "Price after saving",
+    "Pricing changes needed": "Pricing changes needed",
+    "Review prices": "Review prices",
+    "Saved price": "Saved price",
+    "Select this plugin below and reconfigure its price using the current billing fields, then save.": "Select this plugin below and reconfigure its price using the current billing fields, then save.",
+    "Select this plugin below, remove its saved price, then save.": "Select this plugin below, remove its saved price, then save.",
+    "Select this plugin below, set a price for this model, then save.": "Select this plugin below, set a price for this model, then save.",
+    "Show all models": "Show all models",
+    "These models have missing or outdated plugin prices. Select a model to see what needs to change.": "These models have missing or outdated plugin prices. Select a model to see what needs to change.",
+    "Undo changes": "Undo changes",
+    "Unsaved price changes": "Unsaved price changes"
   }
 }

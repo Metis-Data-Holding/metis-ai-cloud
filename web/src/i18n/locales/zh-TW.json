@@ -7224,7 +7224,6 @@
     "Vertex AI Key Format": "Vertex AI 金鑰格式",
     "Vertex AI Project ID": "Vertex AI 專案 ID",
     "e.g., my-project-123": "例如 my-project-123",
-    "Vertex AI keys for batch adding cannot be empty": "批次新增 Vertex AI 的金鑰不能為空",
     "Vertex AI service account key must be valid JSON": "Vertex AI 服務賬號金鑰必須是有效 JSON",
     "Video": "影片",
     "Video {{number}}": "影片{{number}}",
@@ -7544,6 +7543,24 @@
     "The plugin no longer offers this model": "外掛已不再提供這個模型",
     "The price uses usage the plugin no longer provides": "價格用到了外掛不再提供的用量",
     "Vendor path": "廠商路徑",
-    "{{name}}: {{reason}}": "{{name}}：{{reason}}"
+    "{{name}}: {{reason}}": "{{name}}：{{reason}}",
+    "{{count}} unsaved price changes": "{{count}} 項未儲存",
+    "Confirm and save": "確認儲存",
+    "Confirm price changes": "確認價格變更",
+    "Models needing price updates: {{modelCount}}": "有 {{modelCount}} 個模型的價格需要處理",
+    "Modified": "已修改",
+    "New prices apply to requests as soon as you save. {{count}} models change.": "儲存後新價格立即用於計費，共 {{count}} 個模型有變更。",
+    "Pending deletion": "待刪除",
+    "Price after saving": "儲存後價格",
+    "Pricing changes needed": "需要修改的內容",
+    "Review prices": "檢查價格",
+    "Saved price": "已儲存價格",
+    "Select this plugin below and reconfigure its price using the current billing fields, then save.": "在下方選擇對應外掛，依目前計費欄位重新設定價格後儲存。",
+    "Select this plugin below, remove its saved price, then save.": "在下方選擇對應外掛，移除已儲存的價格，再儲存變更。",
+    "Select this plugin below, set a price for this model, then save.": "在下方選擇對應外掛，為此模型設定價格後儲存。",
+    "Show all models": "顯示全部模型",
+    "These models have missing or outdated plugin prices. Select a model to see what needs to change.": "這些模型尚未設定外掛價格，或既有價格已失效。選擇模型可查看原因與處理方式。",
+    "Undo changes": "復原修改",
+    "Unsaved price changes": "未儲存的價格修改"
   }
 }

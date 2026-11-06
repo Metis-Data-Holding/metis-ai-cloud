@@ -7224,7 +7224,6 @@
     "Vertex AI Key Format": "Vertex AIキー形式",
     "Vertex AI Project ID": "Vertex AI プロジェクト ID",
     "e.g., my-project-123": "例: my-project-123",
-    "Vertex AI keys for batch adding cannot be empty": "一括追加する Vertex AI キーは空にできません",
     "Vertex AI service account key must be valid JSON": "Vertex AI サービスアカウントキーは有効な JSON である必要があります",
     "Video": "動画",
     "Video {{number}}": "動画{{number}}",
@@ -7544,6 +7543,24 @@
     "The plugin no longer offers this model": "プラグインはこのモデルを提供しなくなりました",
     "The price uses usage the plugin no longer provides": "価格が、プラグインで提供されなくなった使用量を使っています",
     "Vendor path": "ベンダーのパス",
-    "{{name}}: {{reason}}": "{{name}}：{{reason}}"
+    "{{name}}: {{reason}}": "{{name}}：{{reason}}",
+    "{{count}} unsaved price changes": "未保存 {{count}} 件",
+    "Confirm and save": "確認して保存",
+    "Confirm price changes": "価格の変更を確認",
+    "Models needing price updates: {{modelCount}}": "価格の見直しが必要なモデル：{{modelCount}} 件",
+    "Modified": "変更済み",
+    "New prices apply to requests as soon as you save. {{count}} models change.": "保存するとすぐに新しい価格で課金されます。変更されるモデルは {{count}} 件です。",
+    "Pending deletion": "削除待ち",
+    "Price after saving": "保存後の価格",
+    "Pricing changes needed": "価格の変更が必要です",
+    "Review prices": "価格を確認",
+    "Saved price": "保存済みの価格",
+    "Select this plugin below and reconfigure its price using the current billing fields, then save.": "下でこのプラグインを選択し、現在の課金項目に合わせて価格を再設定して保存してください。",
+    "Select this plugin below, remove its saved price, then save.": "下でこのプラグインを選択し、保存済みの価格を削除してから変更を保存してください。",
+    "Select this plugin below, set a price for this model, then save.": "下でこのプラグインを選択し、モデルの価格を設定して保存してください。",
+    "Show all models": "すべてのモデルを表示",
+    "These models have missing or outdated plugin prices. Select a model to see what needs to change.": "これらのモデルのプラグイン価格は未設定、または古くなっています。モデルを選択すると、必要な変更を確認できます。",
+    "Undo changes": "変更を元に戻す",
+    "Unsaved price changes": "未保存の価格変更"
   }
 }
