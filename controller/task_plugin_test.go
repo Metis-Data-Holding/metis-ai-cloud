@@ -653,6 +653,11 @@ func TestTaskPluginChangesReportPricingIssuesOfServingPlugin(t *testing.T) {
 	require.NoError(t, model.InitLogDB())
 	key := "pricing-notice-probe"
 	cleanupTaskPluginControllerRuntime(t, key)
+	channelSetting := fmt.Sprintf(`{"task_plugin_key":%q}`, key)
+	require.NoError(t, model.DB.Create(&model.Channel{
+		Id: 1, Type: constant.ChannelTypeTaskPlugin, Status: common.ChannelStatusEnabled, Name: "pricing-notice", Setting: &channelSetting,
+	}).Error)
+	require.NoError(t, model.DB.Create(&model.Ability{Group: "default", Model: "doc-1", ChannelId: 1, Enabled: true}).Error)
 	upload := func(version string) string {
 		body, err := common.Marshal(map[string]any{"source": taskPluginControllerTestSource(key, version)})
 		require.NoError(t, err)
@@ -663,16 +668,26 @@ func TestTaskPluginChangesReportPricingIssuesOfServingPlugin(t *testing.T) {
 	for _, step := range []struct {
 		name, method, path, body string
 		params                   gin.Params
+		before                   func()
 		handler                  gin.HandlerFunc
 		want                     []model.ModelPricingIssue
 	}{
-		{"first upload serves", http.MethodPost, "/api/plugin/task", upload("1.0.0"), nil, UploadTaskPlugin, unpriced},
-		{"later upload waits for activation", http.MethodPost, "/api/plugin/task", upload("2.0.0"), nil, UploadTaskPlugin, nil},
-		{"activation", http.MethodPost, "/api/plugin/task/" + key + "/activate", `{"version":"2.0.0"}`, gin.Params{{Key: "key", Value: key}}, ActivateTaskPlugin, unpriced},
-		{"switching off", http.MethodPost, statusPath, `{"enabled":false}`, gin.Params{{Key: "key", Value: key}}, SetTaskPluginStatus, nil},
-		{"switching on", http.MethodPost, statusPath, `{"enabled":true}`, gin.Params{{Key: "key", Value: key}}, SetTaskPluginStatus, unpriced},
-		{"deleting the active version promotes another", http.MethodDelete, "/api/plugin/task/" + key + "/versions/2.0.0", "", gin.Params{{Key: "key", Value: key}, {Key: "version", Value: "2.0.0"}}, DeleteTaskPluginVersion, unpriced},
+		{"first upload serves", http.MethodPost, "/api/plugin/task", upload("1.0.0"), nil, nil, UploadTaskPlugin, unpriced},
+		{"later upload waits for activation", http.MethodPost, "/api/plugin/task", upload("2.0.0"), nil, nil, UploadTaskPlugin, nil},
+		{"activation", http.MethodPost, "/api/plugin/task/" + key + "/activate", `{"version":"2.0.0"}`, gin.Params{{Key: "key", Value: key}}, nil, ActivateTaskPlugin, unpriced},
+		{"switching off", http.MethodPost, statusPath, `{"enabled":false}`, gin.Params{{Key: "key", Value: key}}, func() {
+			require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", 1).Update("status", common.ChannelStatusManuallyDisabled).Error)
+		}, SetTaskPluginStatus, nil},
+		{"switching on", http.MethodPost, statusPath, `{"enabled":true}`, gin.Params{{Key: "key", Value: key}}, func() {
+			require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", 1).Update("status", common.ChannelStatusEnabled).Error)
+		}, SetTaskPluginStatus, unpriced},
+		{"deleting the active version promotes another", http.MethodDelete, "/api/plugin/task/" + key + "/versions/2.0.0", "", gin.Params{{Key: "key", Value: key}, {Key: "version", Value: "2.0.0"}}, func() {
+			require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", 1).Update("status", common.ChannelStatusManuallyDisabled).Error)
+		}, DeleteTaskPluginVersion, []model.ModelPricingIssue{}},
 	} {
+		if step.before != nil {
+			step.before()
+		}
 		recorder := httptest.NewRecorder()
 		context, _ := gin.CreateTestContext(recorder)
 		context.Params = step.params
@@ -727,6 +742,21 @@ func TestSwitchedOffPluginPricesAreNotPricingIssues(t *testing.T) {
 		}
 	}
 	require.NotEmpty(t, kling.Models)
+	_, live := jsplugin.DefaultRegistry.Get("kling")
+	require.True(t, live)
+	// Live plugins, built-ins included, have nothing to price before a channel
+	// serves their models or a provider price is saved.
+	require.NoError(t, config.GlobalConfig.LoadFromDB(map[string]string{billing_setting.PluginBillingExprOption: `{}`}))
+	freshIssues, err := model.GetModelPricingIssues("")
+	require.NoError(t, err)
+	assert.Empty(t, freshIssues)
+	channelSetting := fmt.Sprintf(`{"task_extend_plugin_keys":[%q,%q]}`, key, "kling")
+	require.NoError(t, model.DB.Create(&model.Channel{
+		Id: 1, Type: constant.ChannelTypeNewAPI, Status: common.ChannelStatusEnabled, Name: "pricing-off", Setting: &channelSetting,
+	}).Error)
+	for _, name := range kling.Models {
+		require.NoError(t, model.DB.Create(&model.Ability{Group: "default", Model: name, ChannelId: 1, Enabled: true}).Error)
+	}
 	prices, err := common.Marshal(map[string]string{
 		key + "::doc-1":              `tier("base", u("units") * 0.1)`,
 		key + "::retired-model":      `tier("base", u("units") * 0.1)`,
@@ -758,6 +788,7 @@ func TestSwitchedOffPluginPricesAreNotPricingIssues(t *testing.T) {
 		require.True(t, slices.ContainsFunc(readIssues(), unpricedKling), "a serving built-in reports its unpriced models")
 	}
 
+	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", 1).Update("status", common.ChannelStatusManuallyDisabled).Error)
 	for _, plugin := range []string{key, "kling"} {
 		require.Contains(t, postTaskPluginStatus(t, plugin, "", `{"enabled":false}`).Body.String(), `"success":true`)
 	}

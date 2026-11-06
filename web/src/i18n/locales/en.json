@@ -1,5 +1,8 @@
 {
   "translation": {
+    "360": "360",
+    "1000": "1000",
+    "10000": "10000",
     "\"default\": \"us-central1\", \"claude-3-5-sonnet-20240620\": \"europe-west1\"": "\"default\": \"us-central1\", \"claude-3-5-sonnet-20240620\": \"europe-west1\"",
     "#1 App": "#1 App",
     "#1 Model": "#1 Model",
@@ -44,8 +47,6 @@
     "1. Select upstream models": "1. Select upstream models",
     "10 / page": "10 / page",
     "100 / page": "100 / page",
-    "1000": "1000",
-    "10000": "10000",
     "1080P": "1080P",
     "1080p is unavailable when reference images are included.": "1080p is unavailable when reference images are included.",
     "14 Days": "14 Days",
@@ -69,7 +70,6 @@
     "30 days": "30 days",
     "30 days ago": "30 days ago",
     "30d change": "30d change",
-    "360": "360",
     "480P": "480P",
     "4K": "4K",
     "5 minutes": "5 minutes",
@@ -7511,6 +7511,24 @@
     "The plugin no longer offers this model": "The plugin no longer offers this model",
     "The price uses usage the plugin no longer provides": "The price uses usage the plugin no longer provides",
     "Vendor path": "Vendor path",
-    "{{name}}: {{reason}}": "{{name}}: {{reason}}"
+    "{{name}}: {{reason}}": "{{name}}: {{reason}}",
+    "{{count}} unsaved price changes": "{{count}} unsaved price changes",
+    "Confirm and save": "Confirm and save",
+    "Confirm price changes": "Confirm price changes",
+    "Models needing price updates: {{modelCount}}": "Models needing price updates: {{modelCount}}",
+    "Modified": "Modified",
+    "New prices apply to requests as soon as you save. {{count}} models change.": "New prices apply to requests as soon as you save. {{count}} models change.",
+    "Pending deletion": "Pending deletion",
+    "Price after saving": "Price after saving",
+    "Pricing changes needed": "Pricing changes needed",
+    "Review prices": "Review prices",
+    "Saved price": "Saved price",
+    "Select this plugin below and reconfigure its price using the current billing fields, then save.": "Select this plugin below and reconfigure its price using the current billing fields, then save.",
+    "Select this plugin below, remove its saved price, then save.": "Select this plugin below, remove its saved price, then save.",
+    "Select this plugin below, set a price for this model, then save.": "Select this plugin below, set a price for this model, then save.",
+    "Show all models": "Show all models",
+    "These models have missing or outdated plugin prices. Select a model to see what needs to change.": "These models have missing or outdated plugin prices. Select a model to see what needs to change.",
+    "Undo changes": "Undo changes",
+    "Unsaved price changes": "Unsaved price changes"
   }
 }

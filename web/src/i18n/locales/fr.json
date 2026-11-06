@@ -1,5 +1,8 @@
 {
   "translation": {
+    "360": "360",
+    "1000": "1000",
+    "10000": "10000",
     "\"default\": \"us-central1\", \"claude-3-5-sonnet-20240620\": \"europe-west1\"": "\"default\": \"us-central1\", \"claude-3-5-sonnet-20240620\": \"europe-west1\"",
     "#1 App": "#1 App",
     "#1 Model": "#1 Modèle",
@@ -44,8 +47,6 @@
     "1. Select upstream models": "1. Sélectionner les modèles en amont",
     "10 / page": "10 / page",
     "100 / page": "100 / page",
-    "1000": "1000",
-    "10000": "10000",
     "1080P": "1080P",
     "1080p is unavailable when reference images are included.": "Le format 1080p n’est pas disponible lorsque des images de référence sont incluses.",
     "14 Days": "14 jours",
@@ -69,7 +70,6 @@
     "30 days": "30 jours",
     "30 days ago": "Il y a 30 jours",
     "30d change": "Variation 30 j",
-    "360": "360",
     "480P": "480P",
     "4K": "4K",
     "5 minutes": "5 minutes",
@@ -7511,6 +7511,24 @@
     "The plugin no longer offers this model": "Le plugin ne propose plus ce modèle",
     "The price uses usage the plugin no longer provides": "Le prix utilise un usage que le plugin ne fournit plus",
     "Vendor path": "Chemin du fournisseur",
-    "{{name}}: {{reason}}": "{{name}} : {{reason}}"
+    "{{name}}: {{reason}}": "{{name}} : {{reason}}",
+    "{{count}} unsaved price changes": "{{count}} modifications de prix non enregistrées",
+    "Confirm and save": "Confirmer et enregistrer",
+    "Confirm price changes": "Confirmer les changements de prix",
+    "Models needing price updates: {{modelCount}}": "Modèles dont les tarifs sont à revoir : {{modelCount}}",
+    "Modified": "Modifié",
+    "New prices apply to requests as soon as you save. {{count}} models change.": "Les nouveaux prix s'appliquent aux requêtes dès l'enregistrement. {{count}} modèles changent.",
+    "Pending deletion": "Suppression en attente",
+    "Price after saving": "Prix après enregistrement",
+    "Pricing changes needed": "Tarifs à modifier",
+    "Review prices": "Vérifier les tarifs",
+    "Saved price": "Prix enregistré",
+    "Select this plugin below and reconfigure its price using the current billing fields, then save.": "Sélectionnez ce plugin ci-dessous, reconfigurez son tarif avec les champs de facturation actuels, puis enregistrez.",
+    "Select this plugin below, remove its saved price, then save.": "Sélectionnez ce plugin ci-dessous, supprimez son tarif enregistré, puis enregistrez les modifications.",
+    "Select this plugin below, set a price for this model, then save.": "Sélectionnez ce plugin ci-dessous, définissez un tarif pour ce modèle, puis enregistrez.",
+    "Show all models": "Afficher tous les modèles",
+    "These models have missing or outdated plugin prices. Select a model to see what needs to change.": "Les tarifs de plugin de ces modèles sont absents ou obsolètes. Sélectionnez un modèle pour voir les modifications nécessaires.",
+    "Undo changes": "Annuler les modifications",
+    "Unsaved price changes": "Modifications de prix non enregistrées"
   }
 }
