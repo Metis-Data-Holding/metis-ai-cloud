@@ -2699,6 +2699,7 @@
     "Font": "Font",
     "Footer": "Footer",
     "Footer text displayed at the bottom of pages": "Footer text displayed at the bottom of pages",
+
     "For advanced custom channels this applies only to /v1/responses routes without protocol conversion.": "For advanced custom channels this applies only to /v1/responses routes without protocol conversion.",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment",
     "For private deployments, format: https://fastgpt.run/api/openapi": "For private deployments, format: https://fastgpt.run/api/openapi",
@@ -7538,6 +7539,8 @@
     "Refresh cache statistics": "Refresh cache statistics",
     "Refreshing updates the counts. Clearing cache makes subsequent requests select channels again.": "Refreshing updates the counts. Clearing cache makes subsequent requests select channels again.",
     "Save this rule before clearing its cache.": "Save this rule before clearing its cache.",
-    "This rule shares its cache and cannot be cleared separately.": "This rule shares its cache and cannot be cleared separately."
+    "This rule shares its cache and cannot be cleared separately.": "This rule shares its cache and cannot be cleared separately.",
+    "By clicking sign in, you agree to our": "By clicking sign in, you agree to our",
+    "By creating an account, you agree to our": "By creating an account, you agree to our"
   }
 }
