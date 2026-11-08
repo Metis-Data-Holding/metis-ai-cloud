@@ -553,7 +553,7 @@
     "An unexpected error occurred": "Đã xảy ra lỗi không mong muốn",
     "An unknown error occurred": "Đã xảy ra lỗi không xác định",
     "Analyze data": "Phân tích dữ liệu",
-    "and": "and",
+    "and": "và",
     "Announcement added. Click \"Save Settings\" to apply.": "Đã thêm thông báo. Nhấp \"Save Settings\" để áp dụng.",
     "Announcement content": "Nội dung thông báo",
     "Announcement deleted. Click \"Save Settings\" to apply.": "Đã xóa thông báo. Nhấp \"Save Settings\" để áp dụng.",
@@ -7570,6 +7570,8 @@
     "Refresh cache statistics": "Làm mới thống kê",
     "Refreshing updates the counts. Clearing cache makes subsequent requests select channels again.": "Làm mới sẽ cập nhật số mục. Sau khi xóa bộ nhớ đệm, các yêu cầu tiếp theo sẽ chọn lại kênh.",
     "Save this rule before clearing its cache.": "Hãy lưu quy tắc này trước khi xóa bộ nhớ đệm của nó.",
-    "This rule shares its cache and cannot be cleared separately.": "Quy tắc này dùng chung bộ nhớ đệm nên không thể xóa riêng."
+    "This rule shares its cache and cannot be cleared separately.": "Quy tắc này dùng chung bộ nhớ đệm nên không thể xóa riêng.",
+    "By clicking sign in, you agree to our": "Bằng cách nhấp đăng nhập, bạn đồng ý với",
+    "By creating an account, you agree to our": "Bằng cách tạo tài khoản, bạn đồng ý với"
   }
 }
