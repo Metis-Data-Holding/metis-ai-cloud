@@ -18,6 +18,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestConvertOpenAIRequestMapsDeveloperRole(t *testing.T) {
+	request := &dto.GeneralOpenAIRequest{Messages: []dto.Message{
+		{Role: "developer"},
+		{Role: "system"},
+		{Role: "user"},
+	}}
+
+	converted, err := (&Adaptor{}).ConvertOpenAIRequest(nil, nil, request)
+	require.NoError(t, err)
+	assert.Equal(t, "system", converted.(*dto.GeneralOpenAIRequest).Messages[0].Role)
+	assert.Equal(t, "system", converted.(*dto.GeneralOpenAIRequest).Messages[1].Role)
+	assert.Equal(t, "user", converted.(*dto.GeneralOpenAIRequest).Messages[2].Role)
+}
+
 // The -none/-low/-max tails of deepseek-flash and deepseek-v4-* reach DeepSeek
 // as its own thinking switch and effort in each upstream format, with the base
 // name; a bare name keeps DeepSeek's default, and a blacklisted name is sent
