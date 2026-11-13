@@ -1021,13 +1021,18 @@ func TestTaskAdaptorFetchVideoSuperResolutionSourceUsesTaskKeyAndRejectsRedirect
   if (ctx.artifactKey !== "video" || ctx.upstreamTaskId !== "wan-task") throw new Error("bad content context");
   return {url: ctx.baseUrl + "/content/wan-task", method: "GET", headers: {Authorization: "Bearer " + ctx.apiKey}};
 }`, 1)
+	pluginSource += `
+export function signRequest(ctx) { return {headers: {"X-Signed-Base": ctx.baseUrl}}; }
+`
 	plugin, err := pluginruntime.NewRegistry().Register(pluginSource, pluginruntime.Options{})
 	require.NoError(t, err)
 	requests := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
 		assert.Equal(t, "Custom task-key", r.Header.Get("Authorization"))
 		assert.Equal(t, "task-key", r.Header.Get("X-API-Key"))
+		assert.Equal(t, server.URL, r.Header.Get("X-Signed-Base"))
 		if requests == 1 {
 			http.Redirect(w, r, "https://other.example/video.mp4?token=must-not-leak", http.StatusFound)
 			return
@@ -1042,6 +1047,7 @@ func TestTaskAdaptorFetchVideoSuperResolutionSourceUsesTaskKeyAndRejectsRedirect
 	service.InitHttpClient()
 	adaptor := New(plugin)
 	adaptor.Init(&relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{
+		ChannelType:    constant.ChannelTypeTaskPlugin,
 		ChannelBaseUrl: "https://stale.example",
 		ApiKey:         "stale-info-key",
 		HeadersOverride: map[string]any{
