@@ -230,8 +230,8 @@ func proxyTaskMedia(c *gin.Context, task *model.Task, descriptor *relaychannel.T
 	providerBaseURL, parseErr := url.Parse(strings.TrimSpace(channel.GetBaseURL()))
 	if descriptor.TrustedProviderOrigin &&
 		taskHasPluginExecution(task) &&
-		channel.Type == constant.ChannelTypeTaskPlugin &&
-		parseErr == nil && sameTaskMediaOrigin(providerBaseURL, parsedURL) {
+		parseErr == nil && providerBaseURL.User == nil && providerBaseURL.Fragment == "" &&
+		sameTaskMediaOrigin(providerBaseURL, parsedURL) {
 		trustedProviderOrigin = providerBaseURL
 	}
 	if trustedProviderOrigin == nil {
@@ -244,10 +244,7 @@ func proxyTaskMedia(c *gin.Context, task *model.Task, descriptor *relaychannel.T
 	}
 
 	client := service.GetSSRFProtectedHTTPClient()
-	if trustedProviderOrigin != nil {
-		client = service.GetHttpClient()
-	}
-	if proxy != "" {
+	if trustedProviderOrigin != nil || proxy != "" {
 		client, err = service.GetHttpClientWithProxySettings(proxy, setting)
 		if err != nil {
 			return &taskMediaProxyError{
@@ -521,10 +518,12 @@ func taskMediaRedirectClient(base *http.Client, proxy string, c *gin.Context, cl
 			req.URL.Host == "" || req.URL.User != nil || req.URL.Fragment != "" {
 			return fmt.Errorf("%w: invalid redirect URL", errTaskMediaRequestRejected)
 		}
-		if !sameTaskMediaOrigin(trustedProviderOrigin, req.URL) {
-			if err := validateTaskMediaURL(req.URL.String(), proxy); err != nil {
-				return fmt.Errorf("%w: %v", errTaskMediaRequestRejected, err)
+		if trustedProviderOrigin != nil {
+			if !sameTaskMediaOrigin(trustedProviderOrigin, req.URL) {
+				return fmt.Errorf("%w: redirect outside channel origin", errTaskMediaRequestRejected)
 			}
+		} else if err := validateTaskMediaURL(req.URL.String(), proxy); err != nil {
+			return fmt.Errorf("%w: %v", errTaskMediaRequestRejected, err)
 		}
 		if isSelfTaskMediaURL(c, req.URL) {
 			return fmt.Errorf("%w: proxy loop", errTaskMediaRequestRejected)
@@ -580,11 +579,12 @@ func normalizeTaskMediaHost(scheme, host string) string {
 	if err != nil {
 		return strings.TrimSuffix(host, ".")
 	}
-	hostname = strings.TrimSuffix(strings.ToLower(hostname), ".")
 	if (strings.EqualFold(scheme, "http") && port == "80") || (strings.EqualFold(scheme, "https") && port == "443") {
-		return hostname
+		// Keep an IPv6 literal bracketed, as it is when the port is omitted.
+		host = strings.TrimSuffix(host, ":"+port)
+		return strings.TrimSuffix(host, ".")
 	}
-	return net.JoinHostPort(hostname, port)
+	return net.JoinHostPort(strings.TrimSuffix(hostname, "."), port)
 }
 
 func isSelfTaskMediaURL(c *gin.Context, target *url.URL) bool {
