@@ -57,6 +57,8 @@ type requestDescriptor struct {
 	// BodyText is the body as JSON.stringify wrote it, for a plugin that
 	// preserves JSON order: the upstream gets the members in that order.
 	BodyText json.RawMessage `json:"-"`
+
+	multipartContentType string
 }
 
 // orderedRequestDescriptor is requestDescriptor as a plugin that preserves
@@ -167,10 +169,25 @@ func New(plugin *pluginruntime.LoadedPlugin) *TaskAdaptor { return &TaskAdaptor{
 func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo)   { a.info = info }
 
 func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskError {
+	c.Set(pluginruntime.ContextKeyEffectiveImageRequest, nil)
 	if pinnedValue, exists := c.Get(pluginruntime.ContextKeyPinnedEndpoint); exists {
 		if pinned, ok := pinnedValue.(pluginruntime.PinnedEndpoint); ok && pinned.Plugin == a.plugin {
 			if protocolValue, present := c.Get(pluginruntime.ContextKeyProtocolRequest); present {
 				if protocolContext, valid := protocolValue.(pluginruntime.ProtocolRequestContext); valid {
+					if pinned.Protocol == pluginruntime.ProtocolOpenAIImage {
+						var err error
+						protocolContext, err = applyImageProtocolParamOverride(protocolContext, info)
+						if err != nil {
+							taskErr := service.TaskErrorWrapperLocal(err, "channel_param_override_invalid", http.StatusBadRequest)
+							taskErr.NoRetry = true
+							if fixed, ok := relaycommon.AsParamOverrideReturnError(err); ok {
+								taskErr.Code, taskErr.Message = fixed.Code, fixed.Message
+								taskErr.StatusCode, taskErr.NoRetry = fixed.StatusCode, fixed.SkipRetry
+							}
+							return taskErr
+						}
+						c.Set(pluginruntime.ContextKeyEffectiveImageRequest, protocolContext)
+					}
 					resolvedValue, requestBodyText, callErr := a.plugin.Engine.CallPathWithMemberJSON(
 						context.WithoutCancel(c.Request.Context()), 0, a.plugin.Meta.JSONTextMember("requestBody"),
 						"protocols", []string{pinned.Protocol, "decodeRequest"}, protocolContext.JSValueFor(a.plugin.Meta),
@@ -361,6 +378,10 @@ func (a *TaskAdaptor) BuildRequestHeader(_ *gin.Context, req *http.Request, _ *r
 	for name, value := range a.submit.Headers {
 		req.Header.Set(name, value)
 	}
+	// The upstream Content-Type must carry the boundary used to encode the body.
+	if a.submit.multipartContentType != "" {
+		req.Header.Set("Content-Type", a.submit.multipartContentType)
+	}
 	applyTaskCredential(a.credential, &url.URL{}, req.Header)
 	return nil
 }
@@ -377,14 +398,6 @@ func buildDescriptorBody(c *gin.Context, descriptor *requestDescriptor) (io.Read
 	if descriptor == nil {
 		return nil, fmt.Errorf("request descriptor is missing")
 	}
-	if descriptor.BodyType == "multipart" {
-		form, parseErr := common.ParseMultipartFormReusable(c)
-		if parseErr != nil {
-			return nil, parseErr
-		}
-		defer form.RemoveAll()
-		return buildDescriptorBodyWithForm(c, descriptor, form)
-	}
 	return buildDescriptorBodyWithForm(c, descriptor, nil)
 }
 
@@ -393,9 +406,6 @@ func buildDescriptorBodyWithForm(c *gin.Context, descriptor *requestDescriptor, 
 		return nil, fmt.Errorf("request descriptor is missing")
 	}
 	if descriptor.BodyType == "multipart" {
-		if form == nil {
-			return nil, fmt.Errorf("multipart form is missing")
-		}
 		var body bytes.Buffer
 		writer := multipart.NewWriter(&body)
 		var err error
@@ -415,6 +425,14 @@ func buildDescriptorBodyWithForm(c *gin.Context, descriptor *requestDescriptor, 
 					return nil, err
 				}
 				continue
+			}
+			// Text-only multipart output may originate from a JSON request.
+			if form == nil {
+				form, err = common.ParseMultipartFormReusable(c)
+				if err != nil {
+					return nil, err
+				}
+				defer form.RemoveAll()
 			}
 			field, index, validRef := pluginruntime.ParseFileReference(part.FileRef)
 			files := form.File[field]
@@ -449,15 +467,7 @@ func buildDescriptorBodyWithForm(c *gin.Context, descriptor *requestDescriptor, 
 		if err = writer.Close(); err != nil {
 			return nil, err
 		}
-		if descriptor.Headers == nil {
-			descriptor.Headers = make(map[string]string)
-		}
-		for name := range descriptor.Headers {
-			if strings.EqualFold(name, "Content-Type") {
-				delete(descriptor.Headers, name)
-			}
-		}
-		descriptor.Headers["Content-Type"] = writer.FormDataContentType()
+		descriptor.multipartContentType = writer.FormDataContentType()
 		return bytes.NewReader(body.Bytes()), nil
 	}
 	if descriptor.Body == nil {
@@ -743,6 +753,9 @@ func (a *TaskAdaptor) doPrepareRequest(c *gin.Context, info *relaycommon.RelayIn
 	}
 	for name, value := range descriptor.Headers {
 		request.Header.Set(name, value)
+	}
+	if descriptor.multipartContentType != "" {
+		request.Header.Set("Content-Type", descriptor.multipartContentType)
 	}
 	applyTaskCredential(a.credential, request.URL, request.Header)
 	headerInfo := a.headerOverrideInfo(overrideKey(info.ApiKey, a.credential))
